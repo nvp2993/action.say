@@ -1658,7 +1658,7 @@ selectedMonth: new Date().getMonth() + 1,
                 <button onclick="appActions.openEditModal('${sh.id}')" class="flex-1 bg-indigo-600 text-white font-extrabold py-2.5 rounded-xl text-xs">Chỉnh sửa</button>
                 <button onclick="appActions.deleteShow('${sh.id}')" class="px-3.5 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-xs"><i class="fa-solid fa-trash-can"></i></button>
               </div>
-            ` : `<div class="bg-slate-100 p-2 rounded-xl text-center text-xs font-bold text-slate-600">🔒 Chỉ Chủ show (${escapeHtml(owner.name)}) hoặc Admin mới được sửa</div>`}
+            ` : `<div class="bg-slate-100 p-2 rounded-xl text-center text-xs font-bold text-slate-600">🔒 Chỉ Chủ show (${escapeHtml(owner.name)}) mới được sửa</div>`}
           </div>
         </div>
       `;
