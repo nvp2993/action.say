@@ -343,8 +343,14 @@
       searchQuery: '',
       filterMemberId: 'all',
 
-      checkStart: '2026-11-09',
-      checkEnd: '2026-11-09',
+selectedMonth: new Date().getMonth() + 1,
+      selectedYear: new Date().getFullYear(),
+      filterAllMonthsInList: false,
+      searchQuery: '',
+      filterMemberId: 'all',
+
+      checkStart: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10),
+      checkEnd: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10),
 
       detailShowId: null,
       formModal: null,
