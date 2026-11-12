@@ -526,7 +526,15 @@ function canEditShow(show) {
         : size === 'md'
         ? 'px-2.5 py-1 text-xs'
         : 'px-2 py-0.5 text-[10px]';
-      const roleSpan = roleTag ? `<span class="ml-1 opacity-95 font-bold">• ${escapeHtml(roleTag)}</span>` : '';
+        
+      // Xử lý nếu roleTag là mảng nhiều vai trò
+      let roleStr = '';
+      if (Array.isArray(roleTag)) {
+        roleStr = roleTag.join(', ');
+      } else if (roleTag) {
+        roleStr = roleTag;
+      }
+      const roleSpan = roleStr ? `<span class="ml-1 opacity-95 font-bold">• ${escapeHtml(roleStr)}</span>` : '';
       return `<span ${onClickAttr} style="background-color:${m.bg};color:${m.text}" class="inline-flex items-center font-extrabold rounded-full tracking-wide uppercase select-none shadow-2xs ${sizeCls} ${extraClasses}">${escapeHtml(m.shortLabel)}${roleSpan}</span>`;
     }
 
