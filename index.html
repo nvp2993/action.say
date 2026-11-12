@@ -1972,7 +1972,254 @@ ${editable ? `
       return `<div class="fixed top-12 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-3 pointer-events-none"><div class="p-2.5 rounded-xl shadow-xl text-[11px] font-bold text-white bg-slate-900 flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-400"></i><span>${escapeHtml(state.toast.message)}</span></div></div>`;
     }
 
-    function renderApp() {
+
+          // ========================================================================
+    // LOGIC TAB TÍNH CÔNG TÁC PHÍ (CTP)
+    // ========================================================================
+    function getShowDays(sh) {
+      if (!sh.startDate || !sh.endDate) return 1;
+      const s = new Date(sh.startDate + 'T00:00:00');
+      const e = new Date(sh.endDate + 'T00:00:00');
+      const diffTime = e - s;
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      return diffDays > 0 ? diffDays : 1;
+    }
+
+    function getDefaultRateForTask(taskKey, sh) {
+      const days = getShowDays(sh);
+      if (taskKey === 'quay' || taskKey === 'chup') {
+        return days === 1 ? 1500000 : 1200000 * days;
+      }
+      if (taskKey === 'dung') return 1000000;
+      if (taskKey === 'lamhinh') return 3000000;
+      if (taskKey === 'flycam') return 1000000;
+      if (taskKey === 'gimbal') return 200000;
+      return 0;
+    }
+
+    window.ctpActions = {
+      setMonth(m) {
+        state.ctpMonth = Number(m);
+        renderApp();
+      },
+      setOwner(ownerId) {
+        state.ctpOwnerId = ownerId;
+        renderApp();
+      },
+      toggleTask(showId, taskKey) {
+        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, note: '', customTotal: '' };
+        const tasks = state.ctpItems[showId].tasks;
+        if (tasks[taskKey]) {
+          delete tasks[taskKey];
+        } else {
+          const sh = state.shows.find(s => s.id === showId);
+          tasks[taskKey] = getDefaultRateForTask(taskKey, sh);
+        }
+        renderApp();
+      },
+      updateTaskPrice(showId, taskKey, priceVal) {
+        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, note: '', customTotal: '' };
+        const val = Number(priceVal) || 0;
+        state.ctpItems[showId].tasks[taskKey] = val;
+        renderApp();
+      },
+      updateNote(showId, noteVal) {
+        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, note: '', customTotal: '' };
+        state.ctpItems[showId].note = noteVal;
+      },
+      generateBill() {
+        const curMem = getMember(state.currentUserId);
+        const filteredShows = state.shows.filter(sh => {
+          if (!sh.startDate) return false;
+          const m = parseInt(sh.startDate.split('-')[1], 10);
+          if (m !== state.ctpMonth) return false;
+          if (!(sh.memberIds || []).includes(state.currentUserId)) return false;
+          if (state.ctpOwnerId !== 'all' && sh.ownerId !== state.ctpOwnerId) return false;
+          return true;
+        });
+
+        let grandTotal = 0;
+        let billLines = [];
+        billLines.push(`💰 **BILL CÔNG TÁC PHÍ THÁNG ${state.ctpMonth}/2026**`);
+        billLines.push(`👤 Người nhận: ${curMem.name}`);
+        if (state.ctpOwnerId !== 'all') {
+          billLines.push(`📌 Chủ show: ${getMember(state.ctpOwnerId).name}`);
+        }
+        billLines.push(`-----------------------------------`);
+
+        filteredShows.forEach((sh, idx) => {
+          const item = state.ctpItems[sh.id] || { tasks: {}, note: '' };
+          const tasks = item.tasks;
+          let showSum = 0;
+          let taskDescList = [];
+
+          Object.keys(tasks).forEach(tk => {
+            const p = tasks[tk];
+            showSum += p;
+            let label = tk;
+            if (tk === 'quay') label = 'Quay';
+            else if (tk === 'dung') label = 'Dựng';
+            else if (tk === 'chup') label = 'Chụp hình';
+            else if (tk === 'lamhinh') label = 'Làm hình';
+            else if (tk === 'flycam') label = 'Flycam';
+            else if (tk === 'gimbal') label = 'Gimbal';
+            taskDescList.push(`- ${label}: ${p.toLocaleString('vi-VN')}đ`);
+          });
+
+          if (showSum > 0 || item.note) {
+            grandTotal += showSum;
+            billLines.push(`${idx + 1}. **${sh.location}** (${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) : ''})`);
+            taskDescList.forEach(td => billLines.push(`   ${td}`));
+            if (item.note) billLines.push(`   💬 Note: ${item.note}`);
+            billLines.push(`   👉 Tổng show: **${showSum.toLocaleString('vi-VN')}đ**\n`);
+          }
+        });
+
+        billLines.push(`-----------------------------------`);
+        billLines.push(`🔥 **TỔNG CỘNG CTP LỤM: ${grandTotal.toLocaleString('vi-VN')} VNĐ**`);
+
+        state.ctpBillModal = { text: billLines.join('\n'), total: grandTotal };
+        renderApp();
+      },
+      closeBillModal() {
+        state.ctpBillModal = null;
+        renderApp();
+      },
+      copyBillText() {
+        const el = document.getElementById('ctp-bill-textarea');
+        if (!el) return;
+        el.select();
+        document.execCommand('copy');
+        state.ctpBillModal = null;
+        renderApp();
+        showToast('📋 Đã copy Bill CTP! Gửi ngay cho Chủ Show nhé.');
+      }
+    };
+
+    function renderCtpTabHtml() {
+      const curMem = getMember(state.currentUserId);
+      const filteredShows = state.shows.filter(sh => {
+        if (!sh.startDate) return false;
+        const m = parseInt(sh.startDate.split('-')[1], 10);
+        if (m !== state.ctpMonth) return false;
+        if (!(sh.memberIds || []).includes(state.currentUserId)) return false;
+        if (state.ctpOwnerId !== 'all' && sh.ownerId !== state.ctpOwnerId) return false;
+        return true;
+      });
+
+      return `
+        <div class="flex-1 flex flex-col min-h-0 bg-slate-50">
+          <div class="bg-white p-2.5 border-b border-slate-200 shrink-0 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-black text-xs text-slate-900 uppercase">💼 Tính CTP (${curMem.name})</span>
+              <div class="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                ${[6, 7, 8, 9, 10, 11, 12].map(m => `
+                  <button onclick="ctpActions.setMonth(${m})" class="px-2 py-0.5 rounded-lg text-[10px] font-extrabold ${state.ctpMonth === m ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'}">T${m}</button>
+                `).join('')}
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] font-bold text-slate-500 shrink-0">Lọc Chủ Show:</span>
+              <select onchange="ctpActions.setOwner(this.value)" class="w-full px-2.5 py-1 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold">
+                <option value="all">--- Tất cả Chủ Show ---</option>
+                ${state.members.map(m => `<option value="${m.id}" ${state.ctpOwnerId === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+
+          <div class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-3">
+            ${filteredShows.length === 0 ? `
+              <div class="text-center py-10 text-slate-400 text-xs font-bold">
+                Không tìm thấy show nào trong tháng T${state.ctpMonth} mà bạn tham gia.
+              </div>
+            ` : filteredShows.map((sh, idx) => {
+              const item = state.ctpItems[sh.id] || { tasks: {}, note: '' };
+              const owner = getMember(sh.ownerId);
+              const days = getShowDays(sh);
+              let showSubTotal = 0;
+              Object.values(item.tasks).forEach(v => showSubTotal += v);
+
+              const quayDefault = days === 1 ? 1500000 : 1200000 * days;
+              const chupDefault = days === 1 ? 1500000 : 1200000 * days;
+
+              return `
+                <div class="bg-white rounded-2xl border border-slate-200 p-3 space-y-2.5 shadow-2xs">
+                  <div class="flex items-start justify-between gap-2">
+                    <div>
+                      <span class="text-[9px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">#${idx + 1} • ${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) + ` (${days} ngày)` : ' (1 ngày)'}</span>
+                      <h4 class="font-black text-slate-900 text-xs mt-1">📍 ${escapeHtml(sh.location)} ${sh.partner ? '(' + escapeHtml(sh.partner) + ')' : ''}</h4>
+                      <p class="text-[10px] text-slate-500 mt-0.5">Chủ show: <b class="text-indigo-600">${escapeHtml(owner.name)}</b></p>
+                    </div>
+                    <div class="text-right">
+                      <span class="text-[10px] text-slate-400 font-bold block">Tạm tính show:</span>
+                      <span class="text-xs font-black text-emerald-600">${showSubTotal.toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1 border-t border-slate-100">
+                    ${[
+                      { key: 'quay', label: days === 1 ? 'Quay (1.5tr)' : `Quay (${days}n x 1.2tr)`, def: quayDefault },
+                      { key: 'dung', label: 'Dựng (1tr)', def: 1000000 },
+                      { key: 'chup', label: days === 1 ? 'Chụp (1.5tr)' : `Chụp (${days}n x 1.2tr)`, def: chupDefault },
+                      { key: 'lamhinh', label: 'Làm hình (3tr)', def: 3000000 },
+                      { key: 'flycam', label: 'Flycam (1tr)', def: 1000000 },
+                      { key: 'gimbal', label: 'Gimbal (200k)', def: 200000 }
+                    ].map(t => {
+                      const isChecked = item.tasks[t.key] !== undefined;
+                      const curVal = isChecked ? item.tasks[t.key] : t.def;
+                      return `
+                        <div class="p-1.5 rounded-xl border flex flex-col gap-1 ${isChecked ? 'bg-indigo-50/70 border-indigo-300' : 'bg-slate-50 border-slate-200'}">
+                          <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="ctpActions.toggleTask('${sh.id}', '${t.key}')" class="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5" />
+                            <span class="text-[10px] font-extrabold text-slate-700">${t.label}</span>
+                          </label>
+                          ${isChecked ? `
+                            <input type="number" step="50000" value="${curVal}" oninput="ctpActions.updateTaskPrice('${sh.id}', '${t.key}', this.value)" placeholder="Số tiền" class="w-full px-1.5 py-0.5 bg-white border border-indigo-200 rounded text-[11px] font-mono font-bold text-right" />
+                          ` : ''}
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+
+                  <div>
+                    <input type="text" value="${escapeHtml(item.note || '')}" oninput="ctpActions.updateNote('${sh.id}', this.value)" placeholder="Ghi chú thêm (ví dụ: phát sinh chi phí xe...)" class="w-full px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-xl text-[11px]" />
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+
+          <div class="p-3 bg-white border-t border-slate-200 shrink-0">
+            <button onclick="ctpActions.generateBill()" class="w-full bg-emerald-600 active:scale-98 text-white font-black py-3 rounded-2xl shadow-md text-xs flex items-center justify-center gap-2 uppercase tracking-wider">
+              <i class="fa-solid fa-sack-dollar text-sm"></i>
+              <span>🔥 LỤM (TỔNG HỢP BILL GỬI CHỦ SHOW)</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderCtpBillModalHtml() {
+      const bm = state.ctpBillModal;
+      if (!bm) return '';
+      return `
+        <div onclick="ctpActions.closeBillModal()" class="fixed inset-0 z-50 bg-black/65 flex items-center justify-center p-4">
+          <div onclick="event.stopPropagation()" class="bg-white w-full max-w-md rounded-3xl p-4 space-y-3 text-xs shadow-2xl">
+            <div class="flex justify-between items-center border-b pb-2">
+              <h3 class="font-black text-sm text-emerald-700">💰 Bill CTP Tổng Hợp</h3>
+              <button onclick="ctpActions.closeBillModal()" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <textarea id="ctp-bill-textarea" rows="10" class="w-full p-3 bg-slate-50 border border-slate-300 rounded-2xl font-mono text-[11px] leading-relaxed">${escapeHtml(bm.text)}</textarea>
+            <button onclick="ctpActions.copyBillText()" class="w-full bg-emerald-600 text-white font-black py-3 rounded-xl uppercase tracking-wide flex items-center justify-center gap-2">
+              <i class="fa-regular fa-copy"></i>
+              <span>📋 Copy Bill Gửi Zalo Chủ Show</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+function renderApp() {
       const root = document.getElementById('app');
       if (!root) return;
       if (state.isBackendPortal) {
@@ -1982,9 +2229,10 @@ ${editable ? `
       let main = '';
       if (state.activeTab === 'shows') main = renderShowsTabHtml();
       else if (state.activeTab === 'matrix') main = renderMatrixTabHtml();
-      else main = renderFreeFinderTabHtml();
+      else if (state.activeTab === 'free_finder') main = renderFreeFinderTabHtml();
+      else if (state.activeTab === 'ctp') main = renderCtpTabHtml(); // 👈 Gọi tab CTP
 
-      root.innerHTML = `${renderHeaderHtml()}${main}${renderBottomNavHtml()}${renderDetailModalHtml()}${renderFormModalHtml()}${renderZaloTomorrowModalHtml()}${renderPinModalHtml()}${renderSelfChangePinModalHtml()}${renderGuideModalHtml()}${renderToastHtml()}`;
+      root.innerHTML = `${renderHeaderHtml()}${main}${renderBottomNavHtml()}${renderDetailModalHtml()}${renderFormModalHtml()}${renderZaloTomorrowModalHtml()}${renderPinModalHtml()}${renderSelfChangePinModalHtml()}${renderGuideModalHtml()}${renderCtpBillModalHtml()}${renderToastHtml()}`;
     }
 
     window.state = state;
