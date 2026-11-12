@@ -2256,8 +2256,8 @@ window.ctpActions = {
             <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4">
               <h2 class="font-black text-sm text-amber-400 uppercase">Đăng Nhập Backend Admin</h2>
               ${state.adminLoginInput.error ? `<div class="text-rose-400 text-xs font-bold">${escapeHtml(state.adminLoginInput.error)}</div>` : ''}
-              <input type="email" value="${escapeHtml(state.adminLoginInput.email)}" placeholder="Email Quản trị viên (admin@actionsay.vn)" oninput="state.adminLoginInput.email = this.value" class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white" />
-              <input type="password" value="${escapeHtml(state.adminLoginInput.password)}" placeholder="Mật khẩu Admin (admin2026)" oninput="state.adminLoginInput.password = this.value" class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white" />
+              <input type="email" value="${escapeHtml(state.adminLoginInput.email)}" placeholder="Email Quản trị viên" oninput="state.adminLoginInput.email = this.value" class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white" />
+              <input type="password" value="${escapeHtml(state.adminLoginInput.password)}" placeholder="Mật khẩu" oninput="state.adminLoginInput.password = this.value" class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white" />
               <button onclick="appActions.submitBackendAdminLogin()" class="w-full bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs">Đăng Nhập Quản Trị</button>
               <button onclick="appActions.exitBackendPortal()" class="w-full text-slate-400 text-xs py-1">← Quay lại Lịch Show</button>
             </div>
