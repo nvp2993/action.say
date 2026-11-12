@@ -632,8 +632,13 @@
       return map;
     }
 
+// Tự động lấy đúng ngày hôm nay theo múi giờ máy (YYYY-MM-DD)
     function getDefaultNewShowDate() {
-      return '2026-11-09';
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
     }
 
     let logoTapTimer = null;
