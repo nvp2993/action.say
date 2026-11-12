@@ -484,13 +484,14 @@ selectedMonth: new Date().getMonth() + 1,
       return [...state.members].sort((a, b) => (a.order || 99) - (b.order || 99));
     }
 
-    // BẢO MẬT NGHIÊM NGẶT: Chỉ đúng Chủ Show (người tạo) hoặc Admin mới được sửa/xoá
-    function canEditShow(show) {
+    // BẢO MẬT NGHIÊM NGẶT: Chỉ đúng người tạo hoặc Admin mới được sửa/xoá
+function canEditShow(show) {
       if (!show) return false;
       if (state.isAdminMode) return true;
       const currentId = String(state.currentUserId || '').trim();
-      const ownerId = String(show.ownerId || '').trim();
-      return ownerId !== '' && ownerId === currentId;
+      // Ưu tiên kiểm tra theo người tạo (creatorId), nếu dữ liệu cũ chưa có creatorId thì fallback tạm về ownerId
+      const creatorId = String(show.creatorId || show.ownerId || '').trim();
+      return creatorId !== '' && creatorId === currentId;
     }
 
     function formatDayMonth(dateStr) {
@@ -1652,12 +1653,12 @@ selectedMonth: new Date().getMonth() + 1,
             </button>
 
             <div class="text-[11px] text-slate-500">Chủ show: <b>${escapeHtml(owner.name)}</b></div>
-            ${editable ? `
+${editable ? `
               <div class="flex gap-2">
                 <button onclick="appActions.openEditModal('${sh.id}')" class="flex-1 bg-indigo-600 text-white font-extrabold py-2.5 rounded-xl text-xs">Chỉnh sửa</button>
                 <button onclick="appActions.deleteShow('${sh.id}')" class="px-3.5 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-xs"><i class="fa-solid fa-trash-can"></i></button>
               </div>
-            ` : `<div class="bg-slate-100 p-2 rounded-xl text-center text-xs font-bold text-slate-600">🔒 Chỉ Chủ show (${escapeHtml(owner.name)}) mới được sửa</div>`}
+            ` : `<div class="bg-slate-100 p-2 rounded-xl text-center text-xs font-bold text-slate-600">🔒 Chỉ người tạo show mới được sửa</div>`}
           </div>
         </div>
       `;
