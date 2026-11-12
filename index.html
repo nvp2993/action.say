@@ -362,6 +362,12 @@ selectedMonth: new Date().getMonth() + 1,
       newMemberForm: { name: '', shortLabel: '', pin: '1234', colorIdx: 5 },
       accountDraft: { email: 'admin@actionsay.vn', password: 'admin2026' },
       toast: null
+
+      // Thêm các thuộc tính này vào trong đối tượng state hiện tại của bạn
+      ctpMonth: new Date().getMonth() + 1,
+      ctpOwnerId: 'all',
+      ctpItems: {}, // Lưu cấu hình nhiệm vụ / tiền của từng show
+      ctpBillModal: null, // Lưu nội dung Bill khi bấm LỤM        
     };
 
     // Khôi phục dữ liệu từ LocalStorage nếu chạy độc lập hoặc trước khi Cloud tải xong
