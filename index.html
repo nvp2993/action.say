@@ -1533,7 +1533,7 @@
         return days === 1 ? 1500000 : 1200000 * days;
       }
       if (taskKey === 'dung') return 1000000;
-      if (taskKey === 'lamhinh') return 3000000;
+      if (taskKey === 'lamhinh') return 300000; // 👈 Đã sửa thành 300k
       if (taskKey === 'flycam') return 1000000;
       if (taskKey === 'gimbal') return 200000;
       return 0;
@@ -1549,7 +1549,7 @@
         renderApp();
       },
       toggleTask(showId, taskKey) {
-        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, note: '', customTotal: '' };
+        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, note: '', extraMoney: 0 };
         const tasks = state.ctpItems[showId].tasks;
         if (tasks[taskKey]) {
           delete tasks[taskKey];
@@ -1560,14 +1560,18 @@
         renderApp();
       },
       updateTaskPrice(showId, taskKey, priceVal) {
-        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, note: '', customTotal: '' };
-        const val = Number(priceVal) || 0;
-        state.ctpItems[showId].tasks[taskKey] = val;
+        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, note: '', extraMoney: 0 };
+        state.ctpItems[showId].tasks[taskKey] = Number(priceVal) || 0;
         renderApp();
       },
       updateNote(showId, noteVal) {
-        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, note: '', customTotal: '' };
+        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, note: '', extraMoney: 0 };
         state.ctpItems[showId].note = noteVal;
+      },
+      updateExtraMoney(showId, moneyVal) {
+        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, note: '', extraMoney: 0 };
+        state.ctpItems[showId].extraMoney = Number(moneyVal) || 0;
+        renderApp();
       },
       generateBill() {
         const curMem = getMember(state.currentUserId);
@@ -1590,7 +1594,7 @@
         billLines.push(`-----------------------------------`);
 
         filteredShows.forEach((sh, idx) => {
-          const item = state.ctpItems[sh.id] || { tasks: {}, note: '' };
+          const item = state.ctpItems[sh.id] || { tasks: {}, note: '', extraMoney: 0 };
           const tasks = item.tasks;
           let showSum = 0;
           let taskDescList = [];
@@ -1608,11 +1612,20 @@
             taskDescList.push(`- ${label}: ${p.toLocaleString('vi-VN')}đ`);
           });
 
-          if (showSum > 0 || item.note) {
+          const extra = Number(item.extraMoney) || 0;
+          if (extra > 0) {
+            showSum += extra;
+          }
+
+          if (showSum > 0 || item.note || extra > 0) {
             grandTotal += showSum;
             billLines.push(`${idx + 1}. **${sh.location}** (${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) : ''})`);
             taskDescList.forEach(td => billLines.push(`   ${td}`));
-            if (item.note) billLines.push(`   💬 Note: ${item.note}`);
+            if (extra > 0) {
+              billLines.push(`   - Phát sinh${item.note ? ' (' + item.note + ')' : ''}: ${extra.toLocaleString('vi-VN')}đ`);
+            } else if (item.note) {
+              billLines.push(`   💬 Note: ${item.note}`);
+            }
             billLines.push(`   👉 Tổng show: **${showSum.toLocaleString('vi-VN')}đ**\n`);
           }
         });
@@ -1638,7 +1651,7 @@
       }
     };
 
-function renderCtpTabHtml() {
+    function renderCtpTabHtml() {
       const curMem = getMember(state.currentUserId);
       const filteredShows = state.shows.filter(sh => {
         if (!sh.startDate) return false;
@@ -1651,13 +1664,13 @@ function renderCtpTabHtml() {
 
       let totalGrandSum = 0;
       filteredShows.forEach(sh => {
-        const item = state.ctpItems[sh.id] || { tasks: {} };
+        const item = state.ctpItems[sh.id] || { tasks: {}, extraMoney: 0 };
         Object.values(item.tasks).forEach(v => totalGrandSum += v);
+        totalGrandSum += (Number(item.extraMoney) || 0);
       });
 
       return `
         <div class="flex-1 flex flex-col min-h-0 bg-slate-50 text-xs">
-          <!-- Thanh chọn tháng & bộ lọc Chủ Show -->
           <div class="bg-white p-2.5 border-b border-slate-200 shrink-0 space-y-2 shadow-2xs">
             <div class="flex items-center justify-between gap-2">
               <span class="font-black text-xs text-slate-900 uppercase">💼 Bảng CTP Của Bạn (${curMem.name})</span>
@@ -1682,7 +1695,6 @@ function renderCtpTabHtml() {
             </div>
           </div>
 
-          <!-- Bảng danh sách CTP dạng Table chuyên nghiệp -->
           <div class="flex-1 min-h-0 overflow-auto custom-scroll p-2">
             ${filteredShows.length === 0 ? `
               <div class="text-center py-12 text-slate-400 text-xs font-bold">
@@ -1690,24 +1702,25 @@ function renderCtpTabHtml() {
               </div>
             ` : `
               <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
-                <table class="w-full border-collapse text-[11px] min-w-[750px]">
+                <table class="w-full border-collapse text-[11px] min-w-[780px]">
                   <thead>
                     <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-black text-[10px] uppercase">
                       <th class="py-2 px-2 border-r border-slate-200 w-8 text-center">#</th>
                       <th class="py-2 px-2 border-r border-slate-200 text-left w-28">Ngày & Địa Điểm</th>
-                      <th class="py-2 px-2 border-r border-slate-200 text-center w-24">Quay / Chụp (Mặc định)</th>
                       <th class="py-2 px-2 border-r border-slate-200 text-center">Nhiệm Vụ & Số Tiền Tùy Chỉnh</th>
-                      <th class="py-2 px-2 border-r border-slate-200 text-left w-36">Ghi Chú Phát Sinh</th>
+                      <th class="py-2 px-2 border-r border-slate-200 text-left w-44">Phát Sinh & Ghi Chú</th>
                       <th class="py-2 px-2 text-right w-24">Tổng Show</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-slate-200">
                     ${filteredShows.map((sh, idx) => {
-                      const item = state.ctpItems[sh.id] || { tasks: {}, note: '' };
+                      const item = state.ctpItems[sh.id] || { tasks: {}, note: '', extraMoney: 0 };
                       const owner = getMember(sh.ownerId);
                       const days = getShowDays(sh);
                       let showSubTotal = 0;
                       Object.values(item.tasks).forEach(v => showSubTotal += v);
+                      const extra = Number(item.extraMoney) || 0;
+                      showSubTotal += extra;
 
                       const quayDefault = days === 1 ? 1500000 : 1200000 * days;
                       const chupDefault = days === 1 ? 1500000 : 1200000 * days;
@@ -1716,7 +1729,7 @@ function renderCtpTabHtml() {
                         { key: 'quay', label: `Quay (${days === 1 ? '1.5tr' : days + 'n x 1.2tr'})`, def: quayDefault },
                         { key: 'dung', label: 'Dựng (1tr)', def: 1000000 },
                         { key: 'chup', label: `Chụp (${days === 1 ? '1.5tr' : days + 'n x 1.2tr'})`, def: chupDefault },
-                        { key: 'lamhinh', label: 'Làm hình (3tr)', def: 3000000 },
+                        { key: 'lamhinh', label: 'Làm hình (300k)', def: 300000 },
                         { key: 'flycam', label: 'Flycam (1tr)', def: 1000000 },
                         { key: 'gimbal', label: 'Gimbal (200k)', def: 200000 }
                       ];
@@ -1728,10 +1741,6 @@ function renderCtpTabHtml() {
                             <div class="text-[10px] text-indigo-600 font-mono">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) + ` (${days}n)` : ''}</div>
                             <div class="truncate max-w-[110px]" title="${escapeHtml(sh.location)}">📍 ${escapeHtml(sh.location)}</div>
                             <div class="text-[9px] text-slate-400 font-medium">Chủ: ${escapeHtml(owner.name)}</div>
-                          </td>
-                          <td class="py-2.5 px-2 border-r border-slate-200 text-center bg-slate-50/50">
-                            <div class="text-[9px] text-slate-500">1 ngày: 1.5tr</div>
-                            <div class="text-[9px] text-slate-500">>=2 ngày: 1.2tr/n</div>
                           </td>
                           <td class="py-2.5 px-2 border-r border-slate-200">
                             <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
@@ -1752,8 +1761,9 @@ function renderCtpTabHtml() {
                               }).join('')}
                             </div>
                           </td>
-                          <td class="py-2.5 px-2 border-r border-slate-200">
-                            <input type="text" value="${escapeHtml(item.note || '')}" oninput="ctpActions.updateNote('${sh.id}', this.value)" placeholder="Note phát sinh..." class="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-[10px]" />
+                          <td class="py-2.5 px-2 border-r border-slate-200 space-y-1">
+                            <input type="number" step="50000" value="${item.extraMoney || ''}" oninput="ctpActions.updateExtraMoney('${sh.id}', this.value)" placeholder="Tiền phát sinh (+ VNĐ)" class="w-full px-2 py-1 bg-amber-50/60 border border-amber-200 rounded text-[10px] font-mono font-bold text-amber-900" />
+                            <input type="text" value="${escapeHtml(item.note || '')}" oninput="ctpActions.updateNote('${sh.id}', this.value)" placeholder="Nội dung ghi chú..." class="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-[10px]" />
                           </td>
                           <td class="py-2.5 px-2 text-right font-black text-emerald-600 font-mono text-xs">
                             ${showSubTotal.toLocaleString('vi-VN')}đ
@@ -1767,7 +1777,6 @@ function renderCtpTabHtml() {
             `}
           </div>
 
-          <!-- Nút LỤM tổng hợp bill -->
           <div class="p-3 bg-white border-t border-slate-200 shrink-0">
             <button onclick="ctpActions.generateBill()" class="w-full bg-emerald-600 active:scale-98 text-white font-black py-3 rounded-2xl shadow-md text-xs flex items-center justify-center gap-2 uppercase tracking-wider">
               <i class="fa-solid fa-sack-dollar text-sm"></i>
