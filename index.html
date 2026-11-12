@@ -1659,7 +1659,125 @@
       }
     };
 
-  function renderCtpTabHtml() {
+ window.ctpActions = {
+      setMonth(m) {
+        state.ctpMonth = Number(m);
+        renderApp();
+      },
+      setOwner(ownerId) {
+        state.ctpOwnerId = ownerId;
+        renderApp();
+      },
+      toggleTask(showId, taskKey) {
+        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
+        const tasks = state.ctpItems[showId].tasks;
+        if (tasks[taskKey]) {
+          delete tasks[taskKey];
+        } else {
+          const sh = state.shows.find(s => s.id === showId);
+          tasks[taskKey] = getDefaultRateForTask(taskKey, sh);
+        }
+        renderApp();
+      },
+      updateTaskPrice(showId, taskKey, priceVal) {
+        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
+        state.ctpItems[showId].tasks[taskKey] = Number(priceVal) || 0;
+      },
+      addExtraItem(showId) {
+        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
+        if (!Array.isArray(state.ctpItems[showId].extras)) state.ctpItems[showId].extras = [];
+        state.ctpItems[showId].extras.push({ name: '', amount: '' });
+        renderApp();
+      },
+      removeExtraItem(showId, index) {
+        if (!state.ctpItems[showId] || !state.ctpItems[showId].extras) return;
+        state.ctpItems[showId].extras.splice(index, 1);
+        renderApp();
+      },
+      updateExtraField(showId, index, field, val) {
+        if (!state.ctpItems[showId] || !state.ctpItems[showId].extras) return;
+        state.ctpItems[showId].extras[index][field] = field === 'amount' ? (Number(val) || 0) : val;
+      },
+      generateBill() {
+        const curMem = getMember(state.currentUserId);
+        const filteredShows = state.shows.filter(sh => {
+          if (!sh.startDate) return false;
+          const m = parseInt(sh.startDate.split('-')[1], 10);
+          if (m !== state.ctpMonth) return false;
+          if (!(sh.memberIds || []).includes(state.currentUserId)) return false;
+          if (state.ctpOwnerId !== 'all' && sh.ownerId !== state.ctpOwnerId) return false;
+          return true;
+        });
+
+        let grandTotal = 0;
+        let billLines = [];
+        billLines.push(`💰 **BILL CÔNG TÁC PHÍ THÁNG ${state.ctpMonth}/2026**`);
+        billLines.push(`👤 Người nhận: ${curMem.name}`);
+        if (state.ctpOwnerId !== 'all') {
+          billLines.push(`📌 Chủ show: ${getMember(state.ctpOwnerId).name}`);
+        }
+        billLines.push(`-----------------------------------`);
+
+        filteredShows.forEach((sh, idx) => {
+          const item = state.ctpItems[sh.id] || { tasks: {}, extras: [] };
+          const tasks = item.tasks;
+          let showSum = 0;
+          let taskDescList = [];
+
+          Object.keys(tasks).forEach(tk => {
+            const p = tasks[tk];
+            showSum += p;
+            let label = tk;
+            if (tk === 'quay') label = 'Quay';
+            else if (tk === 'dung') label = 'Dựng';
+            else if (tk === 'chup') label = 'Chụp hình';
+            else if (tk === 'lamhinh') label = 'Làm hình';
+            else if (tk === 'flycam') label = 'Flycam';
+            else if (tk === 'gimbal') label = 'Gimbal';
+            taskDescList.push(`- ${label}: ${p.toLocaleString('vi-VN')}đ`);
+          });
+
+          const extras = Array.isArray(item.extras) ? item.extras : [];
+          let extraDescList = [];
+          extras.forEach(ex => {
+            const amt = Number(ex.amount) || 0;
+            if (amt > 0) {
+              showSum += amt;
+              extraDescList.push(`- Phát sinh (${ex.name || 'Phí khác'}): ${amt.toLocaleString('vi-VN')}đ`);
+            }
+          });
+
+          if (showSum > 0) {
+            grandTotal += showSum;
+            billLines.push(`${idx + 1}. **${sh.location}** (${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) : ''})`);
+            taskDescList.forEach(td => billLines.push(`   ${td}`));
+            extraDescList.forEach(ed => billLines.push(`   ${ed}`));
+            billLines.push(`   👉 Tổng show: **${showSum.toLocaleString('vi-VN')}đ**\n`);
+          }
+        });
+
+        billLines.push(`-----------------------------------`);
+        billLines.push(`🔥 **TỔNG CỘNG CTP LỤM: ${grandTotal.toLocaleString('vi-VN')} VNĐ**`);
+
+        state.ctpBillModal = { text: billLines.join('\n'), total: grandTotal };
+        renderApp();
+      },
+      closeBillModal() {
+        state.ctpBillModal = null;
+        renderApp();
+      },
+      copyBillText() {
+        const el = document.getElementById('ctp-bill-textarea');
+        if (!el) return;
+        el.select();
+        document.execCommand('copy');
+        state.ctpBillModal = null;
+        renderApp();
+        showToast('📋 Đã copy Bill CTP! Gửi ngay cho Chủ Show nhé.');
+      }
+    };
+
+    function renderCtpTabHtml() {
       const curMem = getMember(state.currentUserId);
       const filteredShows = state.shows.filter(sh => {
         if (!sh.startDate) return false;
@@ -1680,130 +1798,131 @@
 
       return `
         <div class="flex-1 flex flex-col min-h-0 bg-slate-100 text-xs font-sans">
-          <!-- Thanh điều khiển tháng & lọc -->
-          <div class="bg-white p-2.5 border-b border-slate-200 shrink-0 space-y-2 shadow-xs">
+          <!-- Thanh điều khiển tháng & lọc Chủ Show -->
+          <div class="bg-white p-3 border-b border-slate-200 shrink-0 space-y-2.5 shadow-xs">
             <div class="flex items-center justify-between gap-2">
               <div class="flex items-center gap-1.5">
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span class="font-black text-xs text-slate-900 uppercase">💼 Bảng CTP (${curMem.name})</span>
+                <span class="font-black text-xs text-slate-900 uppercase">💼 Tính CTP (${curMem.name})</span>
               </div>
-              <div class="flex items-center gap-1 overflow-x-auto no-scrollbar bg-slate-100 p-0.5 rounded-lg">
+              <div class="flex items-center gap-1 overflow-x-auto no-scrollbar bg-slate-100 p-1 rounded-xl">
                 ${[6, 7, 8, 9, 10, 11, 12].map(m => `
-                  <button onclick="ctpActions.setMonth(${m})" class="px-2 py-0.5 rounded-md text-[10px] font-extrabold transition-all ${state.ctpMonth === m ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-600'}">T${m}</button>
+                  <button onclick="ctpActions.setMonth(${m})" class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-all ${state.ctpMonth === m ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">T${m}</button>
                 `).join('')}
               </div>
             </div>
-            <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
-              <div class="flex items-center gap-1.5 flex-1 max-w-xs">
+            <div class="flex items-center justify-between gap-3 pt-1 border-t border-slate-100">
+              <div class="flex items-center gap-2 flex-1">
                 <span class="text-[10px] font-bold text-slate-500 shrink-0">Lọc Chủ:</span>
-                <select onchange="ctpActions.setOwner(this.value)" class="w-full px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold focus:outline-none">
+                <select onchange="ctpActions.setOwner(this.value)" class="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none">
                   <option value="all">--- Tất cả Chủ Show ---</option>
                   ${state.members.map(m => `<option value="${m.id}" ${state.ctpOwnerId === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
                 </select>
               </div>
-              <div class="text-right bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200 shrink-0">
-                <span class="text-[9px] text-emerald-700 font-bold block">Tổng T${state.ctpMonth}</span>
-                <span class="text-xs font-black text-emerald-700 font-mono">${totalGrandSum.toLocaleString('vi-VN')}đ</span>
+              <div class="text-right bg-emerald-50 px-3 py-1.5 rounded-2xl border border-emerald-200 shrink-0">
+                <span class="text-[9px] text-emerald-700 font-bold uppercase block">Tổng T${state.ctpMonth}</span>
+                <span class="text-sm font-black text-emerald-700 font-mono">${totalGrandSum.toLocaleString('vi-VN')}đ</span>
               </div>
             </div>
           </div>
 
-          <!-- Bảng với hệ thống Cloud Tag nhiệm vụ siêu gọn -->
-          <div class="flex-1 min-h-0 overflow-auto custom-scroll p-2">
+          <!-- Danh sách dạng Thẻ dọc hoàn toàn không bị tràn màn hình -->
+          <div class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-3">
             ${filteredShows.length === 0 ? `
-              <div class="text-center py-14 bg-white rounded-2xl border border-slate-200 shadow-2xs mx-auto max-w-sm space-y-1.5">
-                <div class="text-2xl">📭</div>
+              <div class="text-center py-16 bg-white rounded-3xl border border-slate-200 shadow-xs mx-auto max-w-sm space-y-2">
+                <div class="text-3xl">📭</div>
                 <div class="text-slate-800 font-bold text-xs">Không tìm thấy show nào trong tháng T${state.ctpMonth}</div>
               </div>
-            ` : `
-              <div class="bg-white rounded-2xl border border-slate-200 overflow-x-auto custom-scroll shadow-2xs">
-                <table class="w-full border-collapse text-[11px] min-w-[720px]">
-                  <thead>
-                    <tr class="bg-slate-50 text-slate-600 border-b border-slate-200 font-black text-[10px] uppercase">
-                      <th class="py-2.5 px-2 border-r border-slate-200 w-8 text-center">#</th>
-                      <th class="py-2.5 px-2 border-r border-slate-200 text-left w-32">Show & Thời Gian</th>
-                      <th class="py-2.5 px-2 border-r border-slate-200 text-center">Nhiệm Vụ (Cloud Tags)</th>
-                      <th class="py-2.5 px-2 border-r border-slate-200 text-left w-44">Phát Sinh</th>
-                      <th class="py-2.5 px-2 text-right w-24">Tổng Show</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-slate-100">
-                    ${filteredShows.map((sh, idx) => {
-                      const item = state.ctpItems[sh.id] || { tasks: {}, extras: [] };
-                      const owner = getMember(sh.ownerId);
-                      const days = getShowDays(sh);
-                      let showSubTotal = 0;
-                      Object.values(item.tasks).forEach(v => showSubTotal += v);
-                      
-                      const extras = Array.isArray(item.extras) ? item.extras : [];
-                      extras.forEach(ex => showSubTotal += (Number(ex.amount) || 0));
+            ` : filteredShows.map((sh, idx) => {
+              const item = state.ctpItems[sh.id] || { tasks: {}, extras: [] };
+              const owner = getMember(sh.ownerId);
+              const days = getShowDays(sh);
+              let showSubTotal = 0;
+              Object.values(item.tasks).forEach(v => showSubTotal += v);
+              
+              const extras = Array.isArray(item.extras) ? item.extras : [];
+              extras.forEach(ex => showSubTotal += (Number(ex.amount) || 0));
 
-                      const quayDefault = days === 1 ? 1500000 : 1200000 * days;
-                      const chupDefault = days === 1 ? 1500000 : 1200000 * days;
+              const quayDefault = days === 1 ? 1500000 : 1200000 * days;
+              const chupDefault = days === 1 ? 1500000 : 1200000 * days;
 
-                      const taskList = [
-                        { key: 'quay', label: `Quay (${days === 1 ? '1.5tr' : days + 'n x 1.2tr'})`, def: quayDefault },
-                        { key: 'dung', label: 'Dựng (1tr)', def: 1000000 },
-                        { key: 'chup', label: `Chụp (${days === 1 ? '1.5tr' : days + 'n x 1.2tr'})`, def: chupDefault },
-                        { key: 'lamhinh', label: 'Làm hình (300k)', def: 300000 },
-                        { key: 'flycam', label: 'Flycam (1tr)', def: 1000000 },
-                        { key: 'gimbal', label: 'Gimbal (200k)', def: 200000 }
-                      ];
+              const taskList = [
+                { key: 'quay', label: `Quay (${days === 1 ? '1.5tr' : days + 'n x 1.2tr'})`, def: quayDefault },
+                { key: 'dung', label: 'Dựng (1tr)', def: 1000000 },
+                { key: 'chup', label: `Chụp (${days === 1 ? '1.5tr' : days + 'n x 1.2tr'})`, def: chupDefault },
+                { key: 'lamhinh', label: 'Làm hình (300k)', def: 300000 },
+                { key: 'flycam', label: 'Flycam (1tr)', def: 1000000 },
+                { key: 'gimbal', label: 'Gimbal (200k)', def: 200000 }
+              ];
 
-                      return `
-                        <tr class="hover:bg-slate-50/80 transition-colors align-top">
-                          <td class="py-2 px-2 border-r border-slate-100 text-center font-mono font-bold text-slate-400 bg-slate-50/30">${idx + 1}</td>
-                          <td class="py-2 px-2 border-r border-slate-100">
-                            <div class="font-mono text-indigo-600 font-bold text-[9px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) + ` (${days}n)` : ''}</div>
-                            <div class="font-black text-slate-900 text-xs truncate max-w-[120px]" title="${escapeHtml(sh.location)}">📍 ${escapeHtml(sh.location)}</div>
-                            <div class="text-[9px] text-slate-500 mt-0.5">Chủ: <b class="text-slate-700">${escapeHtml(owner.name)}</b></div>
-                          </td>
-                          <td class="py-2.5 px-2 border-r border-slate-100">
-                            <div class="flex flex-wrap gap-1.5 items-center">
-                              ${taskList.map(t => {
-                                const isChecked = item.tasks[t.key] !== undefined;
-                                const curVal = isChecked ? item.tasks[t.key] : t.def;
-                                return `
-                                  <div class="inline-flex flex-col transition-all">
-                                    <button onclick="ctpActions.toggleTask('${sh.id}', '${t.key}')" class="px-2.5 py-1 rounded-full text-[10px] font-extrabold border transition-all flex items-center gap-1 ${isChecked ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'}">
-                                      <span>${t.label}</span>
-                                      <i class="fa-solid ${isChecked ? 'fa-check text-[9px]' : 'fa-plus text-[8px] opacity-60'}"></i>
-                                    </button>
-                                    ${isChecked ? `
-                                      <input type="number" step="50000" value="${curVal}" oninput="ctpActions.updateTaskPrice('${sh.id}', '${t.key}', this.value)" class="mt-1 w-24 px-1.5 py-0.5 bg-indigo-50 border border-indigo-300 rounded text-[10px] font-mono font-black text-right text-indigo-700 focus:outline-none" title="Nhập lại số tiền CTP" />
-                                    ` : ''}
-                                  </div>
-                                `;
-                              }).join('')}
-                            </div>
-                          </td>
-                          <td class="py-2 px-2 border-r border-slate-100 space-y-1">
-                            ${extras.map((ex, exIdx) => `
-                              <div class="flex items-center gap-1 bg-amber-50/70 p-1 rounded-xl border border-amber-200">
-                                <input type="text" value="${escapeHtml(ex.name || '')}" oninput="ctpActions.updateExtraField('${sh.id}', ${exIdx}, 'name', this.value)" placeholder="Tên phí" class="w-20 px-1.5 py-0.5 bg-white border border-amber-300 rounded text-[9px] font-bold focus:outline-none" />
-                                <input type="number" step="50000" value="${ex.amount || ''}" oninput="ctpActions.updateExtraField('${sh.id}', ${exIdx}, 'amount', this.value)" placeholder="Số tiền" class="w-16 px-1.5 py-0.5 bg-white border border-amber-300 rounded text-[9px] font-mono font-black text-right text-amber-900 focus:outline-none" />
-                                <button onclick="ctpActions.removeExtraItem('${sh.id}', ${exIdx})" class="w-5 h-5 rounded bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 hover:bg-rose-200"><i class="fa-solid fa-xmark text-[9px]"></i></button>
-                              </div>
-                            `).join('')}
-                            <button onclick="ctpActions.addExtraItem('${sh.id}')" class="w-full py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[9px] font-black flex items-center justify-center gap-1 transition-colors">
-                              <i class="fa-solid fa-plus text-[8px] text-indigo-600"></i> Thêm phát sinh
+              return `
+                <div class="bg-white rounded-3xl border border-slate-200 p-4 space-y-3 shadow-2xs">
+                  <!-- Header show -->
+                  <div class="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+                    <div>
+                      <div class="flex items-center gap-1.5">
+                        <span class="px-2 py-0.5 rounded-full bg-slate-100 font-mono font-bold text-[10px] text-slate-600">#${idx + 1}</span>
+                        <span class="font-mono font-bold text-indigo-600 text-[10px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) + ` (${days}n)` : ''}</span>
+                      </div>
+                      <h4 class="font-black text-slate-900 text-sm mt-1">📍 ${escapeHtml(sh.location)} ${sh.partner ? '(' + escapeHtml(sh.partner) + ')' : ''}</h4>
+                      <p class="text-[10px] text-slate-500 mt-0.5">Chủ show: <b class="text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">${escapeHtml(owner.name)}</b></p>
+                    </div>
+                    <div class="text-right shrink-0 bg-emerald-50 px-3 py-1.5 rounded-2xl border border-emerald-200">
+                      <span class="text-[9px] text-emerald-700 font-bold block">Tổng Show</span>
+                      <span class="text-xs font-black text-emerald-700 font-mono">${showSubTotal.toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  </div>
+
+                  <!-- Cloud Tags nhiệm vụ siêu gọn -->
+                  <div class="space-y-1.5">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Nhiệm Vụ Tham Gia:</span>
+                    <div class="flex flex-wrap gap-1.5 items-center">
+                      ${taskList.map(t => {
+                        const isChecked = item.tasks[t.key] !== undefined;
+                        const curVal = isChecked ? item.tasks[t.key] : t.def;
+                        return `
+                          <div class="inline-flex flex-col">
+                            <button onclick="ctpActions.toggleTask('${sh.id}', '${t.key}')" class="px-2.5 py-1 rounded-full text-[10px] font-extrabold border transition-all flex items-center gap-1 ${isChecked ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-600 border-slate-200'}">
+                              <span>${t.label}</span>
+                              <i class="fa-solid ${isChecked ? 'fa-check text-[9px]' : 'fa-plus text-[8px] opacity-60'}"></i>
                             </button>
-                          </td>
-                          <td class="py-2 px-2 text-right font-black text-emerald-600 font-mono text-xs align-middle">
-                            ${showSubTotal.toLocaleString('vi-VN')}đ
-                          </td>
-                        </tr>
-                      `;
-                    }).join('')}
-                  </tbody>
-                </table>
-              </div>
-            `}
+                            ${isChecked ? `
+                              <input type="number" step="50000" value="${curVal}" onblur="ctpActions.updateTaskPrice('${sh.id}', '${t.key}', this.value)" class="mt-1 w-24 px-1.5 py-0.5 bg-indigo-50 border border-indigo-300 rounded text-[10px] font-mono font-black text-right text-indigo-700 focus:outline-none" title="Nhập lại số tiền" />
+                            ` : ''}
+                          </div>
+                        `;
+                      }).join('')}
+                    </div>
+                  </div>
+
+                  <!-- Khoản phát sinh dùng onblur gõ phím cực mượt -->
+                  <div class="space-y-2 pt-1 border-t border-slate-100">
+                    <div class="flex items-center justify-between">
+                      <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Khoản Phát Sinh:</span>
+                      <button onclick="ctpActions.addExtraItem('${sh.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-indigo-600 rounded-xl text-[10px] font-black flex items-center gap-1 transition-colors">
+                        <i class="fa-solid fa-plus text-[9px]"></i> Thêm phát sinh
+                      </button>
+                    </div>
+                    ${extras.length > 0 ? `
+                      <div class="space-y-1.5 bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200">
+                        ${extras.map((ex, exIdx) => `
+                          <div class="flex items-center gap-2">
+                            <input type="text" value="${escapeHtml(ex.name || '')}" onblur="ctpActions.updateExtraField('${sh.id}', ${exIdx}, 'name', this.value)" placeholder="Tên phí (vd: Xe, Ăn...)" class="flex-1 px-2.5 py-1 bg-white border border-amber-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none" />
+                            <input type="number" step="50000" value="${ex.amount || ''}" onblur="ctpActions.updateExtraField('${sh.id}', ${exIdx}, 'amount', this.value)" placeholder="Số tiền" class="w-24 px-2.5 py-1 bg-white border border-amber-300 rounded-xl text-xs font-mono font-black text-right text-amber-900 focus:outline-none" />
+                            <button onclick="ctpActions.removeExtraItem('${sh.id}', ${exIdx})" class="w-7 h-7 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-200 shrink-0"><i class="fa-solid fa-xmark text-xs"></i></button>
+                          </div>
+                        `).join('')}
+                      </div>
+                    ` : ''}
+                  </div>
+                </div>
+              `;
+            }).join('')}
           </div>
 
           <!-- Nút LỤM -->
-          <div class="p-2.5 bg-white border-t border-slate-200 shrink-0 shadow-sm">
-            <button onclick="ctpActions.generateBill()" class="w-full bg-emerald-600 active:scale-98 text-white font-black py-2.5 rounded-xl shadow-md text-xs flex items-center justify-center gap-1.5 uppercase tracking-wider transition-all">
+          <div class="p-3 bg-white border-t border-slate-200 shrink-0 shadow-lg">
+            <button onclick="ctpActions.generateBill()" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 active:scale-98 text-white font-black py-3.5 rounded-2xl shadow-md text-xs flex items-center justify-center gap-2 uppercase tracking-wider transition-all">
               <i class="fa-solid fa-sack-dollar text-sm"></i>
               <span>🔥 LỤM (TỔNG HỢP BILL GỬI CHỦ SHOW)</span>
             </button>
