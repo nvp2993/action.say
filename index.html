@@ -1426,7 +1426,7 @@ function canEditShow(show) {
           `}
 
           <div class="flex-1 min-h-0 overflow-auto custom-scroll relative">
-            <table class="w-full border-collapse text-[11px] min-w-[540px]">
+            <table class="w-full border-collapse text-[11px] min-w-[620px]">
               <thead class="sticky top-0 z-20">
                 <tr class="bg-[#d9ead3] text-slate-800 border-b border-slate-300 font-extrabold text-[10px] uppercase">
                   <th class="py-1.5 px-1.5 border-r border-slate-300 w-9 text-center">STT</th>
@@ -1435,13 +1435,15 @@ function canEditShow(show) {
                   <th class="py-1.5 px-1 border-r border-slate-300 text-center w-12">BĐ</th>
                   <th class="py-1.5 px-1 border-r border-slate-300 text-center w-12">KT</th>
                   <th class="py-1.5 px-2 border-r border-slate-300 text-left">NHÂN SỰ & VAI TRÒ</th>
-                  <th class="py-1.5 px-1.5 text-center w-20">CHỦ SHOW</th>
+                  <th class="py-1.5 px-1.5 border-r border-slate-300 text-center w-20">CHỦ SHOW</th>
+                  <th class="py-1.5 px-1.5 text-center w-20">NGƯỜI TẠO</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-200">
                 ${filtered.map((sh, idx) => {
                   const editable = canEditShow(sh);
                   const owner = getMember(sh.ownerId);
+                  const creator = getMember(sh.creatorId || sh.ownerId);
                   const statusBadge = sh.postStatus === 'done'
                     ? '<span title="Đã giao khách" class="text-[9px] ml-1">✅</span>'
                     : sh.postStatus === 'editing'
@@ -1466,10 +1468,13 @@ function canEditShow(show) {
                           ${(sh.memberIds || []).map(mid => renderPillHtml(mid, 'xs', '', '', sh.roles?.[mid] || '')).join('')}
                         </div>
                       </td>
+                      <td class="py-1.5 px-1.5 border-r border-slate-200 text-center">
+                        <span class="text-[10px] font-semibold text-slate-700 truncate max-w-[54px]">${escapeHtml(owner.name)}</span>
+                      </td>
                       <td class="py-1.5 px-1.5 text-center">
-                        <div class="flex items-center justify-center gap-1 text-[10px] font-semibold text-slate-700">
-                          <span class="truncate max-w-[54px]">${sh.ownerLabel !== undefined && sh.ownerLabel !== '' ? escapeHtml(sh.ownerLabel) : escapeHtml(owner.name)}</span>
-                          ${editable ? '<i class="fa-solid fa-pen-to-square text-indigo-600 text-[10px]"></i>' : '<i class="fa-solid fa-lock text-slate-300 text-[9px]"></i>'}
+                        <div class="flex items-center justify-center gap-1 text-[10px] font-bold text-indigo-700">
+                          <span class="truncate max-w-[54px]">${escapeHtml(creator.name)}</span>
+                          ${editable ? '<i class="fa-solid fa-pen-to-square text-[9px]"></i>' : ''}
                         </div>
                       </td>
                     </tr>
