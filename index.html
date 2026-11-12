@@ -1533,7 +1533,7 @@
         return days === 1 ? 1500000 : 1200000 * days;
       }
       if (taskKey === 'dung') return 1000000;
-      if (taskKey === 'lamhinh') return 300000; // 👈 Đã sửa thành 300k
+      if (taskKey === 'lamhinh') return 300000;
       if (taskKey === 'flycam') return 1000000;
       if (taskKey === 'gimbal') return 200000;
       return 0;
@@ -1549,7 +1549,7 @@
         renderApp();
       },
       toggleTask(showId, taskKey) {
-        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, note: '', extraMoney: 0 };
+        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
         const tasks = state.ctpItems[showId].tasks;
         if (tasks[taskKey]) {
           delete tasks[taskKey];
@@ -1560,17 +1560,24 @@
         renderApp();
       },
       updateTaskPrice(showId, taskKey, priceVal) {
-        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, note: '', extraMoney: 0 };
+        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
         state.ctpItems[showId].tasks[taskKey] = Number(priceVal) || 0;
         renderApp();
       },
-      updateNote(showId, noteVal) {
-        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, note: '', extraMoney: 0 };
-        state.ctpItems[showId].note = noteVal;
+      addExtraItem(showId) {
+        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
+        if (!Array.isArray(state.ctpItems[showId].extras)) state.ctpItems[showId].extras = [];
+        state.ctpItems[showId].extras.push({ name: '', amount: '' });
+        renderApp();
       },
-      updateExtraMoney(showId, moneyVal) {
-        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, note: '', extraMoney: 0 };
-        state.ctpItems[showId].extraMoney = Number(moneyVal) || 0;
+      removeExtraItem(showId, index) {
+        if (!state.ctpItems[showId] || !state.ctpItems[showId].extras) return;
+        state.ctpItems[showId].extras.splice(index, 1);
+        renderApp();
+      },
+      updateExtraField(showId, index, field, val) {
+        if (!state.ctpItems[showId] || !state.ctpItems[showId].extras) return;
+        state.ctpItems[showId].extras[index][field] = field === 'amount' ? (Number(val) || 0) : val;
         renderApp();
       },
       generateBill() {
@@ -1594,7 +1601,7 @@
         billLines.push(`-----------------------------------`);
 
         filteredShows.forEach((sh, idx) => {
-          const item = state.ctpItems[sh.id] || { tasks: {}, note: '', extraMoney: 0 };
+          const item = state.ctpItems[sh.id] || { tasks: {}, extras: [] };
           const tasks = item.tasks;
           let showSum = 0;
           let taskDescList = [];
@@ -1612,20 +1619,21 @@
             taskDescList.push(`- ${label}: ${p.toLocaleString('vi-VN')}đ`);
           });
 
-          const extra = Number(item.extraMoney) || 0;
-          if (extra > 0) {
-            showSum += extra;
-          }
+          const extras = Array.isArray(item.extras) ? item.extras : [];
+          let extraDescList = [];
+          extras.forEach(ex => {
+            const amt = Number(ex.amount) || 0;
+            if (amt > 0) {
+              showSum += amt;
+              extraDescList.push(`- Phát sinh (${ex.name || 'Phí khác'}): ${amt.toLocaleString('vi-VN')}đ`);
+            }
+          });
 
-          if (showSum > 0 || item.note || extra > 0) {
+          if (showSum > 0) {
             grandTotal += showSum;
             billLines.push(`${idx + 1}. **${sh.location}** (${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) : ''})`);
             taskDescList.forEach(td => billLines.push(`   ${td}`));
-            if (extra > 0) {
-              billLines.push(`   - Phát sinh${item.note ? ' (' + item.note + ')' : ''}: ${extra.toLocaleString('vi-VN')}đ`);
-            } else if (item.note) {
-              billLines.push(`   💬 Note: ${item.note}`);
-            }
+            extraDescList.forEach(ed => billLines.push(`   ${ed}`));
             billLines.push(`   👉 Tổng show: **${showSum.toLocaleString('vi-VN')}đ**\n`);
           }
         });
@@ -1664,9 +1672,10 @@
 
       let totalGrandSum = 0;
       filteredShows.forEach(sh => {
-        const item = state.ctpItems[sh.id] || { tasks: {}, extraMoney: 0 };
+        const item = state.ctpItems[sh.id] || { tasks: {}, extras: [] };
         Object.values(item.tasks).forEach(v => totalGrandSum += v);
-        totalGrandSum += (Number(item.extraMoney) || 0);
+        const extras = Array.isArray(item.extras) ? item.extras : [];
+        extras.forEach(ex => totalGrandSum += (Number(ex.amount) || 0));
       });
 
       return `
@@ -1702,25 +1711,26 @@
               </div>
             ` : `
               <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
-                <table class="w-full border-collapse text-[11px] min-w-[780px]">
+                <table class="w-full border-collapse text-[11px] min-w-[820px]">
                   <thead>
                     <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-black text-[10px] uppercase">
                       <th class="py-2 px-2 border-r border-slate-200 w-8 text-center">#</th>
                       <th class="py-2 px-2 border-r border-slate-200 text-left w-28">Ngày & Địa Điểm</th>
                       <th class="py-2 px-2 border-r border-slate-200 text-center">Nhiệm Vụ & Số Tiền Tùy Chỉnh</th>
-                      <th class="py-2 px-2 border-r border-slate-200 text-left w-44">Phát Sinh & Ghi Chú</th>
+                      <th class="py-2 px-2 border-r border-slate-200 text-left w-52">Các Khoản Phát Sinh (Nhiều mục)</th>
                       <th class="py-2 px-2 text-right w-24">Tổng Show</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-slate-200">
                     ${filteredShows.map((sh, idx) => {
-                      const item = state.ctpItems[sh.id] || { tasks: {}, note: '', extraMoney: 0 };
+                      const item = state.ctpItems[sh.id] || { tasks: {}, extras: [] };
                       const owner = getMember(sh.ownerId);
                       const days = getShowDays(sh);
                       let showSubTotal = 0;
                       Object.values(item.tasks).forEach(v => showSubTotal += v);
-                      const extra = Number(item.extraMoney) || 0;
-                      showSubTotal += extra;
+                      
+                      const extras = Array.isArray(item.extras) ? item.extras : [];
+                      extras.forEach(ex => showSubTotal += (Number(ex.amount) || 0));
 
                       const quayDefault = days === 1 ? 1500000 : 1200000 * days;
                       const chupDefault = days === 1 ? 1500000 : 1200000 * days;
@@ -1735,7 +1745,7 @@
                       ];
 
                       return `
-                        <tr class="hover:bg-slate-50/80 transition-colors">
+                        <tr class="hover:bg-slate-50/80 transition-colors align-top">
                           <td class="py-2.5 px-2 border-r border-slate-200 text-center font-mono font-bold text-slate-500">${idx + 1}</td>
                           <td class="py-2.5 px-2 border-r border-slate-200 font-extrabold text-slate-900">
                             <div class="text-[10px] text-indigo-600 font-mono">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) + ` (${days}n)` : ''}</div>
@@ -1761,9 +1771,17 @@
                               }).join('')}
                             </div>
                           </td>
-                          <td class="py-2.5 px-2 border-r border-slate-200 space-y-1">
-                            <input type="number" step="50000" value="${item.extraMoney || ''}" oninput="ctpActions.updateExtraMoney('${sh.id}', this.value)" placeholder="Tiền phát sinh (+ VNĐ)" class="w-full px-2 py-1 bg-amber-50/60 border border-amber-200 rounded text-[10px] font-mono font-bold text-amber-900" />
-                            <input type="text" value="${escapeHtml(item.note || '')}" oninput="ctpActions.updateNote('${sh.id}', this.value)" placeholder="Nội dung ghi chú..." class="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-[10px]" />
+                          <td class="py-2.5 px-2 border-r border-slate-200 space-y-1.5">
+                            ${extras.map((ex, exIdx) => `
+                              <div class="flex items-center gap-1 bg-amber-50/60 p-1 rounded border border-amber-200">
+                                <input type="text" value="${escapeHtml(ex.name || '')}" oninput="ctpActions.updateExtraField('${sh.id}', ${exIdx}, 'name', this.value)" placeholder="Tên phí (vd: Tiền xe)" class="w-24 px-1 py-0.5 bg-white border rounded text-[10px]" />
+                                <input type="number" step="50000" value="${ex.amount || ''}" oninput="ctpActions.updateExtraField('${sh.id}', ${exIdx}, 'amount', this.value)" placeholder="Số tiền" class="w-20 px-1 py-0.5 bg-white border rounded text-[10px] font-mono font-bold text-right text-amber-900" />
+                                <button onclick="ctpActions.removeExtraItem('${sh.id}', ${exIdx})" class="text-rose-600 px-1"><i class="fa-solid fa-xmark text-[10px]"></i></button>
+                              </div>
+                            `).join('')}
+                            <button onclick="ctpActions.addExtraItem('${sh.id}')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold flex items-center gap-1">
+                              <i class="fa-solid fa-plus text-[9px]"></i> Thêm phát sinh
+                            </button>
                           </td>
                           <td class="py-2.5 px-2 text-right font-black text-emerald-600 font-mono text-xs">
                             ${showSubTotal.toLocaleString('vi-VN')}đ
