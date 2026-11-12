@@ -1586,9 +1586,9 @@ function renderShowsTabHtml() {
       `;
     }
 
-    function renderBottomNavHtml() {
+function renderBottomNavHtml() {
       return `
-        <nav style="padding-bottom: max(4px, var(--sab));" class="bg-white border-t border-slate-200 px-2 pt-1 shrink-0 z-30 flex items-center justify-around">
+        <nav style="padding-bottom: max(4px, var(--sab));" class="bg-white border-t border-slate-200 px-1 pt-1 shrink-0 z-30 flex items-center justify-around">
           <button onclick="appActions.setTab('shows')" class="flex flex-col items-center py-0.5 px-2 rounded-xl ${state.activeTab === 'shows' ? 'text-indigo-600 font-extrabold' : 'text-slate-400 font-medium'}">
             <i class="fa-solid fa-table-list text-sm"></i>
             <span class="text-[10px] mt-0.5">1. Lịch Show</span>
@@ -1597,12 +1597,16 @@ function renderShowsTabHtml() {
             <i class="fa-solid fa-calendar-days text-sm"></i>
             <span class="text-[10px] mt-0.5">2. Công Tác T${state.selectedMonth}</span>
           </button>
-          <button onclick="appActions.openAddModal()" class="bg-indigo-600 active:scale-95 text-white font-extrabold px-3.5 py-1.5 rounded-full shadow-md flex items-center gap-1 text-xs">
+          <button onclick="appActions.openAddModal()" class="bg-indigo-600 active:scale-95 text-white font-extrabold px-3 py-1.5 rounded-full shadow-md flex items-center gap-1 text-xs shrink-0">
             <i class="fa-solid fa-bolt"></i><span>NỔ SHOW</span>
           </button>
           <button onclick="appActions.setTab('free_finder')" class="flex flex-col items-center py-0.5 px-2 rounded-xl ${state.activeTab === 'free_finder' ? 'text-indigo-600 font-extrabold' : 'text-slate-400 font-medium'}">
             <i class="fa-solid fa-user-check text-sm"></i>
             <span class="text-[10px] mt-0.5">Người Rảnh</span>
+          </button>
+          <button onclick="appActions.setTab('ctp')" class="flex flex-col items-center py-0.5 px-2 rounded-xl ${state.activeTab === 'ctp' ? 'text-indigo-600 font-extrabold' : 'text-slate-400 font-medium'}">
+            <i class="fa-solid fa-file-invoice-dollar text-sm"></i>
+            <span class="text-[10px] mt-0.5">Tính CTP</span>
           </button>
           <button onclick="appActions.openGuideModal()" class="flex flex-col items-center py-0.5 px-2 rounded-xl text-slate-400 font-medium">
             <i class="fa-solid fa-mobile-screen-button text-sm"></i>
