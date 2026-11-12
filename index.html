@@ -19,8 +19,8 @@
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
     body {
       font-family: 'Inter', sans-serif;
-      background-color: #f8fafc;
-      color: #0f172a;
+      background-color: #050505;
+      color: #1e293b;
       user-select: none;
       -webkit-tap-highlight-color: transparent;
     }
@@ -29,7 +29,7 @@
     .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    .sticky-col-shadow { box-shadow: 2px 0 5px -2px rgba(0,0,0,0.05); }
+    .sticky-col-shadow { box-shadow: 2px 0 5px -2px rgba(0,0,0,0.1); }
     .ios-sheet { animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     @keyframes slideUp {
       from { transform: translateY(100%); }
@@ -57,9 +57,9 @@
 
     function generateActionSayLogoSvg() {
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="w-full h-full block">
-        <rect width="512" height="512" fill="#0f172a"/>
-        <path d="M0,185 L145,115 L125,0 L165,0 L215,240 L0,210 Z" fill="#334155"/>
-        <text x="275" y="505" font-family="Georgia, serif" font-weight="900" font-size="370" fill="#334155">S</text>
+        <rect width="512" height="512" fill="#050505"/>
+        <path d="M0,185 L145,115 L125,0 L165,0 L215,240 L0,210 Z" fill="#222222"/>
+        <text x="275" y="505" font-family="Georgia, serif" font-weight="900" font-size="370" fill="#222222">S</text>
         <g transform="translate(0, 6)">
           <text x="52" y="182" font-family="Inter, Arial Black, sans-serif" font-weight="900" font-size="112" fill="#ffffff" letter-spacing="-4">acti</text>
           <rect x="295" y="96" width="84" height="88" rx="28" fill="#ffffff"/>
@@ -86,7 +86,23 @@
       canvas.width = 512; canvas.height = 512;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
-      ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, 512, 512);
+      ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, 512, 512);
+      ctx.fillStyle = '#222222';
+      ctx.beginPath();
+      ctx.moveTo(0, 185); ctx.lineTo(145, 115); ctx.lineTo(125, 0); ctx.lineTo(165, 0); ctx.lineTo(215, 240); ctx.lineTo(0, 210);
+      ctx.closePath(); ctx.fill();
+      ctx.font = '900 360px Georgia, serif'; ctx.fillText('S', 280, 495);
+      ctx.fillStyle = '#ffffff'; ctx.font = '900 108px Inter, Arial, sans-serif';
+      ctx.fillText('acti', 52, 186); ctx.fillText('n', 385, 186);
+      ctx.beginPath(); ctx.roundRect(295, 102, 82, 86, 26); ctx.fill();
+      ctx.fillStyle = '#e11d2e';
+      ctx.beginPath(); ctx.moveTo(304, 172); ctx.quadraticCurveTo(335, 116, 351, 108); ctx.lineTo(368, 170); ctx.quadraticCurveTo(340, 130, 304, 172);
+      ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.arc(338, 159, 7.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff'; ctx.font = '800 52px Inter, Arial, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('m e d i a', 256, 246); ctx.font = '900 32px Inter, Arial, sans-serif'; ctx.fillText('x', 256, 300);
+      ctx.font = '900 122px Inter, Arial, sans-serif'; ctx.fillText('say', 256, 405);
+      ctx.font = '900 44px Inter, Arial, sans-serif'; ctx.fillText('studios', 210, 452);
       try {
         const pngDataUrl = canvas.toDataURL('image/png');
         if (appleLink) appleLink.href = pngDataUrl;
@@ -95,103 +111,36 @@
     }
 
     const INITIAL_TEAM_MEMBERS = [
-      { id: 'duc_lon', name: 'Đức lớn', shortLabel: 'ĐỨC LỚN', bg: '#fee2e2', text: '#991b1b', defaultPin: '1111', order: 3 },
-      { id: 'duc_nho', name: 'Đức nhỏ', shortLabel: 'ĐỨC NHỎ', bg: '#ffedd5', text: '#9a3412', defaultPin: '2222', order: 4 },
-      { id: 'phu_lon', name: 'Phú lớn', shortLabel: 'PHÚ LỚN', bg: '#dcfce7', text: '#166534', defaultPin: '3333', order: 10 },
-      { id: 'phu_nho', name: 'Phú nhỏ', shortLabel: 'PHÚ NHỎ', bg: '#f0fdf4', text: '#14532d', defaultPin: '4444', order: 11 },
-      { id: 'ky', name: 'Kỳ', shortLabel: 'KỲ', bg: '#f3e8ff', text: '#6b21a8', defaultPin: '5555', order: 7 },
-      { id: 'thai', name: 'Thái', shortLabel: 'THÁI', bg: '#dbeafe', text: '#1e40af', defaultPin: '6666', order: 12 },
-      { id: 'kien', name: 'Kiên', shortLabel: 'KIÊN', bg: '#e0e7ff', text: '#3730a3', defaultPin: '7777', order: 6 },
-      { id: 'dung', name: 'Dũng', shortLabel: 'DŨNG', bg: '#fce7f3', text: '#9d174d', defaultPin: '8888', order: 1 },
-      { id: 'thuc', name: 'Thức', shortLabel: 'THỨC', bg: '#ccfbf1', text: '#115e59', defaultPin: '1212', order: 13 },
-      { id: 'loc', name: 'Lộc', shortLabel: 'LỘC', bg: '#f1f5f9', text: '#334155', defaultPin: '1313', order: 8 },
-      { id: 'dang', name: 'Đăng', shortLabel: 'ĐĂNG', bg: '#f8fafc', text: '#0f172a', defaultPin: '1414', order: 2 },
-      { id: 'nhat', name: 'Nhật', shortLabel: 'NHẬT', bg: '#fef3c7', text: '#92400e', defaultPin: '1515', order: 9 },
-      { id: 'khoa', name: 'Khoa', shortLabel: 'KHOA', bg: '#ecfdf5', text: '#065f46', defaultPin: '1616', order: 5 },
+      { id: 'duc_lon', name: 'Đức lớn', shortLabel: 'ĐỨC LỚN', bg: '#a61c00', text: '#ffffff', defaultPin: '1111', order: 3 },
+      { id: 'duc_nho', name: 'Đức nhỏ', shortLabel: 'ĐỨC NHỎ', bg: '#f6b26b', text: '#5b3200', defaultPin: '2222', order: 4 },
+      { id: 'phu_lon', name: 'Phú lớn', shortLabel: 'PHÚ LỚN', bg: '#b6d7a8', text: '#274e13', defaultPin: '3333', order: 10 },
+      { id: 'phu_nho', name: 'Phú nhỏ', shortLabel: 'PHÚ NHỎ', bg: '#38761d', text: '#ffffff', defaultPin: '4444', order: 11 },
+      { id: 'ky', name: 'Kỳ', shortLabel: 'KỲ', bg: '#d9d2e9', text: '#351c75', defaultPin: '5555', order: 7 },
+      { id: 'thai', name: 'Thái', shortLabel: 'THÁI', bg: '#1155cc', text: '#ffffff', defaultPin: '6666', order: 12 },
+      { id: 'kien', name: 'Kiên', shortLabel: 'KIÊN', bg: '#93c47d', text: '#1c4587', defaultPin: '7777', order: 6 },
+      { id: 'dung', name: 'Dũng', shortLabel: 'DŨNG', bg: '#f4cccc', text: '#990000', defaultPin: '8888', order: 1 },
+      { id: 'thuc', name: 'Thức', shortLabel: 'THỨC', bg: '#134f5c', text: '#ffffff', defaultPin: '1212', order: 13 },
+      { id: 'loc', name: 'Lộc', shortLabel: 'LỘC', bg: '#333333', text: '#ffffff', defaultPin: '1313', order: 8 },
+      { id: 'dang', name: 'Đăng', shortLabel: 'ĐĂNG', bg: '#e6e6e6', text: '#222222', defaultPin: '1414', order: 2 },
+      { id: 'nhat', name: 'Nhật', shortLabel: 'NHẬT', bg: '#783f04', text: '#ffffff', defaultPin: '1515', order: 9 },
+      { id: 'khoa', name: 'Khoa', shortLabel: 'KHOA', bg: '#fff2cc', text: '#7f6000', defaultPin: '1616', order: 5 },
     ];
 
-    const POST_STATUS_OPTIONS = [
-      { id: 'pending', label: '⏳ Chờ chép file', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-      { id: 'editing', label: '✂️ Đang dựng', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
-      { id: 'done', label: '✅ Đã xong', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+    const BADGE_COLOR_PRESETS = [
+      { name: 'Đỏ Đậm', bg: '#a61c00', text: '#ffffff' },
+      { name: 'Cam Nhạt', bg: '#f6b26b', text: '#5b3200' },
+      { name: 'Xanh Bơ', bg: '#b6d7a8', text: '#274e13' },
+      { name: 'Xanh Rừng', bg: '#38761d', text: '#ffffff' },
+      { name: 'Tím Nhạt', bg: '#d9d2e9', text: '#351c75' },
+      { name: 'Xanh Dương', bg: '#1155cc', text: '#ffffff' },
+      { name: 'Xanh Lá', bg: '#93c47d', text: '#1c4587' },
+      { name: 'Hồng Phấn', bg: '#f4cccc', text: '#990000' },
+      { name: 'Xanh Cổ Vịt', bg: '#134f5c', text: '#ffffff' },
+      { name: 'Đen Xám', bg: '#333333', text: '#ffffff' },
+      { name: 'Xám Bạc', bg: '#e6e6e6', text: '#222222' },
+      { name: 'Nâu Đất', bg: '#783f04', text: '#ffffff' },
+      { name: 'Vàng Kem', bg: '#fff2cc', text: '#7f6000' },
     ];
 
-    const DEFAULT_PINS_MAP = Object.fromEntries(INITIAL_TEAM_MEMBERS.map(m => [m.id, m.defaultPin]));
-    const DEFAULT_ADMIN_AUTH = { email: 'nvp2993@gmail.com', password: 'admin2026#' };
-
-    function getAutoHighlightColor(locationStr = '', partnerStr = '') {
-      const s = `${locationStr} ${partnerStr}`.toLowerCase();
-      if (s.includes('bận') || s.includes('can tho') || s.includes('cần thơ')) return '#fef9c3';
-      if (s.includes('hồ tràm') || s.includes('vũng tàu')) return '#ede9fe';
-      if (s.includes('nha trang') || s.includes('mũi né')) return '#ffedd5';
-      if (s.includes('đà lạt')) return '#ecfccb';
-      return '#f1f5f9';
-    }
-
-    function getDefaultNewShowDate() {
-      const now = new Date();
-      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    }
-
-    function resolveOwnerIdFromName(ownerName = '', memberIds = []) {
-      const clean = (ownerName || '').trim().toLowerCase();
-      if (clean) {
-        const found = INITIAL_TEAM_MEMBERS.find(m => m.name.toLowerCase() === clean || m.shortLabel.toLowerCase() === clean);
-        if (found) return found.id;
-      }
-      return memberIds[0] || 'khoa';
-    }
-
-    const INITIAL_SHOWS_DATA = window.__BAKED_SHOWS_DATA__ || [];
-
-    const state = {
-      user: null,
-      cloudSynced: false,
-      members: window.__BAKED_MEMBERS_DATA__ || [...INITIAL_TEAM_MEMBERS],
-      shows: [...INITIAL_SHOWS_DATA],
-      pinsMap: window.__BAKED_PINS_DATA__ || { ...DEFAULT_PINS_MAP },
-      customLogoUrl: window.__BAKED_CUSTOM_LOGO__ || null,
-      adminAuth: { ...DEFAULT_ADMIN_AUTH },
-      currentUserId: 'khoa',
-      isAdminMode: false,
-      isBackendPortal: window.location.hash === '#admin',
-      backendTab: 'dashboard',
-      activeTab: 'shows',
-      zenFullscreen: false,
-      compactMatrix: true,
-      selectedMonth: new Date().getMonth() + 1,
-      selectedYear: new Date().getFullYear(),
-      filterAllMonthsInList: false,
-      searchQuery: '',
-      filterMemberId: 'all',
-      checkStart: getDefaultNewShowDate(),
-      checkEnd: getDefaultNewShowDate(),
-      ctpMonth: new Date().getMonth() + 1,
-      ctpOwnerId: 'all',
-      ctpItems: {},
-      ctpBillModal: null,
-      detailShowId: null,
-      formModal: null,
-      pinModal: null,
-      selfChangePinModal: null,
-      guideModal: false,
-      zaloTomorrowModal: null,
-      adminLoginInput: { email: '', password: '', error: '' },
-      newMemberForm: { name: '', shortLabel: '', pin: '1234', colorIdx: 0 },
-      toast: null
-    };
-
-    try {
-      const savedLocalShows = localStorage.getItem('as_shows_backup_2026');
-      if (savedLocalShows) {
-        const parsed = JSON.parse(savedLocalShows);
-        if (Array.isArray(parsed) && parsed.length > 0) state.shows = parsed;
-      }
-      const savedLocalPins = localStorage.getItem('as_pins_backup_2026');
-      if (savedLocalPins) state.pinsMap = { ...state.pinsMap, ...JSON.parse(savedLocalPins) };
-      const savedLocalUser = localStorage.getItem('as_user_backup_2026');
-      if (savedLocalUser) state.currentUserId = savedLocalUser;
-    } catch (e) {}
-
-    function saveShowsToLocalBackup() {
-      try { localStorage.setItem('as_shows_backup_2026', JSON.stringify(state.shows)); } catch (e) {}
+    const ROLE_OPTIONS = [
+      { id: '', label: 'Không gắn' },
