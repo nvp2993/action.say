@@ -803,12 +803,27 @@ function canEditShow(show) {
         if (event) event.stopPropagation();
         if (!state.formModal) return;
         if (!state.formModal.roles) state.formModal.roles = {};
-        if (state.formModal.roles[memId] === roleId) {
-          delete state.formModal.roles[memId];
+        
+        // Đổi sang mảng để lưu nhiều vai trò cho 1 người
+        let currentRoles = state.formModal.roles[memId];
+        if (!Array.isArray(currentRoles)) {
+          currentRoles = currentRoles ? [currentRoles] : [];
+        }
+
+        const idx = currentRoles.indexOf(roleId);
+        if (idx >= 0) {
+          currentRoles.splice(idx, 1); // Bỏ chọn nếu đã có
         } else {
-          state.formModal.roles[memId] = roleId;
+          currentRoles.push(roleId); // Thêm vào nếu chưa có
+        }
+
+        if (currentRoles.length > 0) {
+          state.formModal.roles[memId] = currentRoles;
+        } else {
+          delete state.formModal.roles[memId];
         }
         renderApp();
+      },
       },
       selectOnlyMeForm() {
         if (!state.formModal) return;
