@@ -1263,20 +1263,21 @@
       }
     };
 
-    function renderHeaderHtml() {
+function renderHeaderHtml() {
       const curMem = getMember(state.currentUserId);
       const logoContent = state.customLogoUrl
         ? `<img src="${state.customLogoUrl}" alt="Action x Say" class="w-full h-full object-cover" />`
         : generateActionSayLogoSvg();
       return `
-        <header style="padding-top: max(6px, var(--sat));" class="bg-slate-900 text-white px-2 pb-1.5 shrink-0 border-b border-slate-800 z-30">
-          <div class="flex items-center justify-between gap-1">
-            <div class="flex items-center gap-1.5 min-w-0">
+        <header style="padding-top: max(6px, var(--sat));" class="bg-slate-900 text-white px-2.5 py-2 shrink-0 border-b border-slate-800 z-30 space-y-2">
+          <!-- Hàng 1: Logo, Tiêu đề app & Nút khóa / Admin -->
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
               <div onclick="appActions.tapLogoSecret()" title="Action Media x Say Studios" class="w-8 h-8 rounded-lg bg-black overflow-hidden flex items-center justify-center shrink-0 shadow-sm border border-slate-700 cursor-pointer active:scale-90">
                 ${logoContent}
               </div>
-              <div class="hidden sm:block truncate">
-                <div class="flex items-center gap-1">
+              <div class="truncate">
+                <div class="flex items-center gap-1.5">
                   <span class="text-xs font-black tracking-tight text-white uppercase truncate">LỊCH SHOW 2026</span>
                   <span class="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-emerald-500/20 text-emerald-300">
                     <span class="w-1.5 h-1.5 rounded-full ${state.cloudSynced ? 'bg-emerald-400' : 'bg-amber-400'}"></span>${state.cloudSynced ? 'Cloud' : 'Local'}
@@ -1285,26 +1286,7 @@
               </div>
             </div>
 
-            <div class="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 shrink-0 overflow-x-auto no-scrollbar">
-              <button
-                onclick="appActions.toggleAllMonths()"
-                class="px-1.5 py-0.5 rounded-md text-[10px] font-extrabold transition-all ${
-                  state.filterAllMonthsInList ? 'bg-indigo-500 text-white shadow-2xs' : 'text-slate-300 hover:text-white'
-                }"
-              >Tất cả</button>
-              ${[6, 7, 8, 9, 10, 11, 12].map(m => `
-                <button
-                  onclick="appActions.setMonth(${m})"
-                  class="px-1.5 py-0.5 rounded-md text-[10px] font-extrabold transition-all ${
-                    state.selectedMonth === m && !state.filterAllMonthsInList
-                      ? 'bg-amber-400 text-slate-950 shadow-2xs'
-                      : 'text-slate-300 hover:text-white'
-                  }"
-                >T${m}</button>
-              `).join('')}
-            </div>
-
-            <div class="flex items-center gap-1 shrink-0">
+            <div class="flex items-center gap-1.5 shrink-0">
               <button onclick="appActions.toggleZenFullscreen()" class="w-7 h-7 rounded-lg flex items-center justify-center border text-xs bg-slate-800 text-slate-300 border-slate-700">
                 <i class="fa-solid ${state.zenFullscreen ? 'fa-compress' : 'fa-expand'}"></i>
               </button>
@@ -1315,6 +1297,26 @@
                 <i class="fa-solid fa-key text-emerald-400 text-[10px]"></i>
               </button>
             </div>
+          </div>
+
+          <!-- Hàng 2: Thanh chọn tháng cuộn ngang mượt mà, tách biệt hoàn toàn không đè logo -->
+          <div class="flex items-center gap-1 overflow-x-auto no-scrollbar bg-slate-800/90 p-1 rounded-xl border border-slate-700/60">
+            <button
+              onclick="appActions.toggleAllMonths()"
+              class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold shrink-0 transition-all ${
+                state.filterAllMonthsInList ? 'bg-indigo-500 text-white shadow-2xs' : 'text-slate-300 hover:text-white'
+              }"
+            >Tất cả</button>
+            ${[6, 7, 8, 9, 10, 11, 12].map(m => `
+              <button
+                onclick="appActions.setMonth(${m})"
+                class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold shrink-0 transition-all ${
+                  state.selectedMonth === m && !state.filterAllMonthsInList
+                    ? 'bg-amber-400 text-slate-950 shadow-2xs font-black'
+                    : 'text-slate-300 hover:text-white'
+                }"
+              >T${m}</button>
+            `).join('')}
           </div>
         </header>
       `;
