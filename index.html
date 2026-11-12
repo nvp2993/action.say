@@ -1679,9 +1679,10 @@ window.ctpActions = {
         }
         renderApp();
       },
-      updateTaskPrice(showId, taskKey, priceVal) {
+      updateTaskPrice(showId, taskKey, el) {
         if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
-        state.ctpItems[showId].tasks[taskKey] = Number(priceVal) || 0;
+        const rawVal = el.value.replace(/\./g, '');
+        state.ctpItems[showId].tasks[taskKey] = Number(rawVal) || 0;
       },
       addExtraItem(showId) {
         if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
@@ -1697,7 +1698,12 @@ window.ctpActions = {
       saveExtraField(showId, index, field, el) {
         if (!state.ctpItems[showId] || !state.ctpItems[showId].extras) return;
         const val = el.value;
-        state.ctpItems[showId].extras[index][field] = field === 'amount' ? (Number(val) || 0) : val;
+        if (field === 'amount') {
+          const rawVal = val.replace(/\./g, '');
+          state.ctpItems[showId].extras[index][field] = Number(rawVal) || 0;
+        } else {
+          state.ctpItems[showId].extras[index][field] = val;
+        }
       },
       generateBill() {
         const curMem = getMember(state.currentUserId);
@@ -1884,7 +1890,7 @@ window.ctpActions = {
                               <i class="fa-solid ${isChecked ? 'fa-check text-[9px]' : 'fa-plus text-[8px] opacity-60'}"></i>
                             </button>
                             ${isChecked ? `
-                              <input type="number" step="50000" value="${curVal}" onblur="ctpActions.saveExtraField('${sh.id}', 0, 'amount', this); renderApp();" class="mt-1 w-24 px-1.5 py-0.5 bg-indigo-50 border border-indigo-300 rounded text-[10px] font-mono font-black text-right text-indigo-700 focus:outline-none" title="Nhập lại số tiền" />
+                              <input type="text" inputmode="numeric" value="${curVal ? Number(curVal).toLocaleString('vi-VN') : ''}" onblur="ctpActions.updateTaskPrice('${sh.id}', '${t.key}', this); renderApp();" class="mt-1 w-24 px-1.5 py-0.5 bg-indigo-50 border border-indigo-300 rounded text-[10px] font-mono font-black text-right text-indigo-700 focus:outline-none" title="Nhập lại số tiền" />
                             ` : ''}
                           </div>
                         `;
@@ -1904,7 +1910,7 @@ window.ctpActions = {
                         ${extras.map((ex, exIdx) => `
                           <div class="flex items-center gap-2">
                             <input type="text" value="${escapeHtml(ex.name || '')}" onblur="ctpActions.saveExtraField('${sh.id}', ${exIdx}, 'name', this)" placeholder="Tên phí (vd: Xe, Ăn...)" class="flex-1 px-2.5 py-1 bg-white border border-amber-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none" />
-                            <input type="number" step="50000" value="${ex.amount || ''}" onblur="ctpActions.saveExtraField('${sh.id}', ${exIdx}, 'amount', this); renderApp();" placeholder="Số tiền" class="w-24 px-2.5 py-1 bg-white border border-amber-300 rounded-xl text-xs font-mono font-black text-right text-amber-900 focus:outline-none" />
+                            <input type="text" inputmode="numeric" value="${ex.amount ? Number(ex.amount).toLocaleString('vi-VN') : ''}" onblur="ctpActions.saveExtraField('${sh.id}', ${exIdx}, 'amount', this); renderApp();" placeholder="Số tiền" class="w-24 px-2.5 py-1 bg-white border border-amber-300 rounded-xl text-xs font-mono font-black text-right text-amber-900 focus:outline-none" />
                             <button type="button" onclick="ctpActions.removeExtraItem('${sh.id}', ${exIdx})" class="w-7 h-7 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-200 shrink-0"><i class="fa-solid fa-xmark text-xs"></i></button>
                           </div>
                         `).join('')}
