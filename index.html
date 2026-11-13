@@ -360,6 +360,7 @@
       ctpMonth: new Date().getMonth() + 1,
       ctpOwnerId: 'all',
       ctpItems: {},
+      ctpCustomShows: [],
       ctpBillModal: null,
 
       detailShowId: null,
@@ -385,6 +386,10 @@
       if (savedLocalPins) state.pinsMap = { ...state.pinsMap, ...JSON.parse(savedLocalPins) };
       const savedLocalUser = localStorage.getItem('as_user_backup_2026');
       if (savedLocalUser) state.currentUserId = savedLocalUser;
+      const savedCtpItems = localStorage.getItem('as_ctp_items_2026');
+      if (savedCtpItems) state.ctpItems = JSON.parse(savedCtpItems) || {};
+      const savedCtpCustom = localStorage.getItem('as_ctp_custom_shows_2026');
+      if (savedCtpCustom) state.ctpCustomShows = JSON.parse(savedCtpCustom) || [];
     } catch (e) {}
 
     function saveShowsToLocalBackup() {
@@ -1617,15 +1622,48 @@ function renderHeaderHtml() {
     }
 
     // ========================================================================
-    // LOGIC TAB TÍNH CÔNG TÁC PHÍ (CTP)
+    // LOGIC TAB TÍNH CÔNG TÁC PHÍ (CTP) + TỰ NOTE THÊM SHOW NGOÀI LỊCH
     // ========================================================================
+    function saveCtpStateToLocal() {
+      try {
+        localStorage.setItem('as_ctp_items_2026', JSON.stringify(state.ctpItems));
+        localStorage.setItem('as_ctp_custom_shows_2026', JSON.stringify(state.ctpCustomShows));
+      } catch (e) {}
+    }
+
     function getShowDays(sh) {
-      if (!sh.startDate || !sh.endDate) return 1;
+      if (!sh || !sh.startDate || !sh.endDate) return 1;
       const s = new Date(sh.startDate + 'T00:00:00');
       const e = new Date(sh.endDate + 'T00:00:00');
       const diffTime = e - s;
       const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
       return diffDays > 0 ? diffDays : 1;
+    }
+
+    function findAnyCtpShow(showId) {
+      return state.shows.find(s => s.id === showId) || (state.ctpCustomShows || []).find(s => s.id === showId);
+    }
+
+    function getCombinedCtpShows() {
+      const regularShows = state.shows.filter(sh => {
+        if (!sh.startDate) return false;
+        const m = parseInt(sh.startDate.split('-')[1], 10);
+        if (m !== state.ctpMonth) return false;
+        if (!(sh.memberIds || []).includes(state.currentUserId)) return false;
+        if (state.ctpOwnerId !== 'all' && sh.ownerId !== state.ctpOwnerId) return false;
+        return true;
+      });
+
+      const customShows = (state.ctpCustomShows || []).filter(sh => {
+        if (sh.userId && sh.userId !== state.currentUserId) return false;
+        if (!sh.startDate) return Number(sh.ctpMonth) === state.ctpMonth;
+        const m = parseInt(sh.startDate.split('-')[1], 10);
+        if (m !== state.ctpMonth) return false;
+        if (state.ctpOwnerId !== 'all' && sh.ownerId !== state.ctpOwnerId) return false;
+        return true;
+      });
+
+      return [...regularShows, ...customShows].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
     }
 
     function getDefaultRateForTask(taskKey, sh) {
@@ -1649,31 +1687,89 @@ function renderHeaderHtml() {
         state.ctpOwnerId = ownerId;
         renderApp();
       },
+      addCustomShow() {
+        const mm = String(state.ctpMonth).padStart(2, '0');
+        const defaultDate = `${state.selectedYear}-${mm}-01`;
+        const defaultOwner = state.ctpOwnerId !== 'all' ? state.ctpOwnerId : state.currentUserId;
+        const newId = 'ctp_ext_' + Date.now();
+        const newCustomShow = {
+          id: newId,
+          isCustomCtp: true,
+          userId: state.currentUserId,
+          ctpMonth: state.ctpMonth,
+          location: '',
+          partner: '',
+          startDate: defaultDate,
+          endDate: defaultDate,
+          ownerId: defaultOwner,
+          memberIds: [state.currentUserId]
+        };
+        if (!Array.isArray(state.ctpCustomShows)) state.ctpCustomShows = [];
+        state.ctpCustomShows.push(newCustomShow);
+        state.ctpItems[newId] = { tasks: {}, extras: [] };
+        saveCtpStateToLocal();
+        renderApp();
+        showToast('➕ Đã thêm thẻ Show ngoài lịch! Hãy nhập tên show & chọn nhiệm vụ.');
+      },
+      updateCustomShowField(showId, field, val) {
+        const sh = (state.ctpCustomShows || []).find(s => s.id === showId);
+        if (!sh) return;
+        sh[field] = val;
+        if (field === 'startDate') {
+          if (!sh.endDate || sh.endDate < val) sh.endDate = val;
+          const m = parseInt(val.split('-')[1], 10);
+          if (!isNaN(m)) sh.ctpMonth = m;
+        }
+        // Tự động cập nhật lại định mức Quay/Chụp theo số ngày mới nếu đang được tích chọn
+        if (field === 'startDate' || field === 'endDate') {
+          const item = state.ctpItems[showId];
+          if (item && item.tasks) {
+            if (item.tasks['quay'] !== undefined) item.tasks['quay'] = getDefaultRateForTask('quay', sh);
+            if (item.tasks['chup'] !== undefined) item.tasks['chup'] = getDefaultRateForTask('chup', sh);
+          }
+          saveCtpStateToLocal();
+          renderApp();
+          return;
+        }
+        saveCtpStateToLocal();
+        if (field === 'ownerId') renderApp();
+      },
+      removeCustomShow(showId) {
+        state.ctpCustomShows = (state.ctpCustomShows || []).filter(s => s.id !== showId);
+        delete state.ctpItems[showId];
+        saveCtpStateToLocal();
+        renderApp();
+        showToast('🗑️ Đã xoá show tự note khỏi danh sách CTP!');
+      },
       toggleTask(showId, taskKey) {
         if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
         const tasks = state.ctpItems[showId].tasks;
         if (tasks[taskKey]) {
           delete tasks[taskKey];
         } else {
-          const sh = state.shows.find(s => s.id === showId);
+          const sh = findAnyCtpShow(showId);
           tasks[taskKey] = getDefaultRateForTask(taskKey, sh);
         }
+        saveCtpStateToLocal();
         renderApp();
       },
       updateTaskPrice(showId, taskKey, el) {
         if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
         const rawVal = el.value.replace(/\./g, '');
         state.ctpItems[showId].tasks[taskKey] = Number(rawVal) || 0;
+        saveCtpStateToLocal();
       },
       addExtraItem(showId) {
         if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
         if (!Array.isArray(state.ctpItems[showId].extras)) state.ctpItems[showId].extras = [];
         state.ctpItems[showId].extras.push({ name: '', amount: '' });
+        saveCtpStateToLocal();
         renderApp();
       },
       removeExtraItem(showId, index) {
         if (!state.ctpItems[showId] || !state.ctpItems[showId].extras) return;
         state.ctpItems[showId].extras.splice(index, 1);
+        saveCtpStateToLocal();
         renderApp();
       },
       saveExtraField(showId, index, field, el) {
@@ -1685,17 +1781,11 @@ function renderHeaderHtml() {
         } else {
           state.ctpItems[showId].extras[index][field] = val;
         }
+        saveCtpStateToLocal();
       },
       generateBill() {
         const curMem = getMember(state.currentUserId);
-        const filteredShows = state.shows.filter(sh => {
-          if (!sh.startDate) return false;
-          const m = parseInt(sh.startDate.split('-')[1], 10);
-          if (m !== state.ctpMonth) return false;
-          if (!(sh.memberIds || []).includes(state.currentUserId)) return false;
-          if (state.ctpOwnerId !== 'all' && sh.ownerId !== state.ctpOwnerId) return false;
-          return true;
-        });
+        const filteredShows = getCombinedCtpShows();
 
         let grandTotal = 0;
         let billLines = [];
@@ -1749,6 +1839,8 @@ function renderHeaderHtml() {
           const days = getShowDays(sh);
           const dateLabel = `${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' - ' + formatDayMonth(sh.endDate) : ''}`;
           const ownerObj = getMember(sh.ownerId);
+          const locName = (sh.location || 'Show ngoài lịch').trim();
+          const fullLoc = locName + (sh.partner ? ` (${sh.partner})` : '') + (sh.isCustomCtp ? ' [Ngoài lịch]' : '');
 
           if (showSum > 0 || filteredShows.length > 0) {
             stt++;
@@ -1757,7 +1849,7 @@ function renderHeaderHtml() {
               stt,
               dateLabel,
               days,
-              location: sh.location + (sh.partner ? ` (${sh.partner})` : ''),
+              location: fullLoc,
               ownerName: ownerObj.name,
               quay: Number(tasks['quay']) || 0,
               dung: Number(tasks['dung']) || 0,
@@ -1773,7 +1865,7 @@ function renderHeaderHtml() {
           }
 
           if (showSum > 0) {
-            billLines.push(`${stt}. **${sh.location}** (${dateLabel})`);
+            billLines.push(`${stt}. **${locName}${sh.partner ? ' (' + sh.partner + ')' : ''}** (${dateLabel})`);
             taskDescList.forEach(td => billLines.push(`   ${td}`));
             extraDescList.forEach(ed => billLines.push(`   ${ed}`));
             billLines.push(`   👉 Tổng show: **${showSum.toLocaleString('vi-VN')}đ**\n`);
@@ -1873,14 +1965,7 @@ function renderHeaderHtml() {
 
     function renderCtpTabHtml() {
       const curMem = getMember(state.currentUserId);
-      const filteredShows = state.shows.filter(sh => {
-        if (!sh.startDate) return false;
-        const m = parseInt(sh.startDate.split('-')[1], 10);
-        if (m !== state.ctpMonth) return false;
-        if (!(sh.memberIds || []).includes(state.currentUserId)) return false;
-        if (state.ctpOwnerId !== 'all' && sh.ownerId !== state.ctpOwnerId) return false;
-        return true;
-      });
+      const filteredShows = getCombinedCtpShows();
 
       let totalGrandSum = 0;
       filteredShows.forEach(sh => {
@@ -1904,14 +1989,18 @@ function renderHeaderHtml() {
                 `).join('')}
               </div>
             </div>
-            <div class="flex items-center justify-between gap-3 pt-1 border-t border-slate-100">
-              <div class="flex items-center gap-2 flex-1">
+            <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+              <div class="flex items-center gap-1.5 flex-1 min-w-0">
                 <span class="text-[10px] font-bold text-slate-500 shrink-0">Lọc Chủ:</span>
-                <select onchange="ctpActions.setOwner(this.value)" class="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none">
+                <select onchange="ctpActions.setOwner(this.value)" class="flex-1 min-w-0 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none">
                   <option value="all">--- Tất cả Chủ Show ---</option>
                   ${state.members.map(m => `<option value="${m.id}" ${state.ctpOwnerId === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
                 </select>
               </div>
+              <button type="button" onclick="ctpActions.addCustomShow()" class="px-3 py-2 bg-indigo-600 text-white rounded-full text-[10px] font-extrabold shrink-0 flex items-center gap-1 shadow-xs active:scale-95 transition-transform">
+                <i class="fa-solid fa-plus text-[9px]"></i>
+                <span>Tự note show ngoài</span>
+              </button>
               <div class="text-right bg-emerald-50 px-3 py-1.5 rounded-2xl border border-emerald-200 shrink-0">
                 <span class="text-[9px] text-emerald-700 font-bold uppercase block">Tổng T${state.ctpMonth}</span>
                 <span class="text-sm font-black text-emerald-700 font-mono">${totalGrandSum.toLocaleString('vi-VN')}đ</span>
@@ -1921,9 +2010,13 @@ function renderHeaderHtml() {
 
           <div class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-3">
             ${filteredShows.length === 0 ? `
-              <div class="text-center py-16 bg-white rounded-3xl border border-slate-200 shadow-xs mx-auto max-w-sm space-y-2">
+              <div class="text-center py-12 bg-white rounded-3xl border border-slate-200 shadow-xs mx-auto max-w-sm space-y-3 p-4">
                 <div class="text-3xl">📭</div>
-                <div class="text-slate-800 font-bold text-xs">Không tìm thấy show nào trong tháng T${state.ctpMonth}</div>
+                <div class="text-slate-800 font-bold text-xs">Chưa có show nào trong tháng T${state.ctpMonth}</div>
+                <button type="button" onclick="ctpActions.addCustomShow()" class="px-4 py-2 bg-indigo-600 text-white rounded-full text-xs font-extrabold inline-flex items-center gap-1.5 shadow-sm">
+                  <i class="fa-solid fa-plus"></i>
+                  <span>Tự note thêm show ngoài lịch</span>
+                </button>
               </div>
             ` : filteredShows.map((sh, idx) => {
               const item = state.ctpItems[sh.id] || { tasks: {}, extras: [] };
@@ -1948,21 +2041,63 @@ function renderHeaderHtml() {
               ];
 
               return `
-                <div class="bg-white rounded-3xl border border-slate-200 p-4 space-y-3 shadow-2xs">
-                  <div class="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
-                    <div>
-                      <div class="flex items-center gap-1.5">
-                        <span class="px-2 py-0.5 rounded-full bg-slate-100 font-mono font-bold text-[10px] text-slate-600">#${idx + 1}</span>
-                        <span class="font-mono font-bold text-indigo-600 text-[10px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) + ` (${days}n)` : ''}</span>
+                <div class="bg-white rounded-3xl border ${sh.isCustomCtp ? 'border-amber-300 ring-1 ring-amber-200/70' : 'border-slate-200'} p-4 space-y-3 shadow-2xs">
+                  ${sh.isCustomCtp ? `
+                    <!-- Header cho Show Tự Note Ngoài Lịch (Cho phép sửa trực tiếp tên, ngày, chủ show) -->
+                    <div class="space-y-2.5 border-b border-slate-100 pb-3">
+                      <div class="flex items-start justify-between gap-2">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                          <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-mono font-extrabold text-[10px]">#${idx + 1} • 📝 Show tự note</span>
+                          <span class="font-mono font-bold text-slate-600 text-[10px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) + ` (${days}n)` : ` (${days}n)`}</span>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                          <div class="text-right bg-emerald-50 px-3 py-1 rounded-2xl border border-emerald-200">
+                            <span class="text-[9px] text-emerald-700 font-bold block">Tổng Show</span>
+                            <span class="text-xs font-black text-emerald-700 font-mono">${showSubTotal.toLocaleString('vi-VN')}đ</span>
+                          </div>
+                          <button type="button" onclick="ctpActions.removeCustomShow('${sh.id}')" title="Xoá show tự note này" class="w-8 h-8 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                          </button>
+                        </div>
                       </div>
-                      <h4 class="font-black text-slate-900 text-sm mt-1">📍 ${escapeHtml(sh.location)} ${sh.partner ? '(' + escapeHtml(sh.partner) + ')' : ''}</h4>
-                      <p class="text-[10px] text-slate-500 mt-0.5">Chủ show: <b class="text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">${escapeHtml(owner.name)}</b></p>
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input type="text" value="${escapeHtml(sh.location || '')}" onblur="ctpActions.updateCustomShowField('${sh.id}', 'location', this.value)" placeholder="📍 Nhập Địa điểm / Tên Show ngoài..." class="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-extrabold text-slate-900 focus:outline-none focus:border-slate-900" />
+                        <input type="text" value="${escapeHtml(sh.partner || '')}" onblur="ctpActions.updateCustomShowField('${sh.id}', 'partner', this.value)" placeholder="🤝 Đối tác / Ghi chú thêm (nếu có)" class="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-slate-900" />
+                      </div>
+                      <div class="grid grid-cols-3 gap-2 text-[11px]">
+                        <div>
+                          <label class="text-[9.5px] text-slate-400 font-bold block">Từ ngày:</label>
+                          <input type="date" value="${sh.startDate}" onchange="ctpActions.updateCustomShowField('${sh.id}', 'startDate', this.value)" class="w-full px-2 py-1 bg-slate-50 border border-slate-300 rounded-xl font-bold mt-0.5" />
+                        </div>
+                        <div>
+                          <label class="text-[9.5px] text-slate-400 font-bold block">Đến ngày:</label>
+                          <input type="date" min="${sh.startDate}" value="${sh.endDate}" onchange="ctpActions.updateCustomShowField('${sh.id}', 'endDate', this.value)" class="w-full px-2 py-1 bg-slate-50 border border-slate-300 rounded-xl font-bold mt-0.5" />
+                        </div>
+                        <div>
+                          <label class="text-[9.5px] text-slate-400 font-bold block">Chủ show:</label>
+                          <select onchange="ctpActions.updateCustomShowField('${sh.id}', 'ownerId', this.value)" class="w-full px-2 py-1 bg-slate-50 border border-slate-300 rounded-xl font-bold mt-0.5">
+                            ${state.members.map(m => `<option value="${m.id}" ${sh.ownerId === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
+                          </select>
+                        </div>
+                      </div>
                     </div>
-                    <div class="text-right shrink-0 bg-emerald-50 px-3 py-1.5 rounded-2xl border border-emerald-200">
-                      <span class="text-[9px] text-emerald-700 font-bold block">Tổng Show</span>
-                      <span class="text-xs font-black text-emerald-700 font-mono">${showSubTotal.toLocaleString('vi-VN')}đ</span>
+                  ` : `
+                    <!-- Header cho Show Có Sẵn Trong Lịch -->
+                    <div class="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+                      <div>
+                        <div class="flex items-center gap-1.5">
+                          <span class="px-2 py-0.5 rounded-full bg-slate-100 font-mono font-bold text-[10px] text-slate-600">#${idx + 1}</span>
+                          <span class="font-mono font-bold text-indigo-600 text-[10px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) + ` (${days}n)` : ''}</span>
+                        </div>
+                        <h4 class="font-black text-slate-900 text-sm mt-1">📍 ${escapeHtml(sh.location)} ${sh.partner ? '(' + escapeHtml(sh.partner) + ')' : ''}</h4>
+                        <p class="text-[10px] text-slate-500 mt-0.5">Chủ show: <b class="text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">${escapeHtml(owner.name)}</b></p>
+                      </div>
+                      <div class="text-right shrink-0 bg-emerald-50 px-3 py-1.5 rounded-2xl border border-emerald-200">
+                        <span class="text-[9px] text-emerald-700 font-bold block">Tổng Show</span>
+                        <span class="text-xs font-black text-emerald-700 font-mono">${showSubTotal.toLocaleString('vi-VN')}đ</span>
+                      </div>
                     </div>
-                  </div>
+                  `}
 
                   <div class="space-y-1.5">
                     <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Nhiệm Vụ Tham Gia:</span>
@@ -2007,6 +2142,14 @@ function renderHeaderHtml() {
                 </div>
               `;
             }).join('')}
+
+            <!-- Nút thêm nhanh show ngoài ở cuối danh sách -->
+            <div class="pt-1 pb-2 text-center">
+              <button type="button" onclick="ctpActions.addCustomShow()" class="w-full py-3 rounded-3xl border-2 border-dashed border-slate-300 hover:border-slate-500 bg-white/70 text-slate-700 font-extrabold text-xs flex items-center justify-center gap-2 transition-all active:scale-98">
+                <i class="fa-solid fa-circle-plus text-emerald-600"></i>
+                <span>➕ Tự note thêm Show ngoài lịch vào CTP tháng T${state.ctpMonth}</span>
+              </button>
+            </div>
           </div>
 
           <div class="p-3 bg-white border-t border-slate-200 shrink-0 shadow-lg">
