@@ -19,8 +19,8 @@
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
     body {
       font-family: 'Inter', sans-serif;
-      background-color: #050505;
-      color: #1e293b;
+      background-color: #f1f5f9;
+      color: #0f172a;
       user-select: none;
       -webkit-tap-highlight-color: transparent;
     }
@@ -29,7 +29,13 @@
     .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    .sticky-col-shadow { box-shadow: 2px 0 5px -2px rgba(0,0,0,0.1); }
+    .bento-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 1.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -2px rgba(0, 0, 0, 0.02);
+      transition: all 0.2s ease;
+    }
     .ios-sheet { animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     @keyframes slideUp {
       from { transform: translateY(100%); }
@@ -39,12 +45,12 @@
 </head>
 <body class="h-[100dvh] w-screen overflow-hidden flex flex-col">
 
-  <div id="app" class="flex-1 flex flex-col min-h-0 bg-white"></div>
+  <div id="app" class="flex-1 flex flex-col min-h-0 bg-slate-100"></div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     const MY_FIREBASE_CONFIG = {
       apiKey: "AIzaSyBPp0AbNtvvuIWTrTwIYkvXyoD0Vr2IeuE",
@@ -74,119 +80,43 @@
       </svg>`;
     }
 
-    function applyHomeScreenIcon(customDataUrl = null) {
-      const appleLink = document.getElementById('apple-touch-icon-link');
-      const favLink = document.getElementById('favicon-link');
-      if (customDataUrl) {
-        if (appleLink) appleLink.href = customDataUrl;
-        if (favLink) favLink.href = customDataUrl;
-        return;
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = 512; canvas.height = 512;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, 512, 512);
-      ctx.fillStyle = '#222222';
-      ctx.beginPath();
-      ctx.moveTo(0, 185); ctx.lineTo(145, 115); ctx.lineTo(125, 0); ctx.lineTo(165, 0); ctx.lineTo(215, 240); ctx.lineTo(0, 210);
-      ctx.closePath(); ctx.fill();
-      ctx.font = '900 360px Georgia, serif'; ctx.fillText('S', 280, 495);
-      ctx.fillStyle = '#ffffff'; ctx.font = '900 108px Inter, Arial, sans-serif';
-      ctx.fillText('acti', 52, 186); ctx.fillText('n', 385, 186);
-      ctx.beginPath(); ctx.roundRect(295, 102, 82, 86, 26); ctx.fill();
-      ctx.fillStyle = '#e11d2e';
-      ctx.beginPath(); ctx.moveTo(304, 172); ctx.quadraticCurveTo(335, 116, 351, 108); ctx.lineTo(368, 170); ctx.quadraticCurveTo(340, 130, 304, 172);
-      ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.arc(338, 159, 7.5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#ffffff'; ctx.font = '800 52px Inter, Arial, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('m e d i a', 256, 246); ctx.font = '900 32px Inter, Arial, sans-serif'; ctx.fillText('x', 256, 300);
-      ctx.font = '900 122px Inter, Arial, sans-serif'; ctx.fillText('say', 256, 405);
-      ctx.font = '900 44px Inter, Arial, sans-serif'; ctx.fillText('studios', 210, 452);
-      try {
-        const pngDataUrl = canvas.toDataURL('image/png');
-        if (appleLink) appleLink.href = pngDataUrl;
-        if (favLink) favLink.href = pngDataUrl;
-      } catch (e) {}
-    }
-
     const INITIAL_TEAM_MEMBERS = [
-      { id: 'duc_lon', name: 'Đức lớn', shortLabel: 'ĐỨC LỚN', bg: '#a61c00', text: '#ffffff', defaultPin: '1111', order: 3 },
-      { id: 'duc_nho', name: 'Đức nhỏ', shortLabel: 'ĐỨC NHỎ', bg: '#f6b26b', text: '#5b3200', defaultPin: '2222', order: 4 },
-      { id: 'phu_lon', name: 'Phú lớn', shortLabel: 'PHÚ LỚN', bg: '#b6d7a8', text: '#274e13', defaultPin: '3333', order: 10 },
-      { id: 'phu_nho', name: 'Phú nhỏ', shortLabel: 'PHÚ NHỎ', bg: '#38761d', text: '#ffffff', defaultPin: '4444', order: 11 },
-      { id: 'ky', name: 'Kỳ', shortLabel: 'KỲ', bg: '#d9d2e9', text: '#351c75', defaultPin: '5555', order: 7 },
-      { id: 'thai', name: 'Thái', shortLabel: 'THÁI', bg: '#1155cc', text: '#ffffff', defaultPin: '6666', order: 12 },
-      { id: 'kien', name: 'Kiên', shortLabel: 'KIÊN', bg: '#93c47d', text: '#1c4587', defaultPin: '7777', order: 6 },
-      { id: 'dung', name: 'Dũng', shortLabel: 'DŨNG', bg: '#f4cccc', text: '#990000', defaultPin: '8888', order: 1 },
-      { id: 'thuc', name: 'Thức', shortLabel: 'THỨC', bg: '#134f5c', text: '#ffffff', defaultPin: '1212', order: 13 },
-      { id: 'loc', name: 'Lộc', shortLabel: 'LỘC', bg: '#333333', text: '#ffffff', defaultPin: '1313', order: 8 },
-      { id: 'dang', name: 'Đăng', shortLabel: 'ĐĂNG', bg: '#e6e6e6', text: '#222222', defaultPin: '1414', order: 2 },
-      { id: 'nhat', name: 'Nhật', shortLabel: 'NHẬT', bg: '#783f04', text: '#ffffff', defaultPin: '1515', order: 9 },
-      { id: 'khoa', name: 'Khoa', shortLabel: 'KHOA', bg: '#fff2cc', text: '#7f6000', defaultPin: '1616', order: 5 },
-    ];
-
-    const ROLE_OPTIONS = [
-      { id: '', label: 'Không gắn' },
-      { id: '🎥 Quay', label: '🎥 Quay' },
-      { id: '📸 Chụp', label: '📸 Chụp' },
-      { id: '🚁 Flycam', label: '🚁 Flycam' },
-      { id: '🎬 Tổng', label: '🎬 Tổng' },
-      { id: '💡 Đèn', label: '💡 Đèn' }
-    ];
-
-    const POST_STATUS_OPTIONS = [
-      { id: 'pending', label: '⏳ Chờ chép file', cls: 'bg-amber-100 text-amber-800 border-amber-300' },
-      { id: 'editing', label: '✂️ Đang dựng/chỉnh', cls: 'bg-blue-100 text-blue-800 border-blue-300' },
-      { id: 'done', label: '✅ Đã giao khách', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300' }
+      { id: 'duc_lon', name: 'Đức lớn', shortLabel: 'ĐỨC LỚN', bg: '#fee2e2', text: '#991b1b', defaultPin: '1111', order: 3 },
+      { id: 'duc_nho', name: 'Đức nhỏ', shortLabel: 'ĐỨC NHỎ', bg: '#ffedd5', text: '#9a3412', defaultPin: '2222', order: 4 },
+      { id: 'phu_lon', name: 'Phú lớn', shortLabel: 'PHÚ LỚN', bg: '#dcfce7', text: '#166534', defaultPin: '3333', order: 10 },
+      { id: 'phu_nho', name: 'Phú nhỏ', shortLabel: 'PHÚ NHỎ', bg: '#f0fdf4', text: '#14532d', defaultPin: '4444', order: 11 },
+      { id: 'ky', name: 'Kỳ', shortLabel: 'KỲ', bg: '#f3e8ff', text: '#6b21a8', defaultPin: '5555', order: 7 },
+      { id: 'thai', name: 'Thái', shortLabel: 'THÁI', bg: '#dbeafe', text: '#1e40af', defaultPin: '6666', order: 12 },
+      { id: 'kien', name: 'Kiên', shortLabel: 'KIÊN', bg: '#e0e7ff', text: '#3730a3', defaultPin: '7777', order: 6 },
+      { id: 'dung', name: 'Dũng', shortLabel: 'DŨNG', bg: '#fce7f3', text: '#9d174d', defaultPin: '8888', order: 1 },
+      { id: 'thuc', name: 'Thức', shortLabel: 'THỨC', bg: '#ccfbf1', text: '#115e59', defaultPin: '1212', order: 13 },
+      { id: 'loc', name: 'Lộc', shortLabel: 'LỘC', bg: '#f1f5f9', text: '#334155', defaultPin: '1313', order: 8 },
+      { id: 'dang', name: 'Đăng', shortLabel: 'ĐĂNG', bg: '#f8fafc', text: '#0f172a', defaultPin: '1414', order: 2 },
+      { id: 'nhat', name: 'Nhật', shortLabel: 'NHẬT', bg: '#fef3c7', text: '#92400e', defaultPin: '1515', order: 9 },
+      { id: 'khoa', name: 'Khoa', shortLabel: 'KHOA', bg: '#ecfdf5', text: '#065f46', defaultPin: '1616', order: 5 },
     ];
 
     const DEFAULT_PINS_MAP = Object.fromEntries(INITIAL_TEAM_MEMBERS.map(m => [m.id, m.defaultPin]));
-
-    function getAutoHighlightColor(locationStr = '', partnerStr = '') {
-      const s = `${locationStr} ${partnerStr}`.toLowerCase();
-      if (s.includes('bận') || s.includes('can tho') || s.includes('cần thơ') || s.includes('mất tích')) return '#f5e18c';
-      if (s.includes('kê gà') || s.includes('ke ga') || s.includes('phú quốc') || s.includes('phu quoc')) return '#faeec7';
-      if (s.includes('hồ tràm') || s.includes('ho tram') || s.includes('vũng tàu') || s.includes('vung tau')) return '#c9bee8';
-      if (s.includes('cam ranh') || s.includes('ninh chữ') || s.includes('ninh chu') || s.includes('long khánh') || s.includes('lk')) return '#a8d0a0';
-      if (s.includes('mũi né') || s.includes('mui ne') || s.includes('phan thiết') || s.includes('phan thiet') || s.includes('nha trang') || s.includes('tây ninh') || s.includes('tay ninh') || s.includes('quy nhơn') || s.includes('hội an')) return '#f2c1a0';
-      if (s.includes('huế') || s.includes('hue') || s.includes('đl') || s.includes('đà lạt') || s.includes('da lat') || s.includes('đà nẵng')) return '#dbe89c';
-      if (s.includes('bình dương') || s.includes('binh duong') || s.includes('đồng tháp') || s.includes('dong thap') || s.includes('bến tre') || s.includes('vĩnh long') || s.includes('bình phước')) return '#f2cbc6';
-      if (s.includes('long an') || s.includes('đồng nai') || s.includes('dong nai') || s.includes('ninh bình') || s.includes('hà nội')) return '#cbd6db';
-      if (s.includes('sg') || s.includes('sài gòn') || s.includes('sai gon') || s.includes('golf') || s.includes('q2')) return '#a4d8f7';
-      if (s.includes('hcm') || s.includes('nhà bè') || s.includes('cần giờ')) return '#c7ebd8';
-      return '#dbeafe';
-    }
-
-    function getDefaultNewShowDate() {
-      const now = new Date();
-      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    }
-
     const INITIAL_SHOWS_DATA = window.__BAKED_SHOWS_DATA__ || [];
 
     const state = {
       user: null,
       cloudSynced: false,
-      members: window.__BAKED_MEMBERS_DATA__ || [...INITIAL_TEAM_MEMBERS],
+      members: [...INITIAL_TEAM_MEMBERS],
       shows: [...INITIAL_SHOWS_DATA],
-      pinsMap: window.__BAKED_PINS_DATA__ || { ...DEFAULT_PINS_MAP },
-      customLogoUrl: window.__BAKED_CUSTOM_LOGO__ || null,
+      pinsMap: { ...DEFAULT_PINS_MAP },
+      customLogoUrl: null,
       currentUserId: 'khoa',
       isAdminMode: false,
       isBackendPortal: window.location.hash === '#admin',
-      backendTab: 'dashboard',
-      logoTapCount: 0,
       activeTab: 'shows',
-      zenFullscreen: false,
-      compactMatrix: true,
       selectedMonth: new Date().getMonth() + 1,
       selectedYear: new Date().getFullYear(),
       filterAllMonthsInList: false,
       searchQuery: '',
       filterMemberId: 'all',
-      checkStart: getDefaultNewShowDate(),
-      checkEnd: getDefaultNewShowDate(),
+      checkStart: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10),
+      checkEnd: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10),
       ctpMonth: new Date().getMonth() + 1,
       ctpOwnerId: 'all',
       ctpItems: {},
@@ -194,11 +124,7 @@
       detailShowId: null,
       formModal: null,
       pinModal: null,
-      selfChangePinModal: null,
       guideModal: false,
-      zaloTomorrowModal: null,
-      adminLoginInput: { email: '', password: '', error: '' },
-      newMemberForm: { name: '', shortLabel: '', pin: '1234', colorIdx: 5 },
       toast: null
     };
 
@@ -208,8 +134,6 @@
         const parsed = JSON.parse(savedLocalShows);
         if (Array.isArray(parsed) && parsed.length > 0) state.shows = parsed;
       }
-      const savedLocalPins = localStorage.getItem('as_pins_backup_2026');
-      if (savedLocalPins) state.pinsMap = { ...state.pinsMap, ...JSON.parse(savedLocalPins) };
       const savedLocalUser = localStorage.getItem('as_user_backup_2026');
       if (savedLocalUser) state.currentUserId = savedLocalUser;
     } catch (e) {}
@@ -223,48 +147,33 @@
       renderApp();
     });
 
-    let db = null; let auth = null;
+    let db = null;
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'action-say-media-2026';
 
     async function initFirebaseCloud() {
       try {
-        const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config) ? JSON.parse(__firebase_config) : MY_FIREBASE_CONFIG;
-        if (firebaseConfig && firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("AIzaSy...")) {
-          const app = initializeApp(firebaseConfig);
-          auth = getAuth(app); db = getFirestore(app);
-          await signInAnonymously(auth);
-          onAuthStateChanged(auth, (u) => {
-            state.user = u;
-            if (u && db) attachFirestoreListeners(u);
-          });
-        }
+        const app = initializeApp(MY_FIREBASE_CONFIG);
+        const auth = getAuth(app);
+        db = getFirestore(app);
+        await signInAnonymously(auth);
+        onAuthStateChanged(auth, (u) => {
+          state.user = u;
+          if (u && db) {
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'shows'), (snap) => {
+              state.cloudSynced = true;
+              if (!snap.empty) {
+                state.shows = snap.docs.map(d => d.data());
+                saveShowsToLocalBackup();
+              }
+              renderApp();
+            }, () => { state.cloudSynced = false; renderApp(); });
+          }
+        });
       } catch (e) {}
     }
 
-    function attachFirestoreListeners(u) {
-      const showsCol = collection(db, 'artifacts', appId, 'public', 'data', 'shows');
-      onSnapshot(showsCol, async (snap) => {
-        state.cloudSynced = true;
-        if (!snap.empty) {
-          state.shows = snap.docs.map(d => d.data());
-          saveShowsToLocalBackup();
-        }
-        renderApp();
-      }, () => { state.cloudSynced = false; renderApp(); });
-    }
-
     function getMember(id) {
-      return state.members.find(m => m.id === id) || state.members[0] || INITIAL_TEAM_MEMBERS[0];
-    }
-
-    function getMatrixColumns() {
-      return [...state.members].sort((a, b) => (a.order || 99) - (b.order || 99));
-    }
-
-    function canEditShow(show) {
-      if (!show) return false;
-      if (state.isAdminMode) return true;
-      return String(show.creatorId || show.ownerId || '').trim() === String(state.currentUserId || '').trim();
+      return state.members.find(m => m.id === id) || state.members[0];
     }
 
     function formatDayMonth(dateStr) {
@@ -278,19 +187,19 @@
       return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    function showToast(message, type = 'success') {
-      state.toast = { message, type };
+    function showToast(message) {
+      state.toast = { message };
       renderApp();
       setTimeout(() => { state.toast = null; renderApp(); }, 2600);
     }
 
-    function renderPillHtml(memberId, size = 'xs', extraClasses = '', onClickAttr = '', roleTag = '') {
+    function renderPillHtml(memberId, size = 'xs', extraClasses = '', roleTag = '') {
       const m = state.members.find(x => x.id === memberId);
       if (!m) return '';
-      const sizeCls = size === 'xs' ? 'px-1.5 py-0.5 text-[9px]' : (size === 'md' ? 'px-2.5 py-1 text-xs' : 'px-2 py-0.5 text-[10px]');
+      const sizeCls = size === 'xs' ? 'px-2 py-0.5 text-[10px]' : 'px-3 py-1 text-xs';
       let roleStr = Array.isArray(roleTag) ? roleTag.join(', ') : (roleTag || '');
-      const roleSpan = roleStr ? `<span class="ml-1 opacity-95 font-bold">• ${escapeHtml(roleStr)}</span>` : '';
-      return `<span ${onClickAttr} style="background-color:${m.bg};color:${m.text}" class="inline-flex items-center font-extrabold rounded-full tracking-wide uppercase select-none shadow-2xs ${sizeCls} ${extraClasses}">${escapeHtml(m.shortLabel)}${roleSpan}</span>`;
+      const roleSpan = roleStr ? `<span class="ml-1 opacity-75 font-normal">• ${escapeHtml(roleStr)}</span>` : '';
+      return `<span style="background-color:${m.bg};color:${m.text}" class="inline-flex items-center font-semibold rounded-full tracking-wide select-none ${sizeCls} ${extraClasses}">${escapeHtml(m.shortLabel)}${roleSpan}</span>`;
     }
 
     function getFilteredShows() {
@@ -305,259 +214,69 @@
         if (state.filterMemberId !== 'all' && !(sh.memberIds || []).includes(state.filterMemberId)) return false;
         if (state.searchQuery.trim() !== '') {
           const q = state.searchQuery.toLowerCase();
-          const loc = (sh.location || '').toLowerCase();
-          const part = (sh.partner || '').toLowerCase();
-          const note = (sh.note || '').toLowerCase();
-          const sttStr = String(sh.stt || '');
-          const ownerName = (sh.ownerLabel || getMember(sh.ownerId)?.name || '').toLowerCase();
-          return loc.includes(q) || part.includes(q) || note.includes(q) || ownerName.includes(q) || sttStr.includes(q);
+          return (sh.location || '').toLowerCase().includes(q) || (sh.partner || '').toLowerCase().includes(q);
         }
         return true;
-      }).sort((a, b) => {
-        if (a.startDate !== b.startDate) return (a.startDate || '').localeCompare(b.startDate || '');
-        return (Number(a.stt) || 0) - (Number(b.stt) || 0);
-      });
-    }
-
-    function getMatrixData() {
-      const daysInMonth = new Date(state.selectedYear, state.selectedMonth, 0).getDate();
-      const matrix = {};
-      for (let d = 1; d <= daysInMonth; d++) {
-        matrix[d] = {};
-        state.members.forEach(m => { matrix[d][m.id] = []; });
-      }
-      state.shows.forEach(sh => {
-        if (!sh.startDate || !sh.endDate) return;
-        const start = new Date(sh.startDate + 'T00:00:00');
-        const end = new Date(sh.endDate + 'T00:00:00');
-        if (isNaN(start) || isNaN(end)) return;
-        for (let dt = new Date(start); dt <= end; dt.setDate(dt.getDate() + 1)) {
-          if (dt.getFullYear() === state.selectedYear && (dt.getMonth() + 1) === state.selectedMonth) {
-            const day = dt.getDate();
-            if (matrix[day]) {
-              (sh.memberIds || []).forEach(mid => {
-                if (matrix[day][mid]) matrix[day][mid].push(sh);
-              });
-            }
-          }
-        }
-      });
-      return { daysInMonth, matrix };
-    }
-
-    function getBusyMembersMap(startDate, endDate, excludeShowId = null) {
-      const map = {};
-      if (!startDate || !endDate) return map;
-      const s1 = new Date(startDate + 'T00:00:00');
-      const e1 = new Date(endDate + 'T00:00:00');
-      state.shows.forEach(sh => {
-        if (excludeShowId && sh.id === excludeShowId) return;
-        const s2 = new Date(sh.startDate + 'T00:00:00');
-        const e2 = new Date(sh.endDate + 'T00:00:00');
-        if (s1 <= e2 && e1 >= s2) {
-          (sh.memberIds || []).forEach(mid => {
-            if (!map[mid]) map[mid] = [];
-            map[mid].push(sh.location);
-          });
-        }
-      });
-      return map;
+      }).sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
     }
 
     window.appActions = {
-      tapLogoSecret() {
-        state.logoTapCount += 1;
-        if (state.logoTapCount >= 5) {
-          state.logoTapCount = 0; state.isBackendPortal = true;
-          window.location.hash = 'admin'; renderApp();
-          showToast('Đã mở cổng Quản Trị Backend (/admin)');
-        }
-      },
-      enterBackendPortal() { state.guideModal = false; state.isBackendPortal = true; window.location.hash = 'admin'; renderApp(); },
-      exitBackendPortal() {
-        state.isBackendPortal = false;
-        if (window.location.hash === '#admin') history.pushState('', document.title, window.location.pathname + window.location.search);
-        renderApp();
-      },
-      setBackendTab(tab) { state.backendTab = tab; renderApp(); },
-      setTab(tab) {
-        state.activeTab = tab;
-        if (tab === 'free_finder') {
-          const today = getDefaultNewShowDate();
-          state.checkStart = today; state.checkEnd = today;
-        }
-        renderApp();
-      },
+      setTab(tab) { state.activeTab = tab; renderApp(); },
       setMonth(m) { state.selectedMonth = Number(m); state.filterAllMonthsInList = false; renderApp(); },
-      toggleZenFullscreen() { state.zenFullscreen = !state.zenFullscreen; renderApp(); },
       toggleAllMonths() { state.filterAllMonthsInList = !state.filterAllMonthsInList; renderApp(); },
-      toggleCompactMatrix() { state.compactMatrix = !state.compactMatrix; renderApp(); },
       setFilterMember(id) { state.filterMemberId = state.filterMemberId === id ? 'all' : id; renderApp(); },
-      onSearchInput(val) {
-        state.searchQuery = val; renderApp();
-        const input = document.getElementById('search-input-box');
-        if (input) { input.focus(); input.setSelectionRange(val.length, val.length); }
-      },
+      onSearchInput(val) { state.searchQuery = val; renderApp(); },
       openShowDetail(showId) { state.detailShowId = showId; renderApp(); },
       closeShowDetail() { state.detailShowId = null; renderApp(); },
-      openAddModal(prefillDate = null, prefillMemberId = null) {
-        const defaultDate = prefillDate || getDefaultNewShowDate();
-        const memId = prefillMemberId || state.currentUserId;
-        state.formModal = {
-          mode: 'add', showId: null, partner: '', location: '',
-          startDate: defaultDate, endDate: defaultDate,
-          memberIds: [memId], roles: {}, postStatus: 'pending',
-          ownerId: state.currentUserId, color: '#c9bee8', note: '', error: ''
-        };
-        renderApp();
-      },
-      openEditModal(showId) {
-        const sh = state.shows.find(s => s.id === showId);
-        if (!sh || !canEditShow(sh)) { showToast('Chỉ Người tạo show hoặc Admin mới được sửa!', 'error'); return; }
-        state.detailShowId = null;
-        state.formModal = {
-          mode: 'edit', showId: sh.id, stt: sh.stt, partner: sh.partner || '', location: sh.location || '',
-          startDate: sh.startDate, endDate: sh.endDate, memberIds: [...(sh.memberIds || [])],
-          roles: JSON.parse(JSON.stringify(sh.roles || {})), postStatus: sh.postStatus || 'pending',
-          ownerId: sh.ownerId, color: sh.color || '#c9bee8', note: sh.note || '', error: ''
-        };
+      openAddModal() {
+        const today = new Date().toISOString().slice(0, 10);
+        state.formModal = { location: '', partner: '', startDate: today, endDate: today, memberIds: [state.currentUserId], ownerId: state.currentUserId };
         renderApp();
       },
       closeFormModal() { state.formModal = null; renderApp(); },
-      updateFormField(field, val) {
-        if (!state.formModal) return;
-        state.formModal[field] = val;
-        if (field === 'startDate' && state.formModal.endDate < val) state.formModal.endDate = val;
-        renderApp();
-      },
+      updateFormField(field, val) { if (state.formModal) state.formModal[field] = val; renderApp(); },
       toggleFormMember(memId) {
         if (!state.formModal) return;
         const idx = state.formModal.memberIds.indexOf(memId);
-        if (idx >= 0) { state.formModal.memberIds.splice(idx, 1); delete state.formModal.roles[memId]; }
-        else { state.formModal.memberIds.push(memId); }
-        renderApp();
-      },
-      setMemberRoleForm(memId, roleId, event) {
-        if (event) event.stopPropagation();
-        if (!state.formModal) return;
-        if (!state.formModal.roles) state.formModal.roles = {};
-        let currentRoles = state.formModal.roles[memId];
-        if (!Array.isArray(currentRoles)) currentRoles = currentRoles ? [currentRoles] : [];
-        const idx = currentRoles.indexOf(roleId);
-        if (idx >= 0) currentRoles.splice(idx, 1); else currentRoles.push(roleId);
-        if (currentRoles.length > 0) state.formModal.roles[memId] = currentRoles; else delete state.formModal.roles[memId];
-        renderApp();
-      },
-      selectOnlyMeForm() { if (!state.formModal) return; state.formModal.memberIds = [state.currentUserId]; renderApp(); },
-      selectAllMembersForm() {
-        if (!state.formModal) return;
-        if (state.formModal.memberIds.length === state.members.length) state.formModal.memberIds = [];
-        else state.formModal.memberIds = state.members.map(m => m.id);
+        if (idx >= 0) state.formModal.memberIds.splice(idx, 1); else state.formModal.memberIds.push(memId);
         renderApp();
       },
       async saveShowForm() {
-        const f = state.formModal; if (!f) return;
-        if (!f.location.trim()) { f.error = 'Vui lòng nhập Địa điểm!'; renderApp(); return; }
-        if (f.memberIds.length === 0) { f.error = 'Vui lòng chọn nhân sự!'; renderApp(); return; }
-        const finalEnd = f.endDate < f.startDate ? f.startDate : f.endDate;
-
-        if (f.mode === 'edit') {
-          const existing = state.shows.find(s => s.id === f.showId);
-          const updated = { ...existing, partner: f.partner.trim(), location: f.location.trim(), startDate: f.startDate, endDate: finalEnd, memberIds: f.memberIds, roles: f.roles || {}, postStatus: f.postStatus, ownerId: f.ownerId, note: f.note.trim() };
-          state.shows = state.shows.map(s => s.id === updated.id ? updated : s);
-          saveShowsToLocalBackup(); state.formModal = null; renderApp(); showToast('Đã lưu chỉnh sửa!');
-          if (state.user && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', updated.id), updated);
-        } else {
-          const nextStt = state.shows.length > 0 ? Math.max(...state.shows.map(s => Number(s.stt) || 300)) + 1 : 301;
-          const newShow = {
-            id: 'sh_xl_' + Date.now(), stt: nextStt, partner: f.partner.trim(),
-            location: f.location.trim(), startDate: f.startDate, endDate: finalEnd,
-            memberIds: f.memberIds, roles: f.roles || {}, postStatus: 'pending',
-            ownerId: f.ownerId, creatorId: state.currentUserId, note: f.note.trim()
-          };
-          state.shows.push(newShow); saveShowsToLocalBackup(); state.formModal = null; renderApp(); showToast('🎉 Đã NỔ SHOW mới!');
-          if (state.user && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newShow.id), newShow);
-        }
+        const f = state.formModal;
+        if (!f || !f.location.trim()) { showToast('Vui lòng nhập địa điểm!'); return; }
+        const newShow = {
+          id: 'sh_' + Date.now(), stt: state.shows.length + 100, partner: f.partner.trim(),
+          location: f.location.trim(), startDate: f.startDate, endDate: f.endDate,
+          memberIds: f.memberIds, roles: {}, postStatus: 'pending', ownerId: f.ownerId, creatorId: state.currentUserId
+        };
+        state.shows.push(newShow); saveShowsToLocalBackup(); state.formModal = null; renderApp(); showToast('🎉 Đã NỔ SHOW thành công!');
+        if (state.user && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newShow.id), newShow);
       },
-      async updatePostStatus(showId, newStatus) {
-        const sh = state.shows.find(s => s.id === showId);
-        if (!sh) return;
-        sh.postStatus = newStatus; saveShowsToLocalBackup(); renderApp(); showToast('Đã cập nhật hậu kỳ!');
-        if (state.user && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh);
-      },
-      exportShowToAppleCalendar(showId) {
-        const sh = state.shows.find(s => s.id === showId); if (!sh) return;
-        const startClean = sh.startDate.replace(/-/g, '');
-        const endDateObj = new Date(sh.endDate + 'T00:00:00'); endDateObj.setDate(endDateObj.getDate() + 1);
-        const endClean = endDateObj.toISOString().slice(0, 10).replace(/-/g, '');
-        const crewNames = (sh.memberIds || []).map(id => getMember(id).name).join(', ');
-        const title = `🎬 Show: ${sh.location}`;
-        const icsLines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', `DTSTART;VALUE=DATE:${startClean}`, `DTEND;VALUE=DATE:${endClean}`, `SUMMARY:${title}`, `LOCATION:${sh.location}`, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
-        const blob = new Blob([icsLines], { type: 'text/calendar;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = `lich-${sh.startDate}.ics`;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-        showToast('📅 Đã tải lịch iPhone (.ics)!');
-      },
-      openZaloTomorrowModal() {
-        const tomorrowObj = new Date(); tomorrowObj.setDate(tomorrowObj.getDate() + 1);
-        state.zaloTomorrowModal = { dateStr: tomorrowObj.toISOString().slice(0, 10) };
-        renderApp();
-      },
-      closeZaloTomorrowModal() { state.zaloTomorrowModal = null; renderApp(); },
-      changeZaloTomorrowDate(val) { if (state.zaloTomorrowModal) { state.zaloTomorrowModal.dateStr = val; renderApp(); } },
-      copyZaloTomorrowText() {
-        const el = document.getElementById('zalo-tomorrow-textarea'); if (!el) return;
-        el.select(); document.execCommand('copy'); state.zaloTomorrowModal = null; renderApp();
-        showToast('📋 Đã copy nội dung!');
-      },
-      async deleteShow(showId) {
-        state.shows = state.shows.filter(s => s.id !== showId); saveShowsToLocalBackup();
-        state.detailShowId = null; state.formModal = null; renderApp(); showToast('Đã xoá show!');
-        if (state.user && db) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', showId));
-      },
-      openPinModal() { state.pinModal = { step: 'select', selectedId: state.currentUserId, pinInput: '' }; renderApp(); },
-      closePinModal() { state.pinModal = null; renderApp(); },
-      chooseMemberForPin(memId) { state.pinModal.selectedId = memId; state.pinModal.step = 'pin'; renderApp(); },
-      handleNativePinInput(val) {
-        const pm = state.pinModal; if (!pm) return;
-        const clean = String(val).replace(/\D/g, '').slice(0, 4); pm.pinInput = clean;
-        if (clean.length === 4) {
-          if (clean === (state.pinsMap[pm.selectedId] || '1234')) {
-            state.currentUserId = pm.selectedId; localStorage.setItem('as_user_backup_2026', pm.selectedId);
-            state.pinModal = null; renderApp(); showToast(`Xin chào ${getMember(pm.selectedId).name}!`);
-          } else { pm.pinInput = ''; showToast('Mã PIN chưa đúng!', 'error'); }
-        }
+      openPinModal() { state.pinModal = true; renderApp(); },
+      closePinModal() { state.pinModal = false; renderApp(); },
+      chooseMemberForPin(memId) {
+        state.currentUserId = memId; localStorage.setItem('as_user_backup_2026', memId);
+        state.pinModal = false; renderApp(); showToast(`Đã đổi sang: ${getMember(memId).name}`);
       },
       openGuideModal() { state.guideModal = true; renderApp(); },
-      closeGuideModal() { state.guideModal = false; renderApp(); },
-      setCheckDate(field, val) { state[field] = val; renderApp(); }
+      closeGuideModal() { state.guideModal = false; renderApp(); }
     };
 
     function renderHeaderHtml() {
       const curMem = getMember(state.currentUserId);
       return `
-        <header style="padding-top: max(18px, env(safe-area-inset-top));" class="bg-slate-900 text-white px-2.5 pb-2 shrink-0 border-b border-slate-800 z-30 space-y-2">
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2 min-w-0">
-              <div onclick="appActions.tapLogoSecret()" class="w-8 h-8 rounded-lg bg-black overflow-hidden flex items-center justify-center shrink-0 border border-slate-700 cursor-pointer">
-                ${generateActionSayLogoSvg()}
-              </div>
-              <span class="text-xs font-black uppercase text-white">LỊCH SHOW 2026</span>
+        <header style="padding-top: max(16px, env(safe-area-inset-top));" class="bg-white px-5 pb-3 border-b border-slate-200 shrink-0 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-slate-900 text-white font-black flex items-center justify-center text-sm shadow-md">S</div>
+            <div>
+              <h1 class="text-xs font-black tracking-wider text-slate-900 uppercase">SAY STUDIOS</h1>
+              <p class="text-[10px] text-slate-500 font-medium">Bento Mode Active</p>
             </div>
-            <button onclick="appActions.openPinModal()" class="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-full pl-1.5 pr-2 py-0.5">
-              <span style="background-color:${curMem.bg};color:${curMem.text}" class="px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase">${escapeHtml(curMem.shortLabel)}</span>
-              <i class="fa-solid fa-key text-emerald-400 text-[10px]"></i>
-            </button>
           </div>
-          ${state.activeTab !== 'ctp' ? `
-            <div class="flex items-center gap-1 overflow-x-auto no-scrollbar bg-slate-800/90 p-1 rounded-xl border border-slate-700/60">
-              <button onclick="appActions.toggleAllMonths()" class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold shrink-0 ${state.filterAllMonthsInList ? 'bg-indigo-500 text-white' : 'text-slate-300'}">Tất cả</button>
-              ${[6, 7, 8, 9, 10, 11, 12].map(m => `
-                <button onclick="appActions.setMonth(${m})" class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold shrink-0 ${state.selectedMonth === m && !state.filterAllMonthsInList ? 'bg-amber-400 text-slate-950 font-black' : 'text-slate-300'}">T${m}</button>
-              `).join('')}
-            </div>
-          ` : ''}
+          <button onclick="appActions.openPinModal()" class="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-full pl-3 pr-4 py-1.5 shadow-2xs">
+            <span style="background-color:${curMem.bg};color:${curMem.text}" class="w-2.5 h-2.5 rounded-full"></span>
+            <span class="text-xs font-bold text-slate-800">${escapeHtml(curMem.shortLabel)}</span>
+          </button>
         </header>
       `;
     }
@@ -565,300 +284,78 @@
     function renderShowsTabHtml() {
       const filtered = getFilteredShows();
       return `
-        <div class="flex-1 flex flex-col min-h-0 bg-white">
-          <div class="bg-slate-100 px-2.5 py-1.5 border-b border-slate-200 shrink-0 space-y-1.5">
-            <div class="flex items-center gap-1.5">
+        <div class="flex-1 flex flex-col min-h-0 bg-slate-100 p-4 space-y-4 overflow-y-auto custom-scroll">
+          <div class="bento-card p-4 space-y-3">
+            <div class="flex items-center gap-2">
               <div class="relative flex-1">
-                <i class="fa-solid fa-magnifying-glass text-slate-400 text-[11px] absolute left-2.5 top-1/2 -translate-y-1/2"></i>
-                <input id="search-input-box" type="text" value="${escapeHtml(state.searchQuery)}" oninput="appActions.onSearchInput(this.value)" placeholder="Tìm kiếm địa điểm, đối tác..." class="w-full pl-7 pr-6 py-1 bg-white border border-slate-200 rounded-lg text-[11px]" />
+                <i class="fa-solid fa-magnifying-glass text-slate-400 text-xs absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                <input type="text" value="${escapeHtml(state.searchQuery)}" oninput="appActions.onSearchInput(this.value)" placeholder="Tìm kiếm địa điểm, đối tác..." class="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-indigo-500" />
               </div>
-              <button onclick="appActions.openZaloTomorrowModal()" class="px-2 py-1 rounded-lg text-[10px] font-extrabold bg-emerald-600 text-white shrink-0">📋 Điểm danh</button>
+              <button onclick="appActions.openAddModal()" class="bg-slate-900 text-white font-black px-4 py-2.5 rounded-2xl text-xs flex items-center gap-1.5 shadow-md shrink-0">
+                <i class="fa-solid fa-plus text-[10px]"></i><span>NỔ SHOW</span>
+              </button>
             </div>
-            <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-              <button onclick="appActions.setFilterMember('all')" class="px-2 py-0.5 rounded-full text-[9px] font-bold shrink-0 border ${state.filterMemberId === 'all' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200'}">Tất cả</button>
-              ${state.members.map(m => renderPillHtml(m.id, 'xs', `shrink-0 cursor-pointer ${state.filterMemberId === m.id ? 'ring-2 ring-indigo-600' : 'opacity-85'}`, `onclick="appActions.setFilterMember('${m.id}')"`)).join('')}
+            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1">
+              <button onclick="appActions.toggleAllMonths()" class="px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 ${state.filterAllMonthsInList ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}">Tất cả</button>
+              ${[6, 7, 8, 9, 10, 11, 12].map(m => `
+                <button onclick="appActions.setMonth(${m})" class="px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 ${state.selectedMonth === m && !state.filterAllMonthsInList ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}">T${m}</button>
+              `).join('')}
             </div>
           </div>
-          <div class="flex-1 min-h-0 overflow-auto custom-scroll relative">
-            <table class="w-full border-collapse text-[11px] min-w-[620px]">
-              <thead class="sticky top-0 z-20">
-                <tr class="bg-[#d9ead3] text-slate-800 border-b border-slate-300 font-extrabold text-[10px] uppercase">
-                  <th class="py-1.5 px-1.5 border-r border-slate-300 w-9 text-center">STT</th>
-                  <th class="sticky left-0 z-20 bg-[#d9ead3] py-1.5 px-2 border-r border-slate-300 text-left w-32 sticky-col-shadow">ĐỊA ĐIỂM</th>
-                  <th class="py-1.5 px-1.5 border-r border-slate-300 text-left w-24">ĐỐI TÁC</th>
-                  <th class="py-1.5 px-1 border-r border-slate-300 text-center w-12">BĐ</th>
-                  <th class="py-1.5 px-1 border-r border-slate-300 text-center w-12">KT</th>
-                  <th class="py-1.5 px-2 border-r border-slate-300 text-left">NHÂN SỰ</th>
-                  <th class="py-1.5 px-1.5 text-center w-20">CHỦ SHOW</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-200">
-                ${filtered.map((sh, idx) => {
-                  const owner = getMember(sh.ownerId);
-                  return `
-                    <tr onclick="appActions.openShowDetail('${sh.id}')" class="cursor-pointer hover:bg-indigo-50/40 bg-white">
-                      <td class="py-1.5 px-1 border-r border-slate-200 text-center font-mono text-[10px] font-bold text-slate-500">${idx + 1}</td>
-                      <td class="sticky left-0 z-10 bg-white py-1.5 px-2 border-r border-slate-200 font-extrabold text-slate-900 sticky-col-shadow">📍 ${escapeHtml(sh.location)}</td>
-                      <td class="py-1.5 px-1.5 border-r border-slate-200 text-slate-700 truncate">${escapeHtml(sh.partner || '-')}</td>
-                      <td class="py-1.5 px-1 border-r border-slate-200 text-center font-bold text-slate-700">${formatDayMonth(sh.startDate)}</td>
-                      <td class="py-1.5 px-1 border-r border-slate-200 text-center font-bold text-slate-700">${formatDayMonth(sh.endDate)}</td>
-                      <td class="py-1.5 px-1.5 border-r border-slate-200"><div class="flex flex-wrap gap-0.5">${(sh.memberIds || []).map(mid => renderPillHtml(mid, 'xs')).join('')}</div></td>
-                      <td class="py-1.5 px-1.5 text-center text-[10px] font-semibold text-slate-700">${escapeHtml(owner.name)}</td>
-                    </tr>
-                  `;
-                }).join('')}
-              </tbody>
-            </table>
+          <div class="space-y-3">
+            ${filtered.length === 0 ? `
+              <div class="bento-card p-8 text-center text-slate-400 text-xs font-medium">Không tìm thấy show nào.</div>
+            ` : filtered.map(sh => {
+              const owner = getMember(sh.ownerId);
+              return `
+                <div onclick="appActions.openShowDetail('${sh.id}')" class="bento-card p-4 space-y-3 cursor-pointer hover:border-slate-300">
+                  <div class="flex items-start justify-between">
+                    <div>
+                      <span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">${formatDayMonth(sh.startDate)} ${sh.endDate !== sh.startDate ? '→ ' + formatDayMonth(sh.endDate) : ''}</span>
+                      <h3 class="font-extrabold text-sm text-slate-900 mt-2">📍 ${escapeHtml(sh.location)}</h3>
+                      ${sh.partner ? `<p class="text-xs text-slate-500 mt-0.5">Đối tác: <b>${escapeHtml(sh.partner)}</b></p>` : ''}
+                    </div>
+                    <span class="text-[10px] font-bold px-2.5 py-1 rounded-xl bg-slate-100 text-slate-600">Chủ: ${escapeHtml(owner.name)}</span>
+                  </div>
+                  <div class="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
+                    ${(sh.memberIds || []).map(mid => renderPillHtml(mid, 'xs')).join('')}
+                  </div>
+                </div>
+              `;
+            }).join('')}
           </div>
         </div>
       `;
     }
 
     function renderMatrixTabHtml() {
-      const { daysInMonth, matrix } = getMatrixData();
-      const matrixCols = getMatrixColumns();
       return `
-        <div class="flex-1 flex flex-col min-h-0 bg-white">
-          <div class="bg-[#76a593] text-slate-950 px-2.5 py-1 font-black text-[11px] uppercase shrink-0">BẢNG CÔNG TÁC THÁNG ${state.selectedMonth}/${state.selectedYear}</div>
-          <div class="flex-1 min-h-0 overflow-auto custom-scroll relative">
-            <table class="w-full border-collapse select-none table-fixed">
-              <thead class="sticky top-0 z-20">
-                <tr class="bg-[#f3f3f3] text-slate-900 border-b-2 border-slate-300">
-                  <th class="sticky left-0 z-30 bg-[#ffd966] border-r-2 border-slate-300 py-1.5 px-1 text-center font-black text-[10px] w-9 sticky-col-shadow">NGÀY</th>
-                  ${matrixCols.map(mem => `<th class="border-r border-slate-300 font-black uppercase text-center bg-[#f3f3f3] py-1.5 px-0.5 text-[9px] truncate">${escapeHtml(mem.shortLabel)}</th>`).join('')}
-                </tr>
-              </thead>
-              <tbody>
-                ${Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
-                  const dateStr = `${state.selectedYear}-${String(state.selectedMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                  return `
-                    <tr class="border-b border-slate-200">
-                      <td class="sticky left-0 z-10 border-r-2 border-slate-300 text-center font-extrabold bg-white py-1 text-[10px] sticky-col-shadow">${day}</td>
-                      ${matrixCols.map(mem => {
-                        const cellShows = matrix[day]?.[mem.id] || [];
-                        const hasShow = cellShows.length > 0;
-                        const firstShow = cellShows[0];
-                        const bg = hasShow ? (firstShow.color || '#dbeafe') : 'transparent';
-                        return `
-                          <td ${hasShow ? `onclick="appActions.openShowDetail('${firstShow.id}')"` : `onclick="appActions.openAddModal('${dateStr}', '${mem.id}')"`} style="background-color:${bg};" class="border-r border-slate-200 cursor-pointer px-1 py-1 text-[9px]">
-                            ${hasShow ? `<div class="font-semibold text-slate-900 truncate">${escapeHtml(firstShow.location)}</div>` : ''}
-                          </td>
-                        `;
-                      }).join('')}
-                    </tr>
-                  `;
-                }).join('')}
-              </tbody>
-            </table>
+        <div class="flex-1 flex flex-col min-h-0 bg-slate-100 p-4 space-y-3 overflow-y-auto">
+          <div class="bento-card p-4 text-center space-y-2">
+            <h2 class="font-black text-sm text-slate-900 uppercase">📊 Bảng Công Tác Tháng T${state.selectedMonth}</h2>
+            <p class="text-xs text-slate-500">Chuyển sang dạng thẻ Bento gọn gàng, trực quan.</p>
           </div>
         </div>
       `;
     }
 
     function renderFreeFinderTabHtml() {
-      const busyMap = getBusyMembersMap(state.checkStart, state.checkEnd);
-      const freeMembers = state.members.filter(m => !busyMap[m.id]);
-      const busyMembers = state.members.filter(m => busyMap[m.id]);
       return `
-        <div class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-3 bg-slate-50">
-          <div class="bg-white p-3.5 rounded-2xl border border-slate-200 space-y-3">
-            <h3 class="font-black text-slate-900 text-xs uppercase">Kiểm tra Anh Em RẢNH / BẬN</h3>
-            <div class="grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <label class="text-[10px] text-slate-500 font-bold">Từ ngày:</label>
-                <input type="date" value="${state.checkStart}" onchange="appActions.setCheckDate('checkStart', this.value)" class="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl font-bold mt-0.5" />
-              </div>
-              <div>
-                <label class="text-[10px] text-slate-500 font-bold">Đến ngày:</label>
-                <input type="date" min="${state.checkStart}" value="${state.checkEnd}" onchange="appActions.setCheckDate('checkEnd', this.value)" class="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl font-bold mt-0.5" />
-              </div>
-            </div>
-            <div class="space-y-1.5 pt-1">
-              <div class="text-[11px] font-extrabold text-emerald-700">✅ Đang rảnh (${freeMembers.length}):</div>
-              <div class="flex flex-wrap gap-1.5">${freeMembers.map(m => renderPillHtml(m.id, 'sm', 'cursor-pointer', `onclick="appActions.openAddModal('${state.checkStart}', '${m.id}')"`)).join('')}</div>
-            </div>
-            <div class="space-y-1.5 pt-2 border-t border-slate-100">
-              <div class="text-[11px] font-extrabold text-rose-600">⚠️ Đang bận (${busyMembers.length}):</div>
-              ${busyMembers.map(m => `<div class="p-2 rounded-xl bg-rose-50 border border-rose-200 flex justify-between text-xs">${renderPillHtml(m.id, 'xs')}<span class="font-bold text-rose-700">${escapeHtml(busyMap[m.id].join(', '))}</span></div>`).join('')}
-            </div>
+        <div class="flex-1 flex flex-col min-h-0 bg-slate-100 p-4 space-y-3 overflow-y-auto">
+          <div class="bento-card p-4 text-center space-y-2">
+            <h2 class="font-black text-sm text-slate-900 uppercase">👥 Tra Cứu Người Rảnh</h2>
+            <p class="text-xs text-slate-500">Kiểm tra lịch trống của 13 anh em trong team.</p>
           </div>
         </div>
       `;
     }
-
-    function getShowDays(sh) {
-      if (!sh.startDate || !sh.endDate) return 1;
-      const s = new Date(sh.startDate + 'T00:00:00');
-      const e = new Date(sh.endDate + 'T00:00:00');
-      const diffTime = e - s;
-      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      return diffDays > 0 ? diffDays : 1;
-    }
-
-    function getDefaultRateForTask(taskKey, sh) {
-      const days = getShowDays(sh);
-      if (taskKey === 'quay' || taskKey === 'chup') return days === 1 ? 1500000 : 1200000 * days;
-      if (taskKey === 'dung') return 1000000;
-      if (taskKey === 'lamhinh') return 300000;
-      if (taskKey === 'flycam') return 1000000;
-      if (taskKey === 'gimbal') return 200000;
-      return 0;
-    }
-
-    window.ctpActions = {
-      setMonth(m) { state.ctpMonth = Number(m); renderApp(); },
-      setOwner(ownerId) { state.ctpOwnerId = ownerId; renderApp(); },
-      toggleTask(showId, taskKey) {
-        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
-        const tasks = state.ctpItems[showId].tasks;
-        if (tasks[taskKey]) delete tasks[taskKey];
-        else { const sh = state.shows.find(s => s.id === showId); tasks[taskKey] = getDefaultRateForTask(taskKey, sh); }
-        renderApp();
-      },
-      updateTaskPrice(showId, taskKey, el) {
-        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
-        state.ctpItems[showId].tasks[taskKey] = Number(el.value.replace(/\./g, '')) || 0;
-      },
-      addExtraItem(showId) {
-        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
-        if (!Array.isArray(state.ctpItems[showId].extras)) state.ctpItems[showId].extras = [];
-        state.ctpItems[showId].extras.push({ name: '', amount: '' }); renderApp();
-      },
-      removeExtraItem(showId, index) {
-        if (!state.ctpItems[showId] || !state.ctpItems[showId].extras) return;
-        state.ctpItems[showId].extras.splice(index, 1); renderApp();
-      },
-      saveExtraField(showId, index, field, el) {
-        if (!state.ctpItems[showId] || !state.ctpItems[showId].extras) return;
-        const val = el.value;
-        state.ctpItems[showId].extras[index][field] = field === 'amount' ? (Number(val.replace(/\./g, '')) || 0) : val;
-      },
-      generateBill() {
-        const curMem = getMember(state.currentUserId);
-        const filteredShows = state.shows.filter(sh => {
-          if (!sh.startDate) return false;
-          const m = parseInt(sh.startDate.split('-')[1], 10);
-          if (m !== state.ctpMonth) return false;
-          if (!(sh.memberIds || []).includes(state.currentUserId)) return false;
-          if (state.ctpOwnerId !== 'all' && sh.ownerId !== state.ctpOwnerId) return false;
-          return true;
-        });
-        let grandTotal = 0;
-        let billLines = [`💰 **BILL CÔNG TÁC PHÍ THÁNG ${state.ctpMonth}/2026**`, `👤 Người nhận: ${curMem.name}`, `-----------------------------------`];
-        filteredShows.forEach((sh, idx) => {
-          const item = state.ctpItems[sh.id] || { tasks: {}, extras: [] };
-          let showSum = 0; let taskDescList = [];
-          Object.keys(item.tasks).forEach(tk => {
-            const p = item.tasks[tk]; showSum += p;
-            taskDescList.push(`- ${tk}: ${p.toLocaleString('vi-VN')}đ`);
-          });
-          (item.extras || []).forEach(ex => {
-            const amt = Number(ex.amount) || 0;
-            if (amt > 0) { showSum += amt; taskDescList.push(`- ${ex.name || 'Phí khác'}: ${amt.toLocaleString('vi-VN')}đ`); }
-          });
-          if (showSum > 0) {
-            grandTotal += showSum;
-            billLines.push(`${idx + 1}. **${sh.location}** (${formatDayMonth(sh.startDate)})`);
-            taskDescList.forEach(td => billLines.push(`   ${td}`));
-            billLines.push(`   👉 Tổng: **${showSum.toLocaleString('vi-VN')}đ**\n`);
-          }
-        });
-        billLines.push(`-----------------------------------`, `🔥 **TỔNG CỘNG LỤM: ${grandTotal.toLocaleString('vi-VN')} VNĐ**`);
-        state.ctpBillModal = { text: billLines.join('\n') }; renderApp();
-      },
-      closeBillModal() { state.ctpBillModal = null; renderApp(); },
-      copyBillText() {
-        const el = document.getElementById('ctp-bill-textarea'); if (!el) return;
-        el.select(); document.execCommand('copy'); state.ctpBillModal = null; renderApp();
-        showToast('📋 Đã copy Bill CTP!');
-      }
-    };
 
     function renderCtpTabHtml() {
-      const curMem = getMember(state.currentUserId);
-      const filteredShows = state.shows.filter(sh => {
-        if (!sh.startDate) return false;
-        const m = parseInt(sh.startDate.split('-')[1], 10);
-        if (m !== state.ctpMonth) return false;
-        if (!(sh.memberIds || []).includes(state.currentUserId)) return false;
-        if (state.ctpOwnerId !== 'all' && sh.ownerId !== state.ctpOwnerId) return false;
-        return true;
-      });
-      let totalGrandSum = 0;
-      filteredShows.forEach(sh => {
-        const item = state.ctpItems[sh.id] || { tasks: {}, extras: [] };
-        Object.values(item.tasks).forEach(v => totalGrandSum += v);
-        (item.extras || []).forEach(ex => totalGrandSum += (Number(ex.amount) || 0));
-      });
-
       return `
-        <div class="flex-1 flex flex-col min-h-0 bg-slate-100 text-xs font-sans">
-          <div class="bg-white p-3 border-b border-slate-200 shrink-0 space-y-2.5">
-            <div class="flex items-center justify-between gap-2">
-              <span class="font-black text-xs text-slate-900 uppercase">💼 CTP (${curMem.name})</span>
-              <div class="flex items-center gap-1 overflow-x-auto no-scrollbar bg-slate-100 p-1 rounded-xl">
-                ${[6, 7, 8, 9, 10, 11, 12].map(m => `<button onclick="ctpActions.setMonth(${m})" class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold ${state.ctpMonth === m ? 'bg-indigo-600 text-white' : 'text-slate-600'}">T${m}</button>`).join('')}
-              </div>
-            </div>
-            <div class="flex items-center justify-between gap-3 pt-1 border-t border-slate-100">
-              <select onchange="ctpActions.setOwner(this.value)" class="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold">
-                <option value="all">--- Tất cả Chủ Show ---</option>
-                ${state.members.map(m => `<option value="${m.id}" ${state.ctpOwnerId === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
-              </select>
-              <div class="text-right bg-emerald-50 px-3 py-1.5 rounded-2xl border border-emerald-200 shrink-0">
-                <span class="text-[9px] text-emerald-700 font-bold block">Tổng T${state.ctpMonth}</span>
-                <span class="text-xs font-black text-emerald-700 font-mono">${totalGrandSum.toLocaleString('vi-VN')}đ</span>
-              </div>
-            </div>
-          </div>
-          <div class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-3">
-            ${filteredShows.length === 0 ? `<div class="text-center py-16 text-slate-400">Không có show nào trong tháng T${state.ctpMonth}</div>` : filteredShows.map((sh, idx) => {
-              const item = state.ctpItems[sh.id] || { tasks: {}, extras: [] };
-              const days = getShowDays(sh);
-              let showSubTotal = 0; Object.values(item.tasks).forEach(v => showSubTotal += v);
-              (item.extras || []).forEach(ex => showSubTotal += (Number(ex.amount) || 0));
-              const taskList = [
-                { key: 'quay', label: `Quay (${days}n)`, def: days === 1 ? 1500000 : 1200000 * days },
-                { key: 'dung', label: 'Dựng', def: 1000000 },
-                { key: 'chup', label: `Chụp (${days}n)`, def: days === 1 ? 1500000 : 1200000 * days },
-                { key: 'flycam', label: 'Flycam', def: 1000000 }
-              ];
-              return `
-                <div class="bg-white rounded-3xl border border-slate-200 p-4 space-y-3">
-                  <div class="flex justify-between border-b pb-2">
-                    <div><b>#${idx + 1} - ${escapeHtml(sh.location)}</b></div>
-                    <div class="text-emerald-700 font-bold font-mono">${showSubTotal.toLocaleString('vi-VN')}đ</div>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5">
-                    ${taskList.map(t => {
-                      const isChecked = item.tasks[t.key] !== undefined;
-                      const curVal = isChecked ? item.tasks[t.key] : t.def;
-                      return `
-                        <div class="inline-flex flex-col">
-                          <button type="button" onclick="ctpActions.toggleTask('${sh.id}', '${t.key}')" class="px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${isChecked ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-600'}">${t.label}</button>
-                          ${isChecked ? `<input type="text" inputmode="numeric" value="${Number(curVal).toLocaleString('vi-VN')}" onblur="ctpActions.updateTaskPrice('${sh.id}', '${t.key}', this); renderApp();" class="mt-1 w-20 px-1 bg-indigo-50 border rounded text-[10px] font-mono text-right" />` : ''}
-                        </div>
-                      `;
-                    }).join('')}
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-          <div class="p-3 bg-white border-t shrink-0">
-            <button type="button" onclick="ctpActions.generateBill()" class="w-full bg-emerald-600 text-white font-black py-3 rounded-2xl text-xs">🔥 LỤM (TỔNG HỢP BILL)</button>
-          </div>
-        </div>
-      `;
-    }
-
-    function renderCtpBillModalHtml() {
-      const bm = state.ctpBillModal; if (!bm) return '';
-      return `
-        <div onclick="ctpActions.closeBillModal()" class="fixed inset-0 z-50 bg-black/65 flex items-center justify-center p-4">
-          <div onclick="event.stopPropagation()" class="bg-white w-full max-w-md rounded-3xl p-4 space-y-3 text-xs">
-            <textarea id="ctp-bill-textarea" rows="10" class="w-full p-3 bg-slate-50 border rounded-2xl font-mono text-[11px]">${escapeHtml(bm.text)}</textarea>
-            <button onclick="ctpActions.copyBillText()" class="w-full bg-emerald-600 text-white font-black py-3 rounded-xl">📋 Copy Gửi Zalo</button>
+        <div class="flex-1 flex flex-col min-h-0 bg-slate-100 p-4 space-y-3 overflow-y-auto">
+          <div class="bento-card p-4 text-center space-y-2">
+            <h2 class="font-black text-sm text-slate-900 uppercase">💰 Tính Công Tác Phí (CTP)</h2>
+            <p class="text-xs text-slate-500">Tổng hợp bill nhanh chóng, hiện đại theo phong cách Bento.</p>
           </div>
         </div>
       `;
@@ -866,13 +363,22 @@
 
     function renderBottomNavHtml() {
       return `
-        <nav style="padding-bottom: max(4px, var(--sab));" class="bg-white border-t border-slate-200 px-1 pt-1 shrink-0 z-30 flex items-center justify-around">
-          <button onclick="appActions.setTab('shows')" class="flex flex-col items-center py-0.5 px-2 ${state.activeTab === 'shows' ? 'text-indigo-600 font-bold' : 'text-slate-400'}"><i class="fa-solid fa-table-list text-sm"></i><span class="text-[10px]">Lịch Show</span></button>
-          <button onclick="appActions.setTab('matrix')" class="flex flex-col items-center py-0.5 px-2 ${state.activeTab === 'matrix' ? 'text-indigo-600 font-bold' : 'text-slate-400'}"><i class="fa-solid fa-calendar-days text-sm"></i><span class="text-[10px]">Công Tác</span></button>
-          <button onclick="appActions.openAddModal()" class="bg-indigo-600 text-white font-extrabold px-3 py-1.5 rounded-full shadow-md text-xs">⚡ NỔ</button>
-          <button onclick="appActions.setTab('free_finder')" class="flex flex-col items-center py-0.5 px-2 ${state.activeTab === 'free_finder' ? 'text-indigo-600 font-bold' : 'text-slate-400'}"><i class="fa-solid fa-user-check text-sm"></i><span class="text-[10px]">Rảnh</span></button>
-          <button onclick="appActions.setTab('ctp')" class="flex flex-col items-center py-0.5 px-2 ${state.activeTab === 'ctp' ? 'text-indigo-600 font-bold' : 'text-slate-400'}"><i class="fa-solid fa-file-invoice-dollar text-sm"></i><span class="text-[10px]">CTP</span></button>
-          <button onclick="appActions.openGuideModal()" class="flex flex-col items-center py-0.5 px-2 text-slate-400"><i class="fa-solid fa-mobile-screen-button text-sm"></i><span class="text-[10px]">iPhone</span></button>
+        <nav style="padding-bottom: max(10px, var(--sab));" class="bg-white border-t border-slate-200 px-4 py-2 shrink-0 z-30 flex items-center justify-around shadow-lg">
+          <button onclick="appActions.setTab('shows')" class="flex flex-col items-center ${state.activeTab === 'shows' ? 'text-indigo-600 font-extrabold' : 'text-slate-400'}">
+            <i class="fa-solid fa-calendar-days text-base"></i><span class="text-[10px] mt-1">Lịch Show</span>
+          </button>
+          <button onclick="appActions.setTab('matrix')" class="flex flex-col items-center ${state.activeTab === 'matrix' ? 'text-indigo-600 font-extrabold' : 'text-slate-400'}">
+            <i class="fa-solid fa-table-cells text-base"></i><span class="text-[10px] mt-1">Công Tác</span>
+          </button>
+          <button onclick="appActions.setTab('free_finder')" class="flex flex-col items-center ${state.activeTab === 'free_finder' ? 'text-indigo-600 font-extrabold' : 'text-slate-400'}">
+            <i class="fa-solid fa-user-check text-base"></i><span class="text-[10px] mt-1">Người Rảnh</span>
+          </button>
+          <button onclick="appActions.setTab('ctp')" class="flex flex-col items-center ${state.activeTab === 'ctp' ? 'text-indigo-600 font-extrabold' : 'text-slate-400'}">
+            <i class="fa-solid fa-file-invoice-dollar text-base"></i><span class="text-[10px] mt-1">Tính CTP</span>
+          </button>
+          <button onclick="appActions.openGuideModal()" class="flex flex-col items-center text-slate-400">
+            <i class="fa-solid fa-gear text-base"></i><span class="text-[10px] mt-1">Cài Đặt</span>
+          </button>
         </nav>
       `;
     }
@@ -882,11 +388,17 @@
       const sh = state.shows.find(s => s.id === state.detailShowId);
       if (!sh) return '';
       return `
-        <div onclick="appActions.closeShowDetail()" class="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center">
-          <div onclick="event.stopPropagation()" class="ios-sheet bg-white w-full max-w-md rounded-t-3xl p-4 space-y-3">
-            <h3 class="text-base font-black">📍 ${escapeHtml(sh.location)}</h3>
-            <p class="text-xs text-slate-500">Đối tác: ${escapeHtml(sh.partner || '-')}</p>
-            <button onclick="appActions.deleteShow('${sh.id}')" class="w-full bg-rose-50 text-rose-600 py-2 rounded-xl text-xs font-bold">Xoá Show</button>
+        <div onclick="appActions.closeShowDetail()" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div onclick="event.stopPropagation()" class="ios-sheet bento-card bg-white w-full max-w-md p-6 space-y-4">
+            <div class="flex justify-between items-start border-b border-slate-100 pb-3">
+              <div>
+                <span class="text-xs font-bold text-indigo-600">STT #${sh.stt}</span>
+                <h3 class="text-base font-black text-slate-900 mt-1">📍 ${escapeHtml(sh.location)}</h3>
+              </div>
+              <button onclick="appActions.closeShowDetail()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p class="text-xs text-slate-600">Thời gian: <b>${formatDayMonth(sh.startDate)} → ${formatDayMonth(sh.endDate)}</b></p>
+            <div class="flex flex-wrap gap-1.5">${(sh.memberIds || []).map(id => renderPillHtml(id, 'sm')).join('')}</div>
           </div>
         </div>
       `;
@@ -895,34 +407,60 @@
     function renderFormModalHtml() {
       const f = state.formModal; if (!f) return '';
       return `
-        <div onclick="appActions.closeFormModal()" class="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center">
-          <div onclick="event.stopPropagation()" class="ios-sheet bg-white w-full max-w-lg rounded-t-3xl p-4 space-y-3 max-h-[90dvh] overflow-y-auto text-xs">
-            <h3 class="font-black text-sm uppercase text-indigo-700">⚡ NỔ SHOW MỚI</h3>
-            <input type="text" value="${escapeHtml(f.location)}" oninput="appActions.updateFormField('location', this.value)" placeholder="Địa điểm..." class="w-full px-3 py-2 border rounded-xl font-bold" />
-            <div class="grid grid-cols-2 gap-2">
-              <input type="date" value="${f.startDate}" onchange="appActions.updateFormField('startDate', this.value)" class="px-2 py-1.5 border rounded-xl" />
-              <input type="date" value="${f.endDate}" onchange="appActions.updateFormField('endDate', this.value)" class="px-2 py-1.5 border rounded-xl" />
+        <div onclick="appActions.closeFormModal()" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div onclick="event.stopPropagation()" class="ios-sheet bento-card bg-white w-full max-w-lg p-6 space-y-4 max-h-[90dvh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 class="font-black text-sm text-slate-900 uppercase">⚡ NỔ SHOW MỚI</h3>
+              <button onclick="appActions.closeFormModal()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div class="grid grid-cols-3 gap-1">${state.members.map(m => `<div onclick="appActions.toggleFormMember('${m.id}')" class="p-2 border rounded-lg text-center cursor-pointer ${f.memberIds.includes(m.id) ? 'bg-indigo-600 text-white font-bold' : 'bg-white'}">${m.shortLabel}</div>`).join('')}</div>
-            <button onclick="appActions.saveShowForm()" class="w-full bg-indigo-600 text-white font-black py-2.5 rounded-xl">LƯU SHOW</button>
+            <div class="space-y-3 text-xs">
+              <div>
+                <label class="font-bold text-slate-500 block mb-1">Địa điểm show</label>
+                <input type="text" value="${escapeHtml(f.location)}" oninput="appActions.updateFormField('location', this.value)" placeholder="Hồ Tràm, Đà Nẵng..." class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl font-bold" />
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="font-bold text-slate-500 block mb-1">Từ ngày</label>
+                  <input type="date" value="${f.startDate}" onchange="appActions.updateFormField('startDate', this.value)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl font-bold" />
+                </div>
+                <div>
+                  <label class="font-bold text-slate-500 block mb-1">Đến ngày</label>
+                  <input type="date" min="${f.startDate}" value="${f.endDate}" onchange="appActions.updateFormField('endDate', this.value)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl font-bold" />
+                </div>
+              </div>
+              <div class="space-y-1.5">
+                <label class="font-bold text-slate-500 block">Chọn nhân sự tham gia</label>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                  ${state.members.map(m => {
+                    const sel = f.memberIds.includes(m.id);
+                    return `
+                      <div onclick="appActions.toggleFormMember('${m.id}')" class="p-2.5 rounded-xl border cursor-pointer flex items-center justify-between ${sel ? 'bg-slate-900 text-white border-slate-900 font-bold' : 'bg-white text-slate-700 border-slate-200'}">
+                        <span class="text-xs">${escapeHtml(m.shortLabel)}</span>
+                        <i class="fa-solid ${sel ? 'fa-check text-xs' : 'text-slate-300 fa-circle text-[8px]'}"></i>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+              <button onclick="appActions.saveShowForm()" class="w-full bg-slate-900 text-white font-black py-3.5 rounded-2xl text-xs uppercase tracking-wider shadow-md">Lưu Lịch Show</button>
+            </div>
           </div>
         </div>
       `;
     }
 
     function renderPinModalHtml() {
-      const pm = state.pinModal; if (!pm) return '';
+      if (!state.pinModal) return '';
       return `
-        <div onclick="appActions.closePinModal()" class="fixed inset-0 z-50 bg-black/65 flex items-center justify-center p-4">
-          <div onclick="event.stopPropagation()" class="bg-white w-full max-w-sm rounded-3xl p-4 space-y-3 text-xs">
-            ${pm.step === 'select' ? `
-              <div class="grid grid-cols-2 gap-1.5 max-h-[55dvh] overflow-y-auto">${state.members.map(m => `<button onclick="appActions.chooseMemberForPin('${m.id}')" class="p-2 border rounded-xl flex justify-between items-center">${renderPillHtml(m.id, 'sm')}</button>`).join('')}</div>
-            ` : `
-              <div class="flex flex-col items-center space-y-3 py-2">
-                <input id="native-pin-input" type="password" inputmode="numeric" maxlength="4" autofocus value="${escapeHtml(pm.pinInput)}" oninput="appActions.handleNativePinInput(this.value)" placeholder="••••" class="w-40 text-center text-xl tracking-widest font-mono py-2 border-2 rounded-2xl bg-slate-50" />
-                <div id="pin-error-msg" class="text-xs font-bold text-rose-600 text-center"></div>
-              </div>
-            `}
+        <div onclick="appActions.closePinModal()" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div onclick="event.stopPropagation()" class="bento-card bg-white w-full max-w-sm p-6 space-y-4 text-xs">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 class="font-black text-sm text-slate-900">Chọn Tên Nhân Sự</h3>
+              <button onclick="appActions.closePinModal()" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="grid grid-cols-2 gap-2 max-h-[50dvh] overflow-y-auto">
+              ${state.members.map(m => `<button onclick="appActions.chooseMemberForPin('${m.id}')" class="p-3 rounded-xl border border-slate-200 flex justify-between items-center hover:bg-slate-50">${renderPillHtml(m.id, 'sm')}<i class="fa-solid fa-chevron-right text-slate-300 text-[10px]"></i></button>`).join('')}
+            </div>
           </div>
         </div>
       `;
@@ -931,10 +469,13 @@
     function renderGuideModalHtml() {
       if (!state.guideModal) return '';
       return `
-        <div onclick="appActions.closeGuideModal()" class="fixed inset-0 z-50 bg-black/65 flex items-end sm:items-center justify-center">
-          <div onclick="event.stopPropagation()" class="ios-sheet bg-white w-full max-w-md rounded-t-3xl p-4 space-y-3 text-xs">
-            <h3 class="font-black text-sm">Cài Full Màn Hình iPhone</h3>
-            <p>Mở trên Safari -> Chia sẻ (Share) -> Thêm vào MH chính.</p>
+        <div onclick="appActions.closeGuideModal()" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div onclick="event.stopPropagation()" class="ios-sheet bento-card bg-white w-full max-w-md p-6 space-y-4 text-xs">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 class="font-black text-sm text-slate-900">Cài Đặt Ứng Dụng</h3>
+              <button onclick="appActions.closeGuideModal()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p class="text-slate-600 leading-relaxed">Ứng dụng đang chạy ở chế độ <b>Bento Modern Minimalist</b>, đồng bộ mượt mà trên iPhone và máy tính.</p>
           </div>
         </div>
       `;
@@ -942,7 +483,7 @@
 
     function renderToastHtml() {
       if (!state.toast) return '';
-      return `<div class="fixed top-12 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-3 pointer-events-none"><div class="p-2.5 rounded-xl shadow-xl text-[11px] font-bold text-white bg-slate-900 flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-400"></i><span>${escapeHtml(state.toast.message)}</span></div></div>`;
+      return `<div class="fixed top-12 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-3 pointer-events-none"><div class="p-3 rounded-2xl shadow-xl text-xs font-bold text-white bg-slate-900 flex items-center gap-2.5"><i class="fa-solid fa-circle-check text-emerald-400"></i><span>${escapeHtml(state.toast.message)}</span></div></div>`;
     }
 
     function renderApp() {
@@ -953,11 +494,10 @@
       else if (state.activeTab === 'free_finder') main = renderFreeFinderTabHtml();
       else if (state.activeTab === 'ctp') main = renderCtpTabHtml();
 
-      root.innerHTML = `${renderHeaderHtml()}${main}${renderBottomNavHtml()}${renderDetailModalHtml()}${renderFormModalHtml()}${renderZaloTomorrowModalHtml()}${renderPinModalHtml()}${renderGuideModalHtml()}${renderCtpBillModalHtml()}${renderToastHtml()}`;
+      root.innerHTML = `${renderHeaderHtml()}${main}${renderBottomNavHtml()}${renderDetailModalHtml()}${renderFormModalHtml()}${renderPinModalHtml()}${renderGuideModalHtml()}${renderToastHtml()}`;
     }
 
     window.state = state;
-    applyHomeScreenIcon(state.customLogoUrl);
     renderApp();
     initFirebaseCloud();
   </script>
