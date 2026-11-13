@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>LỊCH SHOW ACTION & SAY 5</title>
+  <title>LỊCH SHOW ACTION & SAY</title>
   
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1660,126 +1660,6 @@ function renderHeaderHtml() {
         }
         renderApp();
       },
-      updateTaskPrice(showId, taskKey, priceVal) {
-        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
-        state.ctpItems[showId].tasks[taskKey] = Number(priceVal) || 0;
-        renderApp();
-      },
-      addExtraItem(showId) {
-        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
-        if (!Array.isArray(state.ctpItems[showId].extras)) state.ctpItems[showId].extras = [];
-        state.ctpItems[showId].extras.push({ name: '', amount: '' });
-        renderApp();
-      },
-      removeExtraItem(showId, index) {
-        if (!state.ctpItems[showId] || !state.ctpItems[showId].extras) return;
-        state.ctpItems[showId].extras.splice(index, 1);
-        renderApp();
-      },
-      updateExtraField(showId, index, field, val) {
-        if (!state.ctpItems[showId] || !state.ctpItems[showId].extras) return;
-        state.ctpItems[showId].extras[index][field] = field === 'amount' ? (Number(val) || 0) : val;
-        renderApp();
-      },
-      generateBill() {
-        const curMem = getMember(state.currentUserId);
-        const filteredShows = state.shows.filter(sh => {
-          if (!sh.startDate) return false;
-          const m = parseInt(sh.startDate.split('-')[1], 10);
-          if (m !== state.ctpMonth) return false;
-          if (!(sh.memberIds || []).includes(state.currentUserId)) return false;
-          if (state.ctpOwnerId !== 'all' && sh.ownerId !== state.ctpOwnerId) return false;
-          return true;
-        });
-
-        let grandTotal = 0;
-        let billLines = [];
-        billLines.push(`💰 **BILL CÔNG TÁC PHÍ THÁNG ${state.ctpMonth}/2026**`);
-        billLines.push(`👤 Người nhận: ${curMem.name}`);
-        if (state.ctpOwnerId !== 'all') {
-          billLines.push(`📌 Chủ show: ${getMember(state.ctpOwnerId).name}`);
-        }
-        billLines.push(`-----------------------------------`);
-
-        filteredShows.forEach((sh, idx) => {
-          const item = state.ctpItems[sh.id] || { tasks: {}, extras: [] };
-          const tasks = item.tasks;
-          let showSum = 0;
-          let taskDescList = [];
-
-          Object.keys(tasks).forEach(tk => {
-            const p = tasks[tk];
-            showSum += p;
-            let label = tk;
-            if (tk === 'quay') label = 'Quay';
-            else if (tk === 'dung') label = 'Dựng';
-            else if (tk === 'chup') label = 'Chụp hình';
-            else if (tk === 'lamhinh') label = 'Làm hình';
-            else if (tk === 'flycam') label = 'Flycam';
-            else if (tk === 'gimbal') label = 'Gimbal';
-            taskDescList.push(`- ${label}: ${p.toLocaleString('vi-VN')}đ`);
-          });
-
-          const extras = Array.isArray(item.extras) ? item.extras : [];
-          let extraDescList = [];
-          extras.forEach(ex => {
-            const amt = Number(ex.amount) || 0;
-            if (amt > 0) {
-              showSum += amt;
-              extraDescList.push(`- Phát sinh (${ex.name || 'Phí khác'}): ${amt.toLocaleString('vi-VN')}đ`);
-            }
-          });
-
-          if (showSum > 0) {
-            grandTotal += showSum;
-            billLines.push(`${idx + 1}. **${sh.location}** (${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) : ''})`);
-            taskDescList.forEach(td => billLines.push(`   ${td}`));
-            extraDescList.forEach(ed => billLines.push(`   ${ed}`));
-            billLines.push(`   👉 Tổng show: **${showSum.toLocaleString('vi-VN')}đ**\n`);
-          }
-        });
-
-        billLines.push(`-----------------------------------`);
-        billLines.push(`🔥 **TỔNG CỘNG CTP LỤM: ${grandTotal.toLocaleString('vi-VN')} VNĐ**`);
-
-        state.ctpBillModal = { text: billLines.join('\n'), total: grandTotal };
-        renderApp();
-      },
-      closeBillModal() {
-        state.ctpBillModal = null;
-        renderApp();
-      },
-      copyBillText() {
-        const el = document.getElementById('ctp-bill-textarea');
-        if (!el) return;
-        el.select();
-        document.execCommand('copy');
-        state.ctpBillModal = null;
-        renderApp();
-        showToast('📋 Đã copy Bill CTP! Gửi ngay cho Chủ Show nhé.');
-      }
-    };
-
-window.ctpActions = {
-      setMonth(m) {
-        state.ctpMonth = Number(m);
-        renderApp();
-      },
-      setOwner(ownerId) {
-        state.ctpOwnerId = ownerId;
-        renderApp();
-      },
-      toggleTask(showId, taskKey) {
-        if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
-        const tasks = state.ctpItems[showId].tasks;
-        if (tasks[taskKey]) {
-          delete tasks[taskKey];
-        } else {
-          const sh = state.shows.find(s => s.id === showId);
-          tasks[taskKey] = getDefaultRateForTask(taskKey, sh);
-        }
-        renderApp();
-      },
       updateTaskPrice(showId, taskKey, el) {
         if (!state.ctpItems[showId]) state.ctpItems[showId] = { tasks: {}, extras: [] };
         const rawVal = el.value.replace(/\./g, '');
@@ -1819,21 +1699,26 @@ window.ctpActions = {
 
         let grandTotal = 0;
         let billLines = [];
+        let rows = [];
+        const ownerTitle = state.ctpOwnerId !== 'all' ? getMember(state.ctpOwnerId).name : 'Tất cả Chủ Show';
+        
         billLines.push(`💰 **BILL CÔNG TÁC PHÍ THÁNG ${state.ctpMonth}/2026**`);
         billLines.push(`👤 Người nhận: ${curMem.name}`);
         if (state.ctpOwnerId !== 'all') {
-          billLines.push(`📌 Chủ show: ${getMember(state.ctpOwnerId).name}`);
+          billLines.push(`📌 Chủ show: ${ownerTitle}`);
         }
         billLines.push(`-----------------------------------`);
 
-        filteredShows.forEach((sh, idx) => {
+        let stt = 0;
+        filteredShows.forEach((sh) => {
           const item = state.ctpItems[sh.id] || { tasks: {}, extras: [] };
-          const tasks = item.tasks;
+          const tasks = item.tasks || {};
           let showSum = 0;
           let taskDescList = [];
+          let shortTasks = [];
 
           Object.keys(tasks).forEach(tk => {
-            const p = tasks[tk];
+            const p = Number(tasks[tk]) || 0;
             showSum += p;
             let label = tk;
             if (tk === 'quay') label = 'Quay';
@@ -1843,21 +1728,52 @@ window.ctpActions = {
             else if (tk === 'flycam') label = 'Flycam';
             else if (tk === 'gimbal') label = 'Gimbal';
             taskDescList.push(`- ${label}: ${p.toLocaleString('vi-VN')}đ`);
+            shortTasks.push(`${label} (${(p/1000).toLocaleString('vi-VN')}k)`);
           });
 
           const extras = Array.isArray(item.extras) ? item.extras : [];
           let extraDescList = [];
+          let extraSum = 0;
+          let extraNames = [];
           extras.forEach(ex => {
             const amt = Number(ex.amount) || 0;
             if (amt > 0) {
               showSum += amt;
-              extraDescList.push(`- Phát sinh (${ex.name || 'Phí khác'}): ${amt.toLocaleString('vi-VN')}đ`);
+              extraSum += amt;
+              const exName = ex.name || 'Phí khác';
+              extraDescList.push(`- Phát sinh (${exName}): ${amt.toLocaleString('vi-VN')}đ`);
+              extraNames.push(`${exName}: ${(amt/1000).toLocaleString('vi-VN')}k`);
             }
           });
 
-          if (showSum > 0) {
+          const days = getShowDays(sh);
+          const dateLabel = `${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' - ' + formatDayMonth(sh.endDate) : ''}`;
+          const ownerObj = getMember(sh.ownerId);
+
+          if (showSum > 0 || filteredShows.length > 0) {
+            stt++;
             grandTotal += showSum;
-            billLines.push(`${idx + 1}. **${sh.location}** (${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) : ''})`);
+            rows.push({
+              stt,
+              dateLabel,
+              days,
+              location: sh.location + (sh.partner ? ` (${sh.partner})` : ''),
+              ownerName: ownerObj.name,
+              quay: Number(tasks['quay']) || 0,
+              dung: Number(tasks['dung']) || 0,
+              chup: Number(tasks['chup']) || 0,
+              lamhinh: Number(tasks['lamhinh']) || 0,
+              flycam: Number(tasks['flycam']) || 0,
+              gimbal: Number(tasks['gimbal']) || 0,
+              extraSum,
+              extraNote: extraNames.join(', '),
+              tasksSummary: shortTasks.join(', ') || '-',
+              showSum
+            });
+          }
+
+          if (showSum > 0) {
+            billLines.push(`${stt}. **${sh.location}** (${dateLabel})`);
             taskDescList.forEach(td => billLines.push(`   ${td}`));
             extraDescList.forEach(ed => billLines.push(`   ${ed}`));
             billLines.push(`   👉 Tổng show: **${showSum.toLocaleString('vi-VN')}đ**\n`);
@@ -1867,7 +1783,25 @@ window.ctpActions = {
         billLines.push(`-----------------------------------`);
         billLines.push(`🔥 **TỔNG CỘNG CTP LỤM: ${grandTotal.toLocaleString('vi-VN')} VNĐ**`);
 
-        state.ctpBillModal = { text: billLines.join('\n'), total: grandTotal };
+        // Tạo chuỗi TSV chuẩn để dán thẳng vào Excel / Google Sheets
+        const tsvHeader = ['STT', 'Ngày', 'Địa điểm / Show', 'Chủ show', 'Quay', 'Dựng', 'Chụp', 'Làm hình', 'Flycam', 'Gimbal', 'Phát sinh', 'Ghi chú PS', 'Thành tiền'].join('\t');
+        const tsvRows = rows.map(r => [
+          r.stt, r.dateLabel, r.location, r.ownerName,
+          r.quay || 0, r.dung || 0, r.chup || 0, r.lamhinh || 0, r.flycam || 0, r.gimbal || 0,
+          r.extraSum || 0, r.extraNote || '', r.showSum || 0
+        ].join('\t'));
+        tsvRows.push(['', '', 'TỔNG CỘNG', '', '', '', '', '', '', '', '', '', grandTotal].join('\t'));
+        const tsvText = [tsvHeader, ...tsvRows].join('\n');
+
+        state.ctpBillModal = {
+          text: billLines.join('\n'),
+          tsvText,
+          total: grandTotal,
+          rows,
+          memberName: curMem.name,
+          ownerTitle,
+          month: state.ctpMonth
+        };
         renderApp();
       },
       closeBillModal() {
@@ -1875,13 +1809,65 @@ window.ctpActions = {
         renderApp();
       },
       copyBillText() {
+        const bm = state.ctpBillModal;
+        if (!bm) return;
         const el = document.getElementById('ctp-bill-textarea');
-        if (!el) return;
-        el.select();
-        document.execCommand('copy');
-        state.ctpBillModal = null;
-        renderApp();
-        showToast('📋 Đã copy Bill CTP! Gửi ngay cho Chủ Show nhé.');
+        if (el) {
+          el.value = bm.text;
+          el.select();
+          document.execCommand('copy');
+        }
+        showToast('📋 Đã copy nội dung Bill gửi Zalo!');
+      },
+      copyExcelTable() {
+        const bm = state.ctpBillModal;
+        if (!bm) return;
+        const el = document.getElementById('ctp-bill-textarea');
+        if (el) {
+          el.value = bm.tsvText;
+          el.select();
+          document.execCommand('copy');
+        }
+        showToast('📊 Đã copy dạng Bảng! Mở Excel / Google Sheets bấm Ctrl+V là vào đúng từng ô.');
+      },
+      exportBillExcelFile() {
+        const bm = state.ctpBillModal;
+        if (!bm || typeof XLSX === 'undefined') return;
+        const wsData = [
+          [`BẢNG KÊ CÔNG TÁC PHÍ THÁNG ${bm.month}/2026`],
+          [`Nhân sự: ${bm.memberName}`, '', `Chủ show: ${bm.ownerTitle}`],
+          [],
+          ['STT', 'Ngày', 'Số ngày', 'Địa điểm / Show', 'Chủ show', 'Quay', 'Dựng', 'Chụp', 'Làm hình', 'Flycam', 'Gimbal', 'Phát sinh', 'Chi tiết phát sinh', 'Tổng cộng (VNĐ)']
+        ];
+        bm.rows.forEach(r => {
+          wsData.push([
+            r.stt, r.dateLabel, r.days, r.location, r.ownerName,
+            r.quay || '', r.dung || '', r.chup || '', r.lamhinh || '', r.flycam || '', r.gimbal || '',
+            r.extraSum || '', r.extraNote || '', r.showSum
+          ]);
+        });
+        wsData.push([
+          '', '', '', 'TỔNG CỘNG LỤM', '',
+          bm.rows.reduce((s, r) => s + r.quay, 0) || '',
+          bm.rows.reduce((s, r) => s + r.dung, 0) || '',
+          bm.rows.reduce((s, r) => s + r.chup, 0) || '',
+          bm.rows.reduce((s, r) => s + r.lamhinh, 0) || '',
+          bm.rows.reduce((s, r) => s + r.flycam, 0) || '',
+          bm.rows.reduce((s, r) => s + r.gimbal, 0) || '',
+          bm.rows.reduce((s, r) => s + r.extraSum, 0) || '',
+          '',
+          bm.total
+        ]);
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [
+          { wch: 5 }, { wch: 13 }, { wch: 8 }, { wch: 26 }, { wch: 12 },
+          { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+          { wch: 12 }, { wch: 20 }, { wch: 15 }
+        ];
+        XLSX.utils.book_append_sheet(wb, ws, `CTP_T${bm.month}`);
+        XLSX.writeFile(wb, `Bill_CTP_${bm.memberName}_Thang_${bm.month}_2026.xlsx`);
+        showToast('📥 Đã tải xuống file Excel (.xlsx) thành công!');
       }
     };
 
@@ -1920,7 +1906,7 @@ window.ctpActions = {
             </div>
             <div class="flex items-center justify-between gap-3 pt-1 border-t border-slate-100">
               <div class="flex items-center gap-2 flex-1">
-                <span class="text-[10px] font-bold text-slate-500 shrink-0">Lọc Chủ Show:</span>
+                <span class="text-[10px] font-bold text-slate-500 shrink-0">Lọc Chủ:</span>
                 <select onchange="ctpActions.setOwner(this.value)" class="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none">
                   <option value="all">--- Tất cả Chủ Show ---</option>
                   ${state.members.map(m => `<option value="${m.id}" ${state.ctpOwnerId === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
@@ -2036,18 +2022,102 @@ window.ctpActions = {
     function renderCtpBillModalHtml() {
       const bm = state.ctpBillModal;
       if (!bm) return '';
+      const rows = bm.rows || [];
+      const sumCol = (k) => rows.reduce((s, r) => s + (Number(r[k]) || 0), 0);
+      const fmtCell = (v) => v > 0 ? v.toLocaleString('vi-VN') : '<span class="text-slate-300">-</span>';
+
       return `
-        <div onclick="ctpActions.closeBillModal()" class="fixed inset-0 z-50 bg-black/65 flex items-center justify-center p-4">
-          <div onclick="event.stopPropagation()" class="bg-white w-full max-w-md rounded-3xl p-4 space-y-3 text-xs shadow-2xl">
-            <div class="flex justify-between items-center border-b pb-2">
-              <h3 class="font-black text-sm text-emerald-700">💰 Bill CTP Tổng Hợp</h3>
-              <button onclick="ctpActions.closeBillModal()" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+        <div onclick="ctpActions.closeBillModal()" class="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+          <div onclick="event.stopPropagation()" class="bg-white w-full max-w-4xl rounded-3xl p-4 sm:p-5 space-y-3.5 text-xs shadow-2xl flex flex-col max-h-[90dvh]">
+            <!-- Header Modal -->
+            <div class="flex justify-between items-center border-b border-slate-200 pb-2.5 shrink-0">
+              <div>
+                <h3 class="font-black text-sm sm:text-base text-slate-900 flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-lg bg-emerald-600 text-white inline-flex items-center justify-center text-xs"><i class="fa-solid fa-table"></i></span>
+                  <span>BẢNG KÊ BILL CTP THÁNG ${bm.month}/2026</span>
+                </h3>
+                <p class="text-[11px] text-slate-500 font-semibold mt-0.5">
+                  👤 Nhân sự: <b class="text-slate-900">${escapeHtml(bm.memberName)}</b> • 📌 Chủ show: <b class="text-slate-900">${escapeHtml(bm.ownerTitle)}</b>
+                </p>
+              </div>
+              <button onclick="ctpActions.closeBillModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <textarea id="ctp-bill-textarea" rows="10" class="w-full p-3 bg-slate-50 border border-slate-300 rounded-2xl font-mono text-[11px] leading-relaxed">${escapeHtml(bm.text)}</textarea>
-            <button onclick="ctpActions.copyBillText()" class="w-full bg-emerald-600 text-white font-black py-3 rounded-xl uppercase tracking-wide flex items-center justify-center gap-2">
-              <i class="fa-regular fa-copy"></i>
-              <span>📋 Copy Bill Gửi Zalo Chủ Show</span>
-            </button>
+
+            <!-- Bảng lưới chuẩn Excel -->
+            <div class="flex-1 min-h-0 overflow-auto custom-scroll border border-slate-300 rounded-xl bg-white">
+              <table class="w-full border-collapse text-[11px] min-w-[680px]">
+                <thead class="sticky top-0 z-10">
+                  <tr class="bg-[#107c41] text-white font-extrabold text-[10px] uppercase tracking-wider">
+                    <th class="py-2 px-1.5 border border-emerald-700 w-9 text-center">STT</th>
+                    <th class="py-2 px-2 border border-emerald-700 text-center w-20">NGÀY</th>
+                    <th class="py-2 px-2.5 border border-emerald-700 text-left">ĐỊA ĐIỂM / SHOW</th>
+                    <th class="py-2 px-2 border border-emerald-700 text-center w-20">CHỦ SHOW</th>
+                    <th class="py-2 px-2 border border-emerald-700 text-right w-20">QUAY</th>
+                    <th class="py-2 px-2 border border-emerald-700 text-right w-20">DỰNG</th>
+                    <th class="py-2 px-2 border border-emerald-700 text-right w-20">CHỤP</th>
+                    <th class="py-2 px-2 border border-emerald-700 text-right w-20">HÌNH/FLY/GIM</th>
+                    <th class="py-2 px-2 border border-emerald-700 text-right w-24">PHÁT SINH</th>
+                    <th class="py-2 px-2.5 border border-emerald-700 text-right w-28 bg-emerald-900">THÀNH TIỀN</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 font-mono">
+                  ${rows.length === 0 ? `
+                    <tr>
+                      <td colspan="10" class="py-8 text-center text-slate-400 font-sans">Chưa có show nào được tích chọn nhiệm vụ tính CTP.</td>
+                    </tr>
+                  ` : rows.map((r, i) => {
+                    const otherTaskSum = (r.lamhinh || 0) + (r.flycam || 0) + (r.gimbal || 0);
+                    return `
+                      <tr class="${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-emerald-50/40">
+                        <td class="py-1.5 px-1.5 border border-slate-200 text-center font-bold text-slate-500">${r.stt}</td>
+                        <td class="py-1.5 px-2 border border-slate-200 text-center font-bold text-slate-700">${escapeHtml(r.dateLabel)}</td>
+                        <td class="py-1.5 px-2.5 border border-slate-200 font-sans font-extrabold text-slate-900">${escapeHtml(r.location)}</td>
+                        <td class="py-1.5 px-2 border border-slate-200 font-sans text-center font-semibold text-slate-600">${escapeHtml(r.ownerName)}</td>
+                        <td class="py-1.5 px-2 border border-slate-200 text-right font-semibold text-slate-800">${fmtCell(r.quay)}</td>
+                        <td class="py-1.5 px-2 border border-slate-200 text-right font-semibold text-slate-800">${fmtCell(r.dung)}</td>
+                        <td class="py-1.5 px-2 border border-slate-200 text-right font-semibold text-slate-800">${fmtCell(r.chup)}</td>
+                        <td class="py-1.5 px-2 border border-slate-200 text-right font-semibold text-slate-800">${fmtCell(otherTaskSum)}</td>
+                        <td class="py-1.5 px-2 border border-slate-200 text-right font-semibold text-amber-800" title="${escapeHtml(r.extraNote)}">
+                          ${fmtCell(r.extraSum)}
+                          ${r.extraNote ? `<div class="text-[9px] font-sans text-slate-400 truncate max-w-[90px]">${escapeHtml(r.extraNote)}</div>` : ''}
+                        </td>
+                        <td class="py-1.5 px-2.5 border border-slate-200 text-right font-black text-emerald-700 bg-emerald-50/40">${r.showSum.toLocaleString('vi-VN')}đ</td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+                <tfoot class="sticky bottom-0 z-10">
+                  <tr class="bg-slate-900 text-white font-mono font-black text-[11px]">
+                    <td colspan="4" class="py-2.5 px-3 border border-slate-700 font-sans text-right uppercase tracking-wider text-amber-300">🔥 Tổng Cộng CTP Lụm:</td>
+                    <td class="py-2.5 px-2 border border-slate-700 text-right">${sumCol('quay') > 0 ? sumCol('quay').toLocaleString('vi-VN') : '-'}</td>
+                    <td class="py-2.5 px-2 border border-slate-700 text-right">${sumCol('dung') > 0 ? sumCol('dung').toLocaleString('vi-VN') : '-'}</td>
+                    <td class="py-2.5 px-2 border border-slate-700 text-right">${sumCol('chup') > 0 ? sumCol('chup').toLocaleString('vi-VN') : '-'}</td>
+                    <td class="py-2.5 px-2 border border-slate-700 text-right">${(sumCol('lamhinh') + sumCol('flycam') + sumCol('gimbal')) > 0 ? (sumCol('lamhinh') + sumCol('flycam') + sumCol('gimbal')).toLocaleString('vi-VN') : '-'}</td>
+                    <td class="py-2.5 px-2 border border-slate-700 text-right">${sumCol('extraSum') > 0 ? sumCol('extraSum').toLocaleString('vi-VN') : '-'}</td>
+                    <td class="py-2.5 px-2.5 border border-slate-700 text-right text-emerald-400 text-xs">${bm.total.toLocaleString('vi-VN')}đ</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <!-- Textarea ẩn phục vụ lệnh Copy -->
+            <textarea id="ctp-bill-textarea" class="sr-only" readonly>${escapeHtml(bm.text)}</textarea>
+
+            <!-- Cụm nút hành động tiện lợi -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 shrink-0">
+              <button onclick="ctpActions.copyBillText()" class="bg-emerald-600 text-white font-black py-2.5 px-3 rounded-full uppercase tracking-wide flex items-center justify-center gap-1.5 text-[11px]">
+                <i class="fa-regular fa-copy"></i>
+                <span>📋 Copy Tin Nhắn Zalo</span>
+              </button>
+              <button onclick="ctpActions.copyExcelTable()" class="bg-indigo-600 text-white font-black py-2.5 px-3 rounded-full uppercase tracking-wide flex items-center justify-center gap-1.5 text-[11px]">
+                <i class="fa-solid fa-table-cells"></i>
+                <span>📊 Copy Bảng Dán Excel/Sheets</span>
+              </button>
+              <button onclick="ctpActions.exportBillExcelFile()" class="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-black py-2.5 px-3 rounded-full uppercase tracking-wide flex items-center justify-center gap-1.5 text-[11px]">
+                <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                <span>📥 Tải File Excel (.xlsx)</span>
+              </button>
+            </div>
           </div>
         </div>
       `;
