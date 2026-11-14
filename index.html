@@ -1402,8 +1402,8 @@ function renderHeaderHtml() {
             </div>
           </div>
 
-          <!-- Hàng 2: Thanh chọn tháng (Tự động ẨN khi đang ở tab Tính CTP để tiết kiệm không gian) -->
-          ${state.activeTab !== 'ctp' ? `
+          <!-- Hàng 2: Thanh chọn tháng (Tự động ẨN khi đang ở tab Người Rảnh hoặc Tính CTP để tiết kiệm không gian) -->
+          ${(state.activeTab !== 'ctp' && state.activeTab !== 'free_finder') ? `
             <div class="flex items-center gap-1 overflow-x-auto no-scrollbar bg-slate-800/90 p-1 rounded-xl border border-slate-700/60">
               <button
                 onclick="appActions.toggleAllMonths()"
@@ -2823,7 +2823,7 @@ function renderHeaderHtml() {
 
       // Lưu lại vị trí cuộn hiện tại của danh sách (đặc biệt là danh sách CTP và các bảng) trước khi vẽ lại DOM
       const savedScrolls = [];
-      root.querySelectorAll('.custom-scroll, . no-scrollbar').forEach((el, idx) => {
+      root.querySelectorAll('.custom-scroll, .no-scrollbar').forEach((el, idx) => {
         savedScrolls.push({
           id: el.id || null,
           idx,
