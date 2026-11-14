@@ -2198,7 +2198,7 @@ function renderHeaderHtml() {
                               <i class="fa-solid ${isChecked ? 'fa-check text-[9px]' : 'fa-plus text-[8px] opacity-60'}"></i>
                             </button>
                             ${isChecked ? `
-                              <input type="tel" inputmode="numeric" pattern="[0-9.]*" value="${curVal ? Number(curVal).toLocaleString('vi-VN') : ''}" oninput="ctpActions.handleTaskPriceInput('${sh.id}', '${t.key}', this)" onblur="renderApp()" class="mt-1 w-24 px-2 py-0.5 bg-indigo-50 border border-indigo-300 rounded-lg text-[10px] font-mono font-black text-right text-indigo-700 focus:outline-none" title="Chỉ nhập số tiền" />
+                              <input type="tel" inputmode="numeric" pattern="[0-9.]*" value="${curVal ? Number(curVal).toLocaleString('vi-VN') : ''}" oninput="ctpActions.handleTaskPriceInput('${sh.id}', '${t.key}', this)" class="mt-1 w-24 px-2 py-0.5 bg-indigo-50 border border-indigo-300 rounded-lg text-[10px] font-mono font-black text-right text-indigo-700 focus:outline-none" title="Chỉ nhập số tiền" />
                             ` : ''}
                           </div>
                         `;
@@ -2218,7 +2218,7 @@ function renderHeaderHtml() {
                         ${extras.map((ex, exIdx) => `
                           <div class="flex items-center gap-1.5">
                             <input type="text" value="${escapeHtml(ex.name || '')}" oninput="ctpActions.saveExtraField('${sh.id}', ${exIdx}, 'name', this)" placeholder="Tên phí (vd: Xe, Ăn...)" class="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-amber-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none" />
-                            <input type="tel" inputmode="numeric" pattern="[0-9.]*" value="${ex.amount ? Number(ex.amount).toLocaleString('vi-VN') : ''}" oninput="ctpActions.handleExtraAmountInput('${sh.id}', ${exIdx}, this)" onblur="renderApp()" placeholder="Số tiền" class="w-24 shrink-0 px-2.5 py-1.5 bg-white border border-amber-300 rounded-xl text-xs font-mono font-black text-right text-amber-900 focus:outline-none" />
+                            <input type="tel" inputmode="numeric" pattern="[0-9.]*" value="${ex.amount ? Number(ex.amount).toLocaleString('vi-VN') : ''}" oninput="ctpActions.handleExtraAmountInput('${sh.id}', ${exIdx}, this)" placeholder="Số tiền" class="w-24 shrink-0 px-2.5 py-1.5 bg-white border border-amber-300 rounded-xl text-xs font-mono font-black text-right text-amber-900 focus:outline-none" />
                             <button type="button" onclick="ctpActions.removeExtraItem('${sh.id}', ${exIdx})" class="w-7 h-7 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-200 shrink-0"><i class="fa-solid fa-xmark text-xs"></i></button>
                           </div>
                         `).join('')}
@@ -2820,6 +2820,18 @@ function renderHeaderHtml() {
     function renderApp() {
       const root = document.getElementById('app');
       if (!root) return;
+
+      // Lưu lại vị trí cuộn hiện tại của danh sách (đặc biệt là danh sách CTP và các bảng) trước khi vẽ lại DOM
+      const savedScrolls = [];
+      root.querySelectorAll('.custom-scroll, . no-scrollbar').forEach((el, idx) => {
+        savedScrolls.push({
+          id: el.id || null,
+          idx,
+          top: el.scrollTop,
+          left: el.scrollLeft
+        });
+      });
+
       if (state.isBackendPortal) {
         root.innerHTML = `${renderBackendPortalHtml()}${renderToastHtml()}`;
         return;
@@ -2831,6 +2843,17 @@ function renderHeaderHtml() {
       else if (state.activeTab === 'ctp') main = renderCtpTabHtml();
 
       root.innerHTML = `${renderHeaderHtml()}${main}${renderBottomNavHtml()}${renderDetailModalHtml()}${renderFormModalHtml()}${renderZaloTomorrowModalHtml()}${renderPinModalHtml()}${renderSelfChangePinModalHtml()}${renderGuideModalHtml()}${renderCtpAddShowModalHtml()}${renderCtpBillModalHtml()}${renderToastHtml()}`;
+
+      // Khôi phục chính xác vị trí cuộn ngay lập tức để màn hình đứng yên tại chỗ đang thao tác
+      const newScrollEls = root.querySelectorAll('.custom-scroll, .no-scrollbar');
+      savedScrolls.forEach(s => {
+        let target = s.id ? document.getElementById(s.id) : null;
+        if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
+        if (target) {
+          target.scrollTop = s.top;
+          target.scrollLeft = s.left;
+        }
+      });
     }
 
     window.state = state;
