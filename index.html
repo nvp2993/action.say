@@ -3258,13 +3258,9 @@ function renderHeaderHtml() {
       const allInvolved = getAllMyInvolvedShows(false);
       const myShows = getAllMyInvolvedShows(true);
 
-      let totalNetIncome = 0;
-      let ownerProfitSum = 0;
       let ownerShowCount = 0;
-      let crewNetSum = 0;
       let crewShowCount = 0;
       let customShowCount = 0;
-      let totalUncollectedDebt = 0;
       let settledCount = 0;
 
       allInvolved.forEach(sh => {
@@ -3273,19 +3269,130 @@ function renderHeaderHtml() {
         if (cat === 'owner') {
           ownerShowCount++;
           const m = calculateOwnerShowMetrics(sh);
-          ownerProfitSum += m.netProfit;
-          totalNetIncome += m.netProfit;
-          totalUncollectedDebt += m.remainingClientDebt;
           if (m.rec.status === 'settled') settledCount++;
         } else {
           crewShowCount++;
           const cm = calculateCrewShowMetrics(sh);
-          crewNetSum += cm.netPocket;
-          totalNetIncome += cm.netPocket;
-          totalUncollectedDebt += cm.pendingCtpDebt;
           if (cm.isSettled) settledCount++;
         }
       });
+
+      let card1 = { label: '💎 TỔNG THU NHẬP (Ròng)', val: 0, cls: 'text-emerald-700' };
+      let card2 = { label: '👑 LÃI SHOW NHẬN KHÁCH', val: 0, cls: 'text-slate-900' };
+      let card3 = { label: '🎥 CTP ĐI LÀM', val: 0, cls: 'text-indigo-700' };
+      let card4 = { label: '⏳ CHƯA THU VỀ VÍ', val: 0, cls: 'text-amber-800' };
+
+      const filterSt = state.ownerFilterStatus;
+
+      if (filterSt === 'all') {
+        let totNet = 0, ownerProf = 0, crewNet = 0, uncoll = 0;
+        allInvolved.forEach(sh => {
+          const cat = getMyShowRoleCategory(sh);
+          if (cat === 'owner') {
+            const m = calculateOwnerShowMetrics(sh);
+            ownerProf += m.netProfit;
+            totNet += m.netProfit;
+            uncoll += m.remainingClientDebt;
+          } else {
+            const cm = calculateCrewShowMetrics(sh);
+            crewNet += cm.netPocket;
+            totNet += cm.netPocket;
+            uncoll += cm.pendingCtpDebt;
+          }
+        });
+        card1 = { label: '💎 TỔNG THU NHẬP (Ròng)', val: (totNet >= 0 ? '+' : '') + totNet.toLocaleString('vi-VN') + 'đ', cls: 'text-emerald-700' };
+        card2 = { label: '👑 LÃI SHOW NHẬN KHÁCH', val: (ownerProf >= 0 ? '+' : '') + ownerProf.toLocaleString('vi-VN') + 'đ', cls: 'text-slate-900' };
+        card3 = { label: '🎥 CTP ĐI LÀM', val: (crewNet >= 0 ? '+' : '') + crewNet.toLocaleString('vi-VN') + 'đ', cls: 'text-indigo-700' };
+        card4 = { label: '⏳ CHƯA THU VỀ VÍ', val: uncoll.toLocaleString('vi-VN') + 'đ', cls: 'text-amber-800' };
+      } else if (filterSt === 'role_owner') {
+        let totRev = 0, totExp = 0, totNet = 0, totDebt = 0;
+        myShows.forEach(sh => {
+          if (getMyShowRoleCategory(sh) === 'owner') {
+            const m = calculateOwnerShowMetrics(sh);
+            totRev += m.clientPrice;
+            totExp += m.totalExpense;
+            totNet += m.netProfit;
+            totDebt += m.remainingClientDebt;
+          }
+        });
+        card1 = { label: '💰 TỔNG DOANH THU (Báo khách)', val: totRev.toLocaleString('vi-VN') + 'đ', cls: 'text-slate-900' };
+        card2 = { label: '💸 TỔNG CHI PHÍ', val: totExp.toLocaleString('vi-VN') + 'đ', cls: 'text-rose-600' };
+        card3 = { label: '💎 LÃI RÒNG CHỦ SHOW', val: (totNet >= 0 ? '+' : '') + totNet.toLocaleString('vi-VN') + 'đ', cls: 'text-emerald-700' };
+        card4 = { label: '⏳ KHÁCH CÒN NỢ', val: totDebt.toLocaleString('vi-VN') + 'đ', cls: 'text-amber-800' };
+      } else if (filterSt === 'role_crew') {
+        let totGross = 0, totSelf = 0, totNetPocket = 0, totPending = 0;
+        myShows.forEach(sh => {
+          if (getMyShowRoleCategory(sh) === 'crew') {
+            const cm = calculateCrewShowMetrics(sh);
+            totGross += cm.grossCtp;
+            totSelf += cm.selfExpense;
+            totNetPocket += cm.netPocket;
+            totPending += cm.pendingCtpDebt;
+          }
+        });
+        card1 = { label: '💼 TỔNG BILL CTP', val: totGross.toLocaleString('vi-VN') + 'đ', cls: 'text-slate-900' };
+        card2 = { label: '⛽ CHI PHÍ TỰ TÚC', val: totSelf.toLocaleString('vi-VN') + 'đ', cls: 'text-rose-600' };
+        card3 = { label: '💎 THỰC NHẬN VỀ', val: (totNetPocket >= 0 ? '+' : '') + totNetPocket.toLocaleString('vi-VN') + 'đ', cls: 'text-emerald-700' };
+        card4 = { label: '⏳ CTP CHƯA NHẬN', val: totPending.toLocaleString('vi-VN') + 'đ', cls: 'text-amber-800' };
+      } else if (filterSt === 'role_custom') {
+        let totRev = 0, totExp = 0, totNet = 0, totUnsettled = 0;
+        myShows.forEach(sh => {
+          const cat = getMyShowRoleCategory(sh);
+          if (cat === 'owner') {
+            const m = calculateOwnerShowMetrics(sh);
+            totRev += m.clientPrice;
+            totExp += m.totalExpense;
+            totNet += m.netProfit;
+            totUnsettled += m.remainingClientDebt;
+          } else {
+            const cm = calculateCrewShowMetrics(sh);
+            totRev += cm.grossCtp;
+            totExp += cm.selfExpense;
+            totNet += cm.netPocket;
+            totUnsettled += cm.pendingCtpDebt;
+          }
+        });
+        card1 = { label: '📝 TỔNG THU SHOW NGOÀI', val: totRev.toLocaleString('vi-VN') + 'đ', cls: 'text-slate-900' };
+        card2 = { label: '💸 TỔNG CHI / TỰ TÚC', val: totExp.toLocaleString('vi-VN') + 'đ', cls: 'text-rose-600' };
+        card3 = { label: '💎 LÃI SHOW NGOÀI', val: (totNet >= 0 ? '+' : '') + totNet.toLocaleString('vi-VN') + 'đ', cls: 'text-emerald-700' };
+        card4 = { label: '⏳ CHƯA TẤT TOÁN', val: totUnsettled.toLocaleString('vi-VN') + 'đ', cls: 'text-amber-800' };
+      } else if (filterSt === 'unsettled') {
+        let totDebtAll = 0, clientDebt = 0, ctpDebt = 0, countUn = myShows.length;
+        myShows.forEach(sh => {
+          const cat = getMyShowRoleCategory(sh);
+          if (cat === 'owner') {
+            const m = calculateOwnerShowMetrics(sh);
+            clientDebt += m.remainingClientDebt;
+            totDebtAll += m.remainingClientDebt;
+          } else {
+            const cm = calculateCrewShowMetrics(sh);
+            ctpDebt += cm.pendingCtpDebt;
+            totDebtAll += cm.pendingCtpDebt;
+          }
+        });
+        card1 = { label: '⏳ TỔNG CÔNG NỢ', val: totDebtAll.toLocaleString('vi-VN') + 'đ', cls: 'text-amber-800' };
+        card2 = { label: '👑 CÔNG NỢ KHÁCH HÀNG', val: clientDebt.toLocaleString('vi-VN') + 'đ', cls: 'text-slate-900' };
+        card3 = { label: '🎥 CÔNG NỢ CTP', val: ctpDebt.toLocaleString('vi-VN') + 'đ', cls: 'text-indigo-700' };
+        card4 = { label: '📊 SỐ SHOW CHƯA XONG', val: countUn + ' show', cls: 'text-slate-900' };
+      } else if (filterSt === 'settled') {
+        let totSettled = 0, setOwner = 0, setCrew = 0, countSet = myShows.length;
+        myShows.forEach(sh => {
+          const cat = getMyShowRoleCategory(sh);
+          if (cat === 'owner') {
+            const m = calculateOwnerShowMetrics(sh);
+            setOwner += m.netProfit;
+            totSettled += m.netProfit;
+          } else {
+            const cm = calculateCrewShowMetrics(sh);
+            setCrew += cm.netPocket;
+            totSettled += cm.netPocket;
+          }
+        });
+        card1 = { label: '✅ TỔNG ĐÃ NHẬN (Ròng)', val: (totSettled >= 0 ? '+' : '') + totSettled.toLocaleString('vi-VN') + 'đ', cls: 'text-emerald-700' };
+        card2 = { label: '👑 ĐÃ THU KHÁCH HÀNG', val: setOwner.toLocaleString('vi-VN') + 'đ', cls: 'text-slate-900' };
+        card3 = { label: '🎥 ĐÃ NHẬN CTP', val: setCrew.toLocaleString('vi-VN') + 'đ', cls: 'text-indigo-700' };
+        card4 = { label: '📊 SỐ SHOW HOÀN TẤT', val: countSet + ' show', cls: 'text-slate-900' };
+      }
 
       return `
         <div class="flex-1 flex flex-col min-h-0 bg-slate-100 text-xs font-sans">
@@ -3333,21 +3440,21 @@ function renderHeaderHtml() {
           <div id="owner-shows-scroll-list" class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-2.5">
             <!-- 4 Ô Bento Tổng Hợp Mọi Nguồn Thu Của Thành Viên -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div class="bg-emerald-50/90 p-2.5 rounded-2xl border border-emerald-200">
-                <span class="text-[9px] font-extrabold text-emerald-800 uppercase block">💎 TỔNG BỎ TÚI (Ròng)</span>
-                <span id="owner-dash-total-income" class="text-xs sm:text-sm font-black text-emerald-700 font-mono mt-0.5 block">${totalNetIncome >= 0 ? '+' : ''}${totalNetIncome.toLocaleString('vi-VN')}đ</span>
+              <div class="bg-white p-2.5 rounded-2xl border border-slate-200">
+                <span class="text-[9px] font-extrabold text-slate-400 uppercase block">${card1.label}</span>
+                <span class="text-xs sm:text-sm font-black font-mono mt-0.5 block ${card1.cls}">${card1.val}</span>
               </div>
               <div class="bg-white p-2.5 rounded-2xl border border-slate-200">
-                <span class="text-[9px] font-extrabold text-slate-400 uppercase block">👑 Lãi Làm Chủ Show</span>
-                <span id="owner-dash-owner-profit" class="text-xs sm:text-sm font-black text-slate-900 font-mono mt-0.5 block">${ownerProfitSum >= 0 ? '+' : ''}${ownerProfitSum.toLocaleString('vi-VN')}đ</span>
+                <span class="text-[9px] font-extrabold text-slate-400 uppercase block">${card2.label}</span>
+                <span class="text-xs sm:text-sm font-black font-mono mt-0.5 block ${card2.cls}">${card2.val}</span>
               </div>
               <div class="bg-white p-2.5 rounded-2xl border border-slate-200">
-                <span class="text-[9px] font-extrabold text-slate-400 uppercase block">🎥 Lương CTP Đi Làm</span>
-                <span id="owner-dash-crew-ctp" class="text-xs sm:text-sm font-black text-indigo-700 font-mono mt-0.5 block">${crewNetSum >= 0 ? '+' : ''}${crewNetSum.toLocaleString('vi-VN')}đ</span>
+                <span class="text-[9px] font-extrabold text-slate-400 uppercase block">${card3.label}</span>
+                <span class="text-xs sm:text-sm font-black font-mono mt-0.5 block ${card3.cls}">${card3.val}</span>
               </div>
-              <div class="bg-amber-50/90 p-2.5 rounded-2xl border border-amber-200">
-                <span class="text-[9px] font-extrabold text-amber-800 uppercase block">⏳ Chưa Thu Về Ví</span>
-                <span id="owner-dash-debt" class="text-xs sm:text-sm font-black text-amber-800 font-mono mt-0.5 block">${totalUncollectedDebt.toLocaleString('vi-VN')}đ</span>
+              <div class="bg-white p-2.5 rounded-2xl border border-slate-200">
+                <span class="text-[9px] font-extrabold text-slate-400 uppercase block">${card4.label}</span>
+                <span class="text-xs sm:text-sm font-black font-mono mt-0.5 block ${card4.cls}">${card4.val}</span>
               </div>
             </div>
 
@@ -3756,9 +3863,7 @@ function renderHeaderHtml() {
           </div>
         </div>
       `;
-    }
-
-    function renderBottomNavHtml() {
+    }function renderBottomNavHtml() {
       return `
         <nav style="padding-bottom: max(4px, var(--sab));" class="bg-white border-t border-slate-200 px-1 pt-1 shrink-0 z-30 flex items-center justify-around">
           <button onclick="appActions.setTab('shows')" class="flex flex-col items-center py-0.5 px-2 rounded-xl ${state.activeTab === 'shows' ? 'text-indigo-600 font-extrabold' : 'text-slate-400 font-medium'}">
