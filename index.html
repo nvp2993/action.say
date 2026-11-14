@@ -397,18 +397,24 @@
       toast: null
     };
 
-    // Tự động gán Người tạo = Chủ show 1 lần cho toàn bộ các dòng dữ liệu cũ (chưa có cờ creatorMigratedV2)
-    // Sau khi đã gán hoặc sau khi được chỉnh sửa (có creatorMigratedV2: true), hệ thống sẽ giữ nguyên 100% giá trị đã lưu!
+    // Kiểm tra chính xác dòng được import từ file Excel (~346-347 dòng có id từ sh_xl_1 đến sh_xl_1000, không phải mã Date.now() 13 chữ số)
+    function isExcelImportedRow(sh) {
+      if (!sh) return false;
+      const m = String(sh.id || '').match(/^sh_xl_(\d+)$/);
+      if (m && Number(m[1]) <= 2000) return true;
+      return false;
+    }
+
+    // Tự động lấy Chủ show gán cho Người tạo CHỈ ĐỐI VỚI các dòng cũ được import từ file Excel (~346-347 dòng)
+    // (Nếu dòng Excel đó đã được chỉnh sửa thủ công và lưu có updatedAt thì giữ nguyên người tạo đã sửa)
     function normalizeShowsCreatorList(list = []) {
       return (list || []).map(sh => {
         if (!sh) return sh;
-        const isLegacyUnmigrated = !sh.creatorMigratedV2 && (!sh.creatorId || /^sh_xl_\d+$/.test(String(sh.id || '')));
-        if (isLegacyUnmigrated && sh.ownerId) {
+        if (!sh.updatedAt && sh.ownerId && (!sh.creatorId || isExcelImportedRow(sh))) {
           return {
             ...sh,
             creatorId: sh.ownerId,
-            ownerLabel: getMember(sh.ownerId)?.name || sh.ownerLabel || '',
-            creatorMigratedV2: true
+            ownerLabel: getMember(sh.ownerId)?.name || sh.ownerLabel || ''
           };
         }
         return sh;
@@ -561,23 +567,8 @@
             } catch (err) { console.error(err); }
           } else if (!snap.empty) {
             const rawList = snap.docs.map(d => d.data());
-            const remoteMap = new Map(rawList.map(d => [d.id, d]));
             state.shows = mergeShowsWithLocalEdits(rawList);
             saveShowsToLocalBackup();
-
-            // Đồng bộ đẩy các thay đổi mới hơn ở máy lên Cloud
-            const toPush = [];
-            state.shows.forEach(sh => {
-              const rem = remoteMap.get(sh.id);
-              if (!rem || (Number(sh.updatedAt) || 0) > (Number(rem.updatedAt) || 0) || (!rem.creatorMigratedV2 && sh.creatorMigratedV2)) {
-                toPush.push(sh);
-              }
-            });
-            if (toPush.length > 0) {
-              Promise.all(
-                toPush.map(sh => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh))
-              ).catch(() => {});
-            }
           }
           renderApp();
         },
@@ -617,17 +608,7 @@
         }
       });
 
-      const sessionCol = collection(db, 'artifacts', appId, 'users', u.uid, 'device_session');
-      onSnapshot(sessionCol, (snap) => {
-        const sDoc = snap.docs.find(d => d.id === 'active_profile');
-        if (sDoc) {
-          const d = sDoc.data();
-          if (d.memberId && !localStorage.getItem('as_user_backup_2026')) {
-            state.currentUserId = d.memberId;
-          }
-          renderApp();
-        }
-      });
+      // Đã lưu phiên đăng nhập trực tiếp trên thiết bị (localStorage), không gọi renderApp() thừa từ sessionCol
     }
 
     function getMember(id) {
@@ -1445,7 +1426,9 @@
       async resetAllCreatorToOwner() {
         if (!state.isAdminMode) return;
         const nowTs = Date.now();
+        const excelRowsToSync = [];
         state.shows = state.shows.map(sh => {
+          if (!isExcelImportedRow(sh)) return sh;
           const updated = {
             ...sh,
             creatorId: sh.ownerId,
@@ -1453,16 +1436,17 @@
             updatedAt: nowTs
           };
           state.localShowEditsMap[sh.id] = updated;
+          excelRowsToSync.push(updated);
           return updated;
         });
         try { localStorage.setItem('as_local_show_edits_2026', JSON.stringify(state.localShowEditsMap)); } catch (e) {}
         saveShowsToLocalBackup();
         renderApp();
-        showToast('✍️ Đã gán Người tạo = Chủ show cho toàn bộ lịch hiện có!');
-        if (state.user && db) {
+        showToast(`✍️ Đã gán Người tạo = Chủ show cho ${excelRowsToSync.length} dòng import từ Excel!`);
+        if (db && excelRowsToSync.length > 0) {
           try {
             await Promise.all(
-              state.shows.map(sh => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh))
+              excelRowsToSync.map(sh => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh))
             );
           } catch (e) {}
         }
@@ -4236,7 +4220,7 @@ function renderHeaderHtml() {
                   <i class="fa-solid fa-file-excel"></i>
                   <span>📂 Chọn File Excel Để Nạp Lại Lịch Show</span>
                 </button>
-                <button onclick="appActions.resetAllCreatorToOwner()" class="w-full bg-amber-500 text-slate-950 font-black py-2.5 rounded-xl">✍️ Gán Người Tạo = Chủ Show Cho Toàn Bộ Dữ Liệu Hiện Tại</button>
+                <button onclick="appActions.resetAllCreatorToOwner()" class="w-full bg-amber-500 text-slate-950 font-black py-2.5 rounded-xl">✍️ Gán Người Tạo = Chủ Show Cho Các Dòng Import Từ Excel</button>
                 <button onclick="appActions.syncExcelShowsToCloud()" class="w-full bg-emerald-600 text-white font-black py-2.5 rounded-xl">🔄 Reset Về Dữ Liệu Gốc</button>
                 <button onclick="appActions.downloadSingleHtmlFile()" class="w-full bg-indigo-600 text-white font-black py-2.5 rounded-xl">⬇️ Tải File index.html Trọn Gói Ngay</button>
               </div>
