@@ -395,11 +395,10 @@
       toast: null
     };
 
-    // Tự động gán Người tạo = Chủ show cho các dòng dữ liệu cũ (Excel import hoặc chưa có creatorId)
+    // Tự động gán Người tạo = Chủ show cho các dòng dữ liệu cũ chưa có trường creatorId
     function normalizeShowsCreatorList(list = []) {
       return (list || []).map(sh => {
-        const isExcelImportedRow = /^sh_xl_\d+$/.test(String(sh.id || '')) && (!sh.creatorId || sh.creatorId === 'khoa');
-        if (!sh.creatorId || isExcelImportedRow) {
+        if (!sh.creatorId && sh.ownerId) {
           return { ...sh, creatorId: sh.ownerId };
         }
         return sh;
@@ -486,8 +485,7 @@
             const rawList = snap.docs.map(d => d.data());
             const toFix = [];
             state.shows = rawList.map(sh => {
-              const isOldExcelRow = /^sh_xl_\d+$/.test(String(sh.id || '')) && (!sh.creatorId || sh.creatorId === 'khoa') && sh.ownerId && sh.creatorId !== sh.ownerId;
-              if (!sh.creatorId || isOldExcelRow) {
+              if (!sh.creatorId && sh.ownerId) {
                 const fixed = { ...sh, creatorId: sh.ownerId };
                 toFix.push(fixed);
                 return fixed;
@@ -957,64 +955,80 @@
       async saveShowForm() {
         const f = state.formModal;
         if (!f) return;
-        if (!f.location.trim()) {
+        const locClean = String(f.location || '').trim();
+        const partClean = String(f.partner || '').trim();
+        const noteClean = String(f.note || '').trim();
+        if (!locClean) {
           f.error = 'Vui lòng nhập Địa điểm / Thông tin show!';
           renderApp();
           return;
         }
-        if (f.memberIds.length === 0) {
+        if (!Array.isArray(f.memberIds) || f.memberIds.length === 0) {
           f.error = 'Vui lòng chọn ít nhất 1 nhân sự!';
           renderApp();
           return;
         }
-        const finalEnd = f.endDate < f.startDate ? f.startDate : f.endDate;
+        const finalEnd = (!f.endDate || f.endDate < f.startDate) ? f.startDate : f.endDate;
 
         if (f.mode === 'edit') {
           const existing = state.shows.find(s => s.id === f.showId);
-          if (!canEditShow(existing)) return;
+          if (!existing) {
+            state.formModal = null;
+            renderApp();
+            return;
+          }
+          const finalOwnerId = f.ownerId || existing.ownerId || state.currentUserId;
+          const finalCreatorId = f.creatorId || existing.creatorId || finalOwnerId;
           const updated = {
             ...existing,
-            partner: f.partner.trim(),
+            partner: partClean,
             hidePartner: !!f.hidePartner,
-            location: f.location.trim(),
+            location: locClean,
             startDate: f.startDate,
             endDate: finalEnd,
             rawEndDate: finalEnd,
-            memberIds: f.memberIds,
+            memberIds: [...f.memberIds],
             roles: f.roles || {},
             postStatus: f.postStatus || 'pending',
-            ownerId: f.ownerId,
-            creatorId: f.creatorId || existing.creatorId || state.currentUserId,
-            color: f.color,
-            note: f.note.trim()
+            ownerId: finalOwnerId,
+            ownerLabel: getMember(finalOwnerId)?.name || '',
+            creatorId: finalCreatorId,
+            color: f.color || getAutoHighlightColor(locClean, partClean),
+            note: noteClean
           };
           state.shows = state.shows.map(s => s.id === updated.id ? updated : s);
           saveShowsToLocalBackup();
           state.formModal = null;
           renderApp();
-          showToast('Đã lưu chỉnh sửa & đồng bộ vĩnh viễn!');
+          showToast('✅ Đã lưu chỉnh sửa & đồng bộ vĩnh viễn!');
           if (state.user && db) {
-            try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', updated.id), updated); } catch (e) {}
+            try {
+              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', updated.id), updated);
+            } catch (e) {
+              console.error('Lỗi lưu chỉnh sửa lên Cloud:', e);
+            }
           }
         } else {
           const nextStt = state.shows.length > 0 ? Math.max(...state.shows.map(s => Number(s.stt) || 300)) + 1 : 301;
+          const finalOwnerId = f.ownerId || state.currentUserId;
+          const finalCreatorId = f.creatorId || state.currentUserId;
           const newShow = {
-            id: 'sh_xl_' + Date.now(),
+            id: 'sh_new_' + Date.now(),
             stt: nextStt,
-            partner: f.partner.trim(),
+            partner: partClean,
             hidePartner: !!f.hidePartner,
-            location: f.location.trim(),
+            location: locClean,
             startDate: f.startDate,
             endDate: finalEnd,
             rawEndDate: finalEnd,
-            memberIds: f.memberIds,
+            memberIds: [...f.memberIds],
             roles: f.roles || {},
             postStatus: 'pending',
-            ownerId: f.ownerId,
-            creatorId: f.creatorId || state.currentUserId,
-            ownerLabel: getMember(f.ownerId)?.name || '',
-            color: f.color,
-            note: f.note.trim()
+            ownerId: finalOwnerId,
+            creatorId: finalCreatorId,
+            ownerLabel: getMember(finalOwnerId)?.name || '',
+            color: f.color || getAutoHighlightColor(locClean, partClean),
+            note: noteClean
           };
           state.shows.push(newShow);
           saveShowsToLocalBackup();
@@ -1343,6 +1357,24 @@
         state[field] = val;
         if (field === 'checkStart' && state.checkEnd < val) state.checkEnd = val;
         renderApp();
+      },
+      async resetAllCreatorToOwner() {
+        if (!state.isAdminMode) return;
+        state.shows = state.shows.map(sh => ({
+          ...sh,
+          creatorId: sh.ownerId,
+          ownerLabel: getMember(sh.ownerId)?.name || ''
+        }));
+        saveShowsToLocalBackup();
+        renderApp();
+        showToast('✍️ Đã gán Người tạo = Chủ show cho toàn bộ lịch hiện có!');
+        if (state.user && db) {
+          try {
+            await Promise.all(
+              state.shows.map(sh => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh))
+            );
+          } catch (e) {}
+        }
       },
       async syncExcelShowsToCloud() {
         state.shows = [...INITIAL_SHOWS_DATA];
@@ -3903,7 +3935,7 @@ function renderHeaderHtml() {
             </div>
 
             ${f.error ? `<div class="text-rose-600 font-bold">${escapeHtml(f.error)}</div>` : ''}
-            <button onclick="appActions.saveShowForm()" class="w-full bg-indigo-600 text-white font-black py-2.5 rounded-xl uppercase tracking-wide">⚡ NỔ SHOW</button>
+            <button type="button" onclick="appActions.saveShowForm()" class="w-full bg-indigo-600 text-white font-black py-2.5 rounded-xl uppercase tracking-wide">${f.mode === 'edit' ? '💾 LƯU CHỈNH SỬA' : '⚡ NỔ SHOW'}</button>
           </div>
         </div>
       `;
@@ -4112,6 +4144,7 @@ function renderHeaderHtml() {
                   <i class="fa-solid fa-file-excel"></i>
                   <span>📂 Chọn File Excel Để Nạp Lại Lịch Show</span>
                 </button>
+                <button onclick="appActions.resetAllCreatorToOwner()" class="w-full bg-amber-500 text-slate-950 font-black py-2.5 rounded-xl">✍️ Gán Người Tạo = Chủ Show Cho Toàn Bộ Dữ Liệu Hiện Tại</button>
                 <button onclick="appActions.syncExcelShowsToCloud()" class="w-full bg-emerald-600 text-white font-black py-2.5 rounded-xl">🔄 Reset Về Dữ Liệu Gốc</button>
                 <button onclick="appActions.downloadSingleHtmlFile()" class="w-full bg-indigo-600 text-white font-black py-2.5 rounded-xl">⬇️ Tải File index.html Trọn Gói Ngay</button>
               </div>
