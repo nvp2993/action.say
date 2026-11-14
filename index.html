@@ -361,6 +361,7 @@
       ctpOwnerId: 'all',
       ctpItems: {},
       ctpCustomShows: [],
+      ctpAddShowModal: null,
       ctpBillModal: null,
 
       detailShowId: null,
@@ -1622,7 +1623,7 @@ function renderHeaderHtml() {
     }
 
     // ========================================================================
-    // LOGIC TAB TÍNH CÔNG TÁC PHÍ (CTP) + TỰ NOTE THÊM SHOW NGOÀI LỊCH
+    // LOGIC TAB TÍNH CÔNG TÁC PHÍ (CTP) + POPUP THÊM SHOW NGOÀI CUỐI DANH SÁCH
     // ========================================================================
     function saveCtpStateToLocal() {
       try {
@@ -1645,15 +1646,18 @@ function renderHeaderHtml() {
     }
 
     function getCombinedCtpShows() {
-      const regularShows = state.shows.filter(sh => {
-        if (!sh.startDate) return false;
-        const m = parseInt(sh.startDate.split('-')[1], 10);
-        if (m !== state.ctpMonth) return false;
-        if (!(sh.memberIds || []).includes(state.currentUserId)) return false;
-        if (state.ctpOwnerId !== 'all' && sh.ownerId !== state.ctpOwnerId) return false;
-        return true;
-      });
+      const regularShows = state.shows
+        .filter(sh => {
+          if (!sh.startDate) return false;
+          const m = parseInt(sh.startDate.split('-')[1], 10);
+          if (m !== state.ctpMonth) return false;
+          if (!(sh.memberIds || []).includes(state.currentUserId)) return false;
+          if (state.ctpOwnerId !== 'all' && sh.ownerId !== state.ctpOwnerId) return false;
+          return true;
+        })
+        .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
 
+      // Các show tự note ngoài lịch luôn được xếp nối tiếp ở CUỐI danh sách theo thứ tự tạo
       const customShows = (state.ctpCustomShows || []).filter(sh => {
         if (sh.userId && sh.userId !== state.currentUserId) return false;
         if (!sh.startDate) return Number(sh.ctpMonth) === state.ctpMonth;
@@ -1663,7 +1667,7 @@ function renderHeaderHtml() {
         return true;
       });
 
-      return [...regularShows, ...customShows].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+      return [...regularShows, ...customShows];
     }
 
     function getDefaultRateForTask(taskKey, sh) {
@@ -1687,52 +1691,112 @@ function renderHeaderHtml() {
         state.ctpOwnerId = ownerId;
         renderApp();
       },
-      addCustomShow() {
+      openAddCustomShowModal() {
+        const now = new Date();
         const mm = String(state.ctpMonth).padStart(2, '0');
-        const defaultDate = `${state.selectedYear}-${mm}-01`;
+        const dd = (now.getMonth() + 1) === state.ctpMonth ? String(now.getDate()).padStart(2, '0') : '15';
+        const defaultDate = `${state.selectedYear}-${mm}-${dd}`;
         const defaultOwner = state.ctpOwnerId !== 'all' ? state.ctpOwnerId : state.currentUserId;
-        const newId = 'ctp_ext_' + Date.now();
-        const newCustomShow = {
-          id: newId,
-          isCustomCtp: true,
-          userId: state.currentUserId,
-          ctpMonth: state.ctpMonth,
+        state.ctpAddShowModal = {
+          mode: 'add',
+          showId: null,
           location: '',
           partner: '',
           startDate: defaultDate,
           endDate: defaultDate,
           ownerId: defaultOwner,
-          memberIds: [state.currentUserId]
+          error: ''
         };
-        if (!Array.isArray(state.ctpCustomShows)) state.ctpCustomShows = [];
-        state.ctpCustomShows.push(newCustomShow);
-        state.ctpItems[newId] = { tasks: {}, extras: [] };
-        saveCtpStateToLocal();
         renderApp();
-        showToast('➕ Đã thêm thẻ Show ngoài lịch! Hãy nhập tên show & chọn nhiệm vụ.');
       },
-      updateCustomShowField(showId, field, val) {
+      openEditCustomShowModal(showId) {
         const sh = (state.ctpCustomShows || []).find(s => s.id === showId);
         if (!sh) return;
-        sh[field] = val;
-        if (field === 'startDate') {
-          if (!sh.endDate || sh.endDate < val) sh.endDate = val;
-          const m = parseInt(val.split('-')[1], 10);
-          if (!isNaN(m)) sh.ctpMonth = m;
+        state.ctpAddShowModal = {
+          mode: 'edit',
+          showId: sh.id,
+          location: sh.location || '',
+          partner: sh.partner || '',
+          startDate: sh.startDate,
+          endDate: sh.endDate || sh.startDate,
+          ownerId: sh.ownerId || state.currentUserId,
+          error: ''
+        };
+        renderApp();
+      },
+      closeAddCustomShowModal() {
+        state.ctpAddShowModal = null;
+        renderApp();
+      },
+      updateCustomModalField(field, val) {
+        const m = state.ctpAddShowModal;
+        if (!m) return;
+        m[field] = val;
+        if (field === 'startDate' && (!m.endDate || m.endDate < val)) {
+          m.endDate = val;
+          renderApp();
         }
-        // Tự động cập nhật lại định mức Quay/Chụp theo số ngày mới nếu đang được tích chọn
-        if (field === 'startDate' || field === 'endDate') {
-          const item = state.ctpItems[showId];
-          if (item && item.tasks) {
-            if (item.tasks['quay'] !== undefined) item.tasks['quay'] = getDefaultRateForTask('quay', sh);
-            if (item.tasks['chup'] !== undefined) item.tasks['chup'] = getDefaultRateForTask('chup', sh);
-          }
-          saveCtpStateToLocal();
+      },
+      submitCustomShowModal() {
+        const m = state.ctpAddShowModal;
+        if (!m) return;
+        if (!m.location || !m.location.trim()) {
+          m.error = 'Vui lòng nhập Địa điểm / Tên Show ngoài!';
           renderApp();
           return;
         }
-        saveCtpStateToLocal();
-        if (field === 'ownerId') renderApp();
+        const finalStart = m.startDate;
+        const finalEnd = (!m.endDate || m.endDate < finalStart) ? finalStart : m.endDate;
+        const monthNum = parseInt(finalStart.split('-')[1], 10) || state.ctpMonth;
+
+        if (m.mode === 'edit' && m.showId) {
+          const sh = (state.ctpCustomShows || []).find(s => s.id === m.showId);
+          if (sh) {
+            sh.location = m.location.trim();
+            sh.partner = (m.partner || '').trim();
+            sh.startDate = finalStart;
+            sh.endDate = finalEnd;
+            sh.ownerId = m.ownerId;
+            sh.ctpMonth = monthNum;
+
+            const item = state.ctpItems[sh.id];
+            if (item && item.tasks) {
+              if (item.tasks['quay'] !== undefined) item.tasks['quay'] = getDefaultRateForTask('quay', sh);
+              if (item.tasks['chup'] !== undefined) item.tasks['chup'] = getDefaultRateForTask('chup', sh);
+            }
+          }
+          state.ctpAddShowModal = null;
+          saveCtpStateToLocal();
+          renderApp();
+          showToast('✅ Đã cập nhật thông tin Show ngoài lịch!');
+        } else {
+          const newId = 'ctp_ext_' + Date.now();
+          const newCustomShow = {
+            id: newId,
+            isCustomCtp: true,
+            createdAt: Date.now(),
+            userId: state.currentUserId,
+            ctpMonth: monthNum,
+            location: m.location.trim(),
+            partner: (m.partner || '').trim(),
+            startDate: finalStart,
+            endDate: finalEnd,
+            ownerId: m.ownerId,
+            memberIds: [state.currentUserId]
+          };
+          if (!Array.isArray(state.ctpCustomShows)) state.ctpCustomShows = [];
+          state.ctpCustomShows.push(newCustomShow);
+          state.ctpItems[newId] = { tasks: {}, extras: [] };
+          state.ctpMonth = monthNum;
+          state.ctpAddShowModal = null;
+          saveCtpStateToLocal();
+          renderApp();
+          showToast('🎉 Đã thêm Show ngoài xuống cuối danh sách CTP!');
+          setTimeout(() => {
+            const listEl = document.getElementById('ctp-shows-scroll-list');
+            if (listEl) listEl.scrollTo({ top: listEl.scrollHeight, behavior: 'smooth' });
+          }, 80);
+        }
       },
       removeCustomShow(showId) {
         state.ctpCustomShows = (state.ctpCustomShows || []).filter(s => s.id !== showId);
@@ -1977,43 +2041,49 @@ function renderHeaderHtml() {
 
       return `
         <div class="flex-1 flex flex-col min-h-0 bg-slate-100 text-xs font-sans">
-          <div class="bg-white p-3 border-b border-slate-200 shrink-0 space-y-2.5 shadow-xs">
+          <!-- Khung điều khiển trên cùng: Tối ưu màn hình dọc iPhone (không đè nút) -->
+          <div class="bg-white px-3 py-2.5 border-b border-slate-200 shrink-0 space-y-2 shadow-xs">
+            <!-- Dòng 1: Tên nhân sự + chọn tháng -->
             <div class="flex items-center justify-between gap-2">
-              <div class="flex items-center gap-1.5">
-                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span class="font-black text-xs text-slate-900 uppercase">💼 Tính CTP (${curMem.name})</span>
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                <span class="font-black text-xs text-slate-900 uppercase truncate">💼 CTP (${escapeHtml(curMem.name)})</span>
               </div>
-              <div class="flex items-center gap-1 overflow-x-auto no-scrollbar bg-slate-100 p-1 rounded-xl">
+              <div class="flex items-center gap-1 overflow-x-auto no-scrollbar bg-slate-100 p-1 rounded-xl shrink-0">
                 ${[6, 7, 8, 9, 10, 11, 12].map(m => `
-                  <button onclick="ctpActions.setMonth(${m})" class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-all ${state.ctpMonth === m ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">T${m}</button>
+                  <button onclick="ctpActions.setMonth(${m})" class="px-2 py-1 rounded-lg text-[10px] font-extrabold transition-all ${state.ctpMonth === m ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">T${m}</button>
                 `).join('')}
               </div>
             </div>
-            <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+
+            <!-- Dòng 2: Lọc Chủ Show & Tổng Tiền Tháng -->
+            <div class="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100">
               <div class="flex items-center gap-1.5 flex-1 min-w-0">
-                <span class="text-[10px] font-bold text-slate-500 shrink-0">Lọc Chủ:</span>
-                <select onchange="ctpActions.setOwner(this.value)" class="flex-1 min-w-0 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none">
-                  <option value="all">--- Tất cả Chủ Show ---</option>
-                  ${state.members.map(m => `<option value="${m.id}" ${state.ctpOwnerId === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
+                <span class="text-[10px] font-bold text-slate-500 shrink-0">Chủ show:</span>
+                <select onchange="ctpActions.setOwner(this.value)" class="flex-1 min-w-0 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none truncate">
+                  <option value="all">Tất cả Chủ Show</option>
+                  ${state.members.map(m => `<option value="${m.id}" ${state.ctpOwnerId === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
                 </select>
               </div>
-              <button type="button" onclick="ctpActions.addCustomShow()" class="px-3 py-2 bg-indigo-600 text-white rounded-full text-[10px] font-extrabold shrink-0 flex items-center gap-1 shadow-xs active:scale-95 transition-transform">
-                <i class="fa-solid fa-plus text-[9px]"></i>
-                <span>Tự note show ngoài</span>
-              </button>
-              <div class="text-right bg-emerald-50 px-3 py-1.5 rounded-2xl border border-emerald-200 shrink-0">
-                <span class="text-[9px] text-emerald-700 font-bold uppercase block">Tổng T${state.ctpMonth}</span>
-                <span class="text-sm font-black text-emerald-700 font-mono">${totalGrandSum.toLocaleString('vi-VN')}đ</span>
+              <div class="text-right bg-emerald-50 px-3 py-1 rounded-2xl border border-emerald-200 shrink-0">
+                <span class="text-[8.5px] text-emerald-700 font-bold uppercase block">Tổng T${state.ctpMonth}</span>
+                <span class="text-xs font-black text-emerald-700 font-mono">${totalGrandSum.toLocaleString('vi-VN')}đ</span>
               </div>
             </div>
+
+            <!-- Dòng 3 riêng biệt cho màn hình dọc: Nút mở Popup Tự note thêm Show ngoài -->
+            <button type="button" onclick="ctpActions.openAddCustomShowModal()" class="w-full py-2 px-3 bg-indigo-600 text-white rounded-full text-[11px] font-extrabold flex items-center justify-center gap-1.5 shadow-xs active:scale-98 transition-all">
+              <i class="fa-solid fa-circle-plus text-xs"></i>
+              <span>Tự note thêm Show ngoài lịch (Vào cuối danh sách)</span>
+            </button>
           </div>
 
-          <div class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-3">
+          <div id="ctp-shows-scroll-list" class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-3">
             ${filteredShows.length === 0 ? `
               <div class="text-center py-12 bg-white rounded-3xl border border-slate-200 shadow-xs mx-auto max-w-sm space-y-3 p-4">
                 <div class="text-3xl">📭</div>
                 <div class="text-slate-800 font-bold text-xs">Chưa có show nào trong tháng T${state.ctpMonth}</div>
-                <button type="button" onclick="ctpActions.addCustomShow()" class="px-4 py-2 bg-indigo-600 text-white rounded-full text-xs font-extrabold inline-flex items-center gap-1.5 shadow-sm">
+                <button type="button" onclick="ctpActions.openAddCustomShowModal()" class="px-4 py-2.5 bg-indigo-600 text-white rounded-full text-xs font-extrabold inline-flex items-center gap-1.5 shadow-sm">
                   <i class="fa-solid fa-plus"></i>
                   <span>Tự note thêm show ngoài lịch</span>
                 </button>
@@ -2042,77 +2112,46 @@ function renderHeaderHtml() {
 
               return `
                 <div class="bg-white rounded-3xl border ${sh.isCustomCtp ? 'border-amber-300 ring-1 ring-amber-200/70' : 'border-slate-200'} p-4 space-y-3 shadow-2xs">
-                  ${sh.isCustomCtp ? `
-                    <!-- Header cho Show Tự Note Ngoài Lịch (Cho phép sửa trực tiếp tên, ngày, chủ show) -->
-                    <div class="space-y-2.5 border-b border-slate-100 pb-3">
-                      <div class="flex items-start justify-between gap-2">
-                        <div class="flex items-center gap-1.5 flex-wrap">
-                          <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-mono font-extrabold text-[10px]">#${idx + 1} • 📝 Show tự note</span>
-                          <span class="font-mono font-bold text-slate-600 text-[10px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) + ` (${days}n)` : ` (${days}n)`}</span>
-                        </div>
-                        <div class="flex items-center gap-2 shrink-0">
-                          <div class="text-right bg-emerald-50 px-3 py-1 rounded-2xl border border-emerald-200">
-                            <span class="text-[9px] text-emerald-700 font-bold block">Tổng Show</span>
-                            <span class="text-xs font-black text-emerald-700 font-mono">${showSubTotal.toLocaleString('vi-VN')}đ</span>
-                          </div>
-                          <button type="button" onclick="ctpActions.removeCustomShow('${sh.id}')" title="Xoá show tự note này" class="w-8 h-8 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
-                            <i class="fa-solid fa-trash-can text-xs"></i>
+                  <!-- Header Card gọn gàng đồng nhất cho cả Show có sẵn & Show tự note -->
+                  <div class="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="px-2 py-0.5 rounded-full ${sh.isCustomCtp ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'} font-mono font-bold text-[10px]">#${idx + 1}${sh.isCustomCtp ? ' • 📝 Show ngoài' : ''}</span>
+                        <span class="font-mono font-bold text-indigo-600 text-[10px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) + ` (${days}n)` : ` (${days}n)`}</span>
+                      </div>
+                      <h4 class="font-black text-slate-900 text-sm mt-1 break-words">📍 ${escapeHtml(sh.location)} ${sh.partner ? '(' + escapeHtml(sh.partner) + ')' : ''}</h4>
+                      <div class="flex items-center gap-2 mt-1 flex-wrap">
+                        <p class="text-[10px] text-slate-500">Chủ show: <b class="text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">${escapeHtml(owner.name)}</b></p>
+                        ${sh.isCustomCtp ? `
+                          <button type="button" onclick="ctpActions.openEditCustomShowModal('${sh.id}')" class="text-[10px] font-bold text-indigo-600 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                            <i class="fa-solid fa-pen text-[8px]"></i> Sửa
                           </button>
-                        </div>
-                      </div>
-                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <input type="text" value="${escapeHtml(sh.location || '')}" onblur="ctpActions.updateCustomShowField('${sh.id}', 'location', this.value)" placeholder="📍 Nhập Địa điểm / Tên Show ngoài..." class="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-extrabold text-slate-900 focus:outline-none focus:border-slate-900" />
-                        <input type="text" value="${escapeHtml(sh.partner || '')}" onblur="ctpActions.updateCustomShowField('${sh.id}', 'partner', this.value)" placeholder="🤝 Đối tác / Ghi chú thêm (nếu có)" class="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-slate-900" />
-                      </div>
-                      <div class="grid grid-cols-3 gap-2 text-[11px]">
-                        <div>
-                          <label class="text-[9.5px] text-slate-400 font-bold block">Từ ngày:</label>
-                          <input type="date" value="${sh.startDate}" onchange="ctpActions.updateCustomShowField('${sh.id}', 'startDate', this.value)" class="w-full px-2 py-1 bg-slate-50 border border-slate-300 rounded-xl font-bold mt-0.5" />
-                        </div>
-                        <div>
-                          <label class="text-[9.5px] text-slate-400 font-bold block">Đến ngày:</label>
-                          <input type="date" min="${sh.startDate}" value="${sh.endDate}" onchange="ctpActions.updateCustomShowField('${sh.id}', 'endDate', this.value)" class="w-full px-2 py-1 bg-slate-50 border border-slate-300 rounded-xl font-bold mt-0.5" />
-                        </div>
-                        <div>
-                          <label class="text-[9.5px] text-slate-400 font-bold block">Chủ show:</label>
-                          <select onchange="ctpActions.updateCustomShowField('${sh.id}', 'ownerId', this.value)" class="w-full px-2 py-1 bg-slate-50 border border-slate-300 rounded-xl font-bold mt-0.5">
-                            ${state.members.map(m => `<option value="${m.id}" ${sh.ownerId === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
-                          </select>
-                        </div>
+                          <button type="button" onclick="ctpActions.removeCustomShow('${sh.id}')" class="text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                            <i class="fa-solid fa-trash-can text-[8px]"></i> Xoá
+                          </button>
+                        ` : ''}
                       </div>
                     </div>
-                  ` : `
-                    <!-- Header cho Show Có Sẵn Trong Lịch -->
-                    <div class="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
-                      <div>
-                        <div class="flex items-center gap-1.5">
-                          <span class="px-2 py-0.5 rounded-full bg-slate-100 font-mono font-bold text-[10px] text-slate-600">#${idx + 1}</span>
-                          <span class="font-mono font-bold text-indigo-600 text-[10px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) + ` (${days}n)` : ''}</span>
-                        </div>
-                        <h4 class="font-black text-slate-900 text-sm mt-1">📍 ${escapeHtml(sh.location)} ${sh.partner ? '(' + escapeHtml(sh.partner) + ')' : ''}</h4>
-                        <p class="text-[10px] text-slate-500 mt-0.5">Chủ show: <b class="text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">${escapeHtml(owner.name)}</b></p>
-                      </div>
-                      <div class="text-right shrink-0 bg-emerald-50 px-3 py-1.5 rounded-2xl border border-emerald-200">
-                        <span class="text-[9px] text-emerald-700 font-bold block">Tổng Show</span>
-                        <span class="text-xs font-black text-emerald-700 font-mono">${showSubTotal.toLocaleString('vi-VN')}đ</span>
-                      </div>
+                    <div class="text-right shrink-0 bg-emerald-50 px-3 py-1.5 rounded-2xl border border-emerald-200">
+                      <span class="text-[9px] text-emerald-700 font-bold block">Tổng Show</span>
+                      <span class="text-xs font-black text-emerald-700 font-mono">${showSubTotal.toLocaleString('vi-VN')}đ</span>
                     </div>
-                  `}
+                  </div>
 
                   <div class="space-y-1.5">
                     <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Nhiệm Vụ Tham Gia:</span>
-                    <div class="flex flex-wrap gap-1.5 items-center">
+                    <div class="flex flex-wrap gap-1.5 items-start">
                       ${taskList.map(t => {
                         const isChecked = item.tasks[t.key] !== undefined;
                         const curVal = isChecked ? item.tasks[t.key] : t.def;
                         return `
-                          <div class="inline-flex flex-col">
-                            <button type="button" onclick="ctpActions.toggleTask('${sh.id}', '${t.key}')" class="px-2.5 py-1 rounded-full text-[10px] font-extrabold border transition-all flex items-center gap-1 ${isChecked ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-600 border-slate-200'}">
+                          <div class="inline-flex flex-col items-start">
+                            <button type="button" onclick="ctpActions.toggleTask('${sh.id}', '${t.key}')" class="px-2.5 py-1.5 rounded-full text-[10px] font-extrabold border transition-all flex items-center gap-1 ${isChecked ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-600 border-slate-200'}">
                               <span>${t.label}</span>
                               <i class="fa-solid ${isChecked ? 'fa-check text-[9px]' : 'fa-plus text-[8px] opacity-60'}"></i>
                             </button>
                             ${isChecked ? `
-                              <input type="text" inputmode="numeric" value="${curVal ? Number(curVal).toLocaleString('vi-VN') : ''}" onblur="ctpActions.updateTaskPrice('${sh.id}', '${t.key}', this); renderApp();" class="mt-1 w-24 px-1.5 py-0.5 bg-indigo-50 border border-indigo-300 rounded text-[10px] font-mono font-black text-right text-indigo-700 focus:outline-none" title="Nhập lại số tiền" />
+                              <input type="text" inputmode="numeric" value="${curVal ? Number(curVal).toLocaleString('vi-VN') : ''}" onblur="ctpActions.updateTaskPrice('${sh.id}', '${t.key}', this); renderApp();" class="mt-1 w-24 px-2 py-0.5 bg-indigo-50 border border-indigo-300 rounded-lg text-[10px] font-mono font-black text-right text-indigo-700 focus:outline-none" title="Nhập lại số tiền" />
                             ` : ''}
                           </div>
                         `;
@@ -2130,9 +2169,9 @@ function renderHeaderHtml() {
                     ${extras.length > 0 ? `
                       <div class="space-y-1.5 bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200">
                         ${extras.map((ex, exIdx) => `
-                          <div class="flex items-center gap-2">
-                            <input type="text" value="${escapeHtml(ex.name || '')}" onblur="ctpActions.saveExtraField('${sh.id}', ${exIdx}, 'name', this)" placeholder="Tên phí (vd: Xe, Ăn...)" class="flex-1 px-2.5 py-1 bg-white border border-amber-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none" />
-                            <input type="text" inputmode="numeric" value="${ex.amount ? Number(ex.amount).toLocaleString('vi-VN') : ''}" onblur="ctpActions.saveExtraField('${sh.id}', ${exIdx}, 'amount', this); renderApp();" placeholder="Số tiền" class="w-24 px-2.5 py-1 bg-white border border-amber-300 rounded-xl text-xs font-mono font-black text-right text-amber-900 focus:outline-none" />
+                          <div class="flex items-center gap-1.5">
+                            <input type="text" value="${escapeHtml(ex.name || '')}" onblur="ctpActions.saveExtraField('${sh.id}', ${exIdx}, 'name', this)" placeholder="Tên phí (vd: Xe, Ăn...)" class="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-amber-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none" />
+                            <input type="text" inputmode="numeric" value="${ex.amount ? Number(ex.amount).toLocaleString('vi-VN') : ''}" onblur="ctpActions.saveExtraField('${sh.id}', ${exIdx}, 'amount', this); renderApp();" placeholder="Số tiền" class="w-24 shrink-0 px-2.5 py-1.5 bg-white border border-amber-300 rounded-xl text-xs font-mono font-black text-right text-amber-900 focus:outline-none" />
                             <button type="button" onclick="ctpActions.removeExtraItem('${sh.id}', ${exIdx})" class="w-7 h-7 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-200 shrink-0"><i class="fa-solid fa-xmark text-xs"></i></button>
                           </div>
                         `).join('')}
@@ -2145,9 +2184,9 @@ function renderHeaderHtml() {
 
             <!-- Nút thêm nhanh show ngoài ở cuối danh sách -->
             <div class="pt-1 pb-2 text-center">
-              <button type="button" onclick="ctpActions.addCustomShow()" class="w-full py-3 rounded-3xl border-2 border-dashed border-slate-300 hover:border-slate-500 bg-white/70 text-slate-700 font-extrabold text-xs flex items-center justify-center gap-2 transition-all active:scale-98">
+              <button type="button" onclick="ctpActions.openAddCustomShowModal()" class="w-full py-3 rounded-3xl border-2 border-dashed border-slate-300 hover:border-slate-500 bg-white/70 text-slate-700 font-extrabold text-xs flex items-center justify-center gap-2 transition-all active:scale-98">
                 <i class="fa-solid fa-circle-plus text-emerald-600"></i>
-                <span>➕ Tự note thêm Show ngoài lịch vào CTP tháng T${state.ctpMonth}</span>
+                <span>➕ Tự note thêm Show ngoài lịch vào cuối danh sách</span>
               </button>
             </div>
           </div>
@@ -2157,6 +2196,62 @@ function renderHeaderHtml() {
               <i class="fa-solid fa-sack-dollar text-sm"></i>
               <span>🔥 LỤM (TỔNG HỢP BILL GỬI CHỦ SHOW)</span>
             </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // Popup Modal nhập thông tin Show ngoài lịch (Tối ưu cho màn hình dọc điện thoại)
+    function renderCtpAddShowModalHtml() {
+      const m = state.ctpAddShowModal;
+      if (!m) return '';
+      return `
+        <div onclick="ctpActions.closeAddCustomShowModal()" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div onclick="event.stopPropagation()" class="ios-sheet bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 space-y-3.5 text-xs shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-2.5">
+              <div>
+                <h3 class="font-black text-sm text-slate-900 uppercase">${m.mode === 'edit' ? '✏️ Sửa Show Ngoài Lịch' : '📝 Tự Note Show Ngoài Lịch'}</h3>
+                <p class="text-[10px] text-slate-500 font-medium mt-0.5">Show sẽ được thêm vào cuối danh sách tính CTP tháng T${state.ctpMonth}</p>
+              </div>
+              <button type="button" onclick="ctpActions.closeAddCustomShowModal()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="space-y-3">
+              <div>
+                <label class="text-[10px] text-slate-500 font-bold block mb-1">📍 Địa điểm / Tên Show (*):</label>
+                <input type="text" value="${escapeHtml(m.location)}" oninput="ctpActions.updateCustomModalField('location', this.value)" placeholder="VD: Tiệc cưới Q7, Event Phú Quốc..." class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-2xl font-bold text-slate-900 focus:outline-none focus:border-slate-900" autofocus />
+              </div>
+
+              <div>
+                <label class="text-[10px] text-slate-500 font-bold block mb-1">🤝 Đối tác / Ghi chú (nếu có):</label>
+                <input type="text" value="${escapeHtml(m.partner)}" oninput="ctpActions.updateCustomModalField('partner', this.value)" placeholder="VD: PSC, Anh Khoa gọi ngoài..." class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-2xl font-semibold text-slate-800 focus:outline-none focus:border-slate-900" />
+              </div>
+
+              <div class="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label class="text-[10px] text-slate-500 font-bold block mb-1">Từ ngày:</label>
+                  <input type="date" value="${m.startDate}" onchange="ctpActions.updateCustomModalField('startDate', this.value)" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-2xl font-bold text-slate-900 focus:outline-none" />
+                </div>
+                <div>
+                  <label class="text-[10px] text-slate-500 font-bold block mb-1">Đến ngày:</label>
+                  <input type="date" min="${m.startDate}" value="${m.endDate}" onchange="ctpActions.updateCustomModalField('endDate', this.value)" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-2xl font-bold text-slate-900 focus:outline-none" />
+                </div>
+              </div>
+
+              <div>
+                <label class="text-[10px] text-slate-500 font-bold block mb-1">📌 Chọn Chủ Show (Người thanh toán CTP):</label>
+                <select onchange="ctpActions.updateCustomModalField('ownerId', this.value)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-2xl font-bold text-slate-900 focus:outline-none">
+                  ${state.members.map(mem => `<option value="${mem.id}" ${m.ownerId === mem.id ? 'selected' : ''}>${escapeHtml(mem.name)}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+
+            ${m.error ? `<div class="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 font-bold text-center">${escapeHtml(m.error)}</div>` : ''}
+
+            <div class="grid grid-cols-2 gap-2 pt-2">
+              <button type="button" onclick="ctpActions.closeAddCustomShowModal()" class="w-full py-3 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs">Huỷ</button>
+              <button type="button" onclick="ctpActions.submitCustomShowModal()" class="w-full py-3 rounded-full bg-indigo-600 text-white font-black text-xs uppercase tracking-wider shadow-md active:scale-95 transition-all">OK • Thêm Vào Cuối</button>
+            </div>
           </div>
         </div>
       `;
@@ -2669,7 +2764,7 @@ function renderHeaderHtml() {
       else if (state.activeTab === 'free_finder') main = renderFreeFinderTabHtml();
       else if (state.activeTab === 'ctp') main = renderCtpTabHtml();
 
-      root.innerHTML = `${renderHeaderHtml()}${main}${renderBottomNavHtml()}${renderDetailModalHtml()}${renderFormModalHtml()}${renderZaloTomorrowModalHtml()}${renderPinModalHtml()}${renderSelfChangePinModalHtml()}${renderGuideModalHtml()}${renderCtpBillModalHtml()}${renderToastHtml()}`;
+      root.innerHTML = `${renderHeaderHtml()}${main}${renderBottomNavHtml()}${renderDetailModalHtml()}${renderFormModalHtml()}${renderZaloTomorrowModalHtml()}${renderPinModalHtml()}${renderSelfChangePinModalHtml()}${renderGuideModalHtml()}${renderCtpAddShowModalHtml()}${renderCtpBillModalHtml()}${renderToastHtml()}`;
     }
 
     window.state = state;
