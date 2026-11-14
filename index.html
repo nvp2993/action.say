@@ -277,12 +277,23 @@
 
     const ROLE_OPTIONS = [
       { id: '', label: 'Không gắn' },
-      { id: '🎥 Quay', label: '🎥 Quay' },
-      { id: '📸 Chụp', label: '📸 Chụp' },
-      { id: '🚁 Flycam', label: '🚁 Flycam' },
-      { id: '🎬 Tổng', label: '🎬 Tổng' },
-      { id: '💡 Đèn', label: '💡 Đèn' }
+      { id: 'Quay', label: '🎥 Quay' },
+      { id: 'Chụp', label: '📸 Chụp' },
+      { id: 'Dựng', label: '✂️ Dựng' },
+      { id: 'Flycam', label: '🚁 Flycam' },
+      { id: 'Đèn', label: '💡 Đèn' }
     ];
+
+    function normalizeRoleName(r = '') {
+      return String(r).replace(/^[🎥📸✂️🚁🎬💡]\s*/u, '').trim();
+    }
+
+    function formatMemberRolesClean(roleVal) {
+      if (!roleVal) return '';
+      const arr = Array.isArray(roleVal) ? roleVal : [roleVal];
+      const cleaned = arr.map(normalizeRoleName).filter(Boolean);
+      return cleaned.join(', ');
+    }
 
     const POST_STATUS_OPTIONS = [
       { id: 'pending', label: '⏳ Chờ chép file', cls: 'bg-amber-100 text-amber-800 border-amber-300' },
@@ -576,12 +587,7 @@
         ? 'px-2.5 py-1 text-xs'
         : 'px-2 py-0.5 text-[10px]';
         
-      let roleStr = '';
-      if (Array.isArray(roleTag)) {
-        roleStr = roleTag.join(', ');
-      } else if (roleTag) {
-        roleStr = roleTag;
-      }
+      const roleStr = formatMemberRolesClean(roleTag);
       const roleSpan = roleStr ? `<span class="ml-1 opacity-95 font-bold">• ${escapeHtml(roleStr)}</span>` : '';
       return `<span ${onClickAttr} style="background-color:${m.bg};color:${m.text}" class="inline-flex items-center font-extrabold rounded-full tracking-wide uppercase select-none shadow-2xs ${sizeCls} ${extraClasses}">${escapeHtml(m.shortLabel)}${roleSpan}</span>`;
     }
@@ -867,12 +873,14 @@
         if (!Array.isArray(currentRoles)) {
           currentRoles = currentRoles ? [currentRoles] : [];
         }
+        currentRoles = currentRoles.map(normalizeRoleName).filter(Boolean);
+        const cleanRoleId = normalizeRoleName(roleId);
 
-        const idx = currentRoles.indexOf(roleId);
+        const idx = currentRoles.indexOf(cleanRoleId);
         if (idx >= 0) {
           currentRoles.splice(idx, 1);
         } else {
-          currentRoles.push(roleId);
+          currentRoles.push(cleanRoleId);
         }
 
         if (currentRoles.length > 0) {
@@ -1518,7 +1526,7 @@ function renderHeaderHtml() {
                   <th class="py-1.5 px-1.5 border-r border-slate-300 text-left w-24">TÊN SHOW - ĐỐI TÁC</th>
                   <th class="py-1.5 px-1 border-r border-slate-300 text-center w-12">BĐ</th>
                   <th class="py-1.5 px-1 border-r border-slate-300 text-center w-12">KT</th>
-                  <th class="py-1.5 px-2 border-r border-slate-300 text-left">NHÂN SỰ & VAI TRÒ</th>
+                  <th class="py-1.5 px-2 border-r border-slate-300 text-left">NHÂN SỰ</th>
                   <th class="py-1.5 px-1.5 border-r border-slate-300 text-center w-20">CHỦ SHOW</th>
                   <th class="py-1.5 px-1.5 text-center w-20">NGƯỜI TẠO</th>
                 </tr>
@@ -1551,7 +1559,7 @@ function renderHeaderHtml() {
                       <td class="py-1.5 px-1 border-r border-slate-200 text-center font-bold text-slate-700">${formatDayMonth(sh.rawEndDate || sh.endDate)}</td>
                       <td class="py-1.5 px-1.5 border-r border-slate-200">
                         <div class="flex flex-wrap gap-0.5">
-                          ${(sh.memberIds || []).map(mid => renderPillHtml(mid, 'xs', '', '', sh.roles?.[mid] || '')).join('')}
+                          ${(sh.memberIds || []).map(mid => renderPillHtml(mid, 'xs')).join('')}
                         </div>
                       </td>
                       <td class="py-1.5 px-1.5 border-r border-slate-200 text-center">
@@ -2578,6 +2586,7 @@ function renderHeaderHtml() {
       let sum = 0;
       roles.forEach(r => {
         if (r.includes('Quay') || r.includes('Chụp') || r.includes('Tổng')) sum += dayRate;
+        else if (r.includes('Dựng')) sum += 1000000;
         else if (r.includes('Flycam')) sum += 1000000;
         else if (r.includes('Đèn')) sum += 500000;
       });
@@ -3618,8 +3627,21 @@ function renderHeaderHtml() {
               <span>Bắt đầu: ${formatDayMonth(sh.startDate)}</span>
               <span>Kết thúc: ${formatDayMonth(sh.endDate)}</span>
             </div>
-            <div class="flex flex-wrap gap-1.5">
-              ${(sh.memberIds || []).map(id => renderPillHtml(id, 'md', '', '', sh.roles?.[id] || '')).join('')}
+            <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 space-y-1.5">
+              <div class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Nhân sự & Nhiệm vụ:</div>
+              <div class="space-y-1 text-xs">
+                ${(sh.memberIds || []).map(id => {
+                  const m = getMember(id);
+                  const roleStr = formatMemberRolesClean(sh.roles?.[id]);
+                  return `
+                    <div class="flex items-center gap-1.5 font-bold text-slate-800">
+                      <span class="text-slate-400">-</span>
+                      ${renderPillHtml(id, 'xs')}
+                      ${roleStr ? `<span class="text-slate-400">-</span><span class="text-slate-700 font-semibold">${escapeHtml(roleStr)}</span>` : ''}
+                    </div>
+                  `;
+                }).join('')}
+              </div>
             </div>
 
             <div class="space-y-1.5 pt-1 border-t border-slate-100">
@@ -3672,7 +3694,7 @@ function renderHeaderHtml() {
             </div>
             <label class="flex items-center gap-2 px-1 py-0.5 cursor-pointer select-none text-[11px] font-bold text-slate-700">
               <input type="checkbox" ${f.hidePartner ? 'checked' : ''} onchange="appActions.toggleFormHidePartner()" class="w-4 h-4 rounded accent-slate-900" />
-              <span>Riêng tư (Ẩn đối tác với mọi người, chỉ báo lịch bận lên lịch chung)</span>
+              <span>Ẩn đối tác với mọi người, chỉ báo bận lên lịch chung</span>
             </label>
             <div class="grid grid-cols-2 gap-2">
               <div>
@@ -3712,8 +3734,8 @@ function renderHeaderHtml() {
                       ${selected ? `
                         <div class="flex flex-wrap gap-1 mt-1.5 pt-1 border-t border-indigo-200/60" onclick="event.stopPropagation()">
                           ${ROLE_OPTIONS.filter(r => r.id !== '').map(r => {
-                            const assignedRoles = Array.isArray(curRole) ? curRole : (curRole ? [curRole] : []);
-                            const isChosen = assignedRoles.includes(r.id);
+                            const assignedRoles = (Array.isArray(curRole) ? curRole : (curRole ? [curRole] : [])).map(normalizeRoleName);
+                            const isChosen = assignedRoles.includes(normalizeRoleName(r.id));
                             return `
                               <button
                                 type="button"
