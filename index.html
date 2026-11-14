@@ -2442,12 +2442,18 @@ function renderHeaderHtml() {
     }
 
     // ========================================================================
-    // LOGIC TAB CHỦ SHOW (QUẢN LÝ THU CHI, GIÁ BÁO KHÁCH, CTP ĐOÀN & THANH LÝ)
+    // LOGIC TAB CHỦ SHOW & VÍ THU NHẬP CÁ NHÂN TOÀN DIỆN (3 TRONG 1)
+    // Gom: 1. Show Làm Chủ | 2. Show Đi Nhận CTP | 3. Show Tự Note Ngoài Lịch
     // ========================================================================
     const OWNER_STATUS_OPTIONS = [
       { id: 'unpaid',    label: '⏳ Chưa thanh lý', badgeCls: 'bg-amber-100 text-amber-800 border-amber-300' },
       { id: 'deposited', label: '💵 Đã nhận cọc',   badgeCls: 'bg-blue-100 text-blue-800 border-blue-300' },
       { id: 'settled',   label: '✅ Đã thanh lý',   badgeCls: 'bg-emerald-100 text-emerald-800 border-emerald-300' }
+    ];
+
+    const CREW_CTP_STATUS_OPTIONS = [
+      { id: 'unpaid',  label: '⏳ Chờ Chủ Show trả', badgeCls: 'bg-amber-100 text-amber-800 border-amber-300' },
+      { id: 'settled', label: '✅ Đã nhận CTP',      badgeCls: 'bg-emerald-100 text-emerald-800 border-emerald-300' }
     ];
 
     let ownerCloudSyncTimers = {};
@@ -2500,6 +2506,7 @@ function renderHeaderHtml() {
           crewCosts: initCrewCosts,
           postCost: 0,
           otherExpenses: [],
+          crewMemberMeta: {},
           note: ''
         };
       } else {
@@ -2511,10 +2518,37 @@ function renderHeaderHtml() {
           }
         });
         if (!Array.isArray(rec.otherExpenses)) rec.otherExpenses = [];
+        if (!rec.crewMemberMeta) rec.crewMemberMeta = {};
       }
       return state.ownerFinanceMap[sh.id];
     }
 
+    function ensureCrewMemberMeta(sh, userId = state.currentUserId) {
+      const rec = ensureOwnerFinRecord(sh);
+      if (!rec.crewMemberMeta[userId]) {
+        rec.crewMemberMeta[userId] = {
+          ctpStatus: 'unpaid',
+          selfExpense: 0,
+          selfExpenseNote: ''
+        };
+      }
+      return rec.crewMemberMeta[userId];
+    }
+
+    // Kiểm tra phân loại show đối với user hiện tại:
+    // - 'owner': Mình đứng tên Chủ Show (hoặc show ngoài đang bật chế độ Làm Chủ Show)
+    // - 'crew': Show người khác làm Chủ Show (hoặc show ngoài chế độ nhận CTP)
+    function getMyShowRoleCategory(sh, userId = state.currentUserId) {
+      if (sh.isCustomCtp) {
+        const rec = ensureOwnerFinRecord(sh);
+        if (rec.customMode === 'owner') return 'owner';
+        if (rec.customMode === 'crew') return 'crew';
+        return sh.ownerId === userId ? 'owner' : 'crew';
+      }
+      return sh.ownerId === userId ? 'owner' : 'crew';
+    }
+
+    // Tính toán số liệu khi MÌNH LÀ CHỦ SHOW
     function calculateOwnerShowMetrics(sh) {
       const rec = ensureOwnerFinRecord(sh);
       const clientPrice = Number(rec.clientPrice) || 0;
@@ -2532,6 +2566,7 @@ function renderHeaderHtml() {
       const netProfit = clientPrice - totalExpense;
       const remainingClientDebt = rec.status === 'settled' ? 0 : Math.max(0, clientPrice - depositPaid);
       return {
+        mode: 'owner',
         rec,
         clientPrice,
         depositPaid,
@@ -2544,9 +2579,46 @@ function renderHeaderHtml() {
       };
     }
 
-    function getMyOwnedShowsList() {
-      const regularOwned = state.shows.filter(sh => {
-        if (sh.ownerId !== state.currentUserId) return false;
+    // Tính toán số liệu khi MÌNH ĐI LÀM NHẬN CTP (Đồng bộ 2 chiều với tab Tính CTP)
+    function calculateCrewShowMetrics(sh, userId = state.currentUserId) {
+      const ctpItem = state.ctpItems[sh.id] || { tasks: {}, extras: [] };
+      const tasks = ctpItem.tasks || {};
+      const extras = Array.isArray(ctpItem.extras) ? ctpItem.extras : [];
+
+      let taskSum = 0;
+      Object.values(tasks).forEach(v => taskSum += (Number(v) || 0));
+      let extraBillSum = 0;
+      extras.forEach(ex => extraBillSum += (Number(ex.amount) || 0));
+
+      const grossCtp = taskSum + extraBillSum;
+      const meta = ensureCrewMemberMeta(sh, userId);
+      const selfExpense = Number(meta.selfExpense) || 0;
+      const netPocket = grossCtp - selfExpense;
+      const isSettled = meta.ctpStatus === 'settled';
+      const pendingCtpDebt = isSettled ? 0 : Math.max(0, grossCtp);
+
+      return {
+        mode: 'crew',
+        ctpItem,
+        meta,
+        taskSum,
+        extraBillSum,
+        grossCtp,
+        selfExpense,
+        netPocket,
+        isSettled,
+        pendingCtpDebt
+      };
+    }
+
+    // Lấy toàn bộ danh sách Show liên quan đến thành viên đang đăng nhập (Làm Chủ + Đi Làm + Show Ngoài)
+    function getAllMyInvolvedShows(applyFilter = true) {
+      const uid = state.currentUserId;
+
+      const regularInvolved = state.shows.filter(sh => {
+        const isOwner = sh.ownerId === uid;
+        const isParticipant = (sh.memberIds || []).includes(uid);
+        if (!isOwner && !isParticipant) return false;
         if (!state.ownerAllMonths) {
           if (!sh.startDate) return false;
           const m = parseInt(sh.startDate.split('-')[1], 10);
@@ -2555,8 +2627,9 @@ function renderHeaderHtml() {
         return true;
       });
 
-      const customOwned = (state.ctpCustomShows || []).filter(sh => {
-        if (sh.ownerId !== state.currentUserId) return false;
+      const customInvolved = (state.ctpCustomShows || []).filter(sh => {
+        const isMyCustom = (!sh.userId || sh.userId === uid) || sh.ownerId === uid || (sh.memberIds || []).includes(uid);
+        if (!isMyCustom) return false;
         if (!state.ownerAllMonths) {
           if (!sh.startDate) return Number(sh.ctpMonth) === state.ownerMonth;
           const m = parseInt(sh.startDate.split('-')[1], 10);
@@ -2565,70 +2638,114 @@ function renderHeaderHtml() {
         return true;
       });
 
-      const combined = [...regularOwned, ...customOwned].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+      const combined = [...regularInvolved, ...customInvolved].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
 
-      if (state.ownerFilterStatus === 'all') return combined;
+      if (!applyFilter || state.ownerFilterStatus === 'all') return combined;
+
       return combined.filter(sh => {
-        const rec = ensureOwnerFinRecord(sh);
-        if (state.ownerFilterStatus === 'settled') return rec.status === 'settled';
-        if (state.ownerFilterStatus === 'unsettled') return rec.status !== 'settled';
-        return rec.status === state.ownerFilterStatus;
+        const cat = getMyShowRoleCategory(sh, uid);
+        if (state.ownerFilterStatus === 'role_owner') return cat === 'owner' && !sh.isCustomCtp;
+        if (state.ownerFilterStatus === 'role_crew') return cat === 'crew' && !sh.isCustomCtp;
+        if (state.ownerFilterStatus === 'role_custom') return !!sh.isCustomCtp;
+
+        const isSettled = cat === 'owner'
+          ? (ensureOwnerFinRecord(sh).status === 'settled')
+          : (ensureCrewMemberMeta(sh, uid).ctpStatus === 'settled');
+
+        if (state.ownerFilterStatus === 'settled') return isSettled;
+        if (state.ownerFilterStatus === 'unsettled') return !isSettled;
+        return true;
       });
     }
 
     function refreshOwnerLiveDom(showId) {
       const sh = findAnyCtpShow(showId);
       if (!sh) return;
-      const m = calculateOwnerShowMetrics(sh);
+      const cat = getMyShowRoleCategory(sh);
 
-      // Cập nhật cả phần tóm tắt trên Header thẻ và phần Chân thẻ
-      const revSummaryEl = document.getElementById(`owner-summary-rev-${showId}`);
-      if (revSummaryEl) revSummaryEl.textContent = formatCompactMoneyPlain(m.clientPrice);
+      if (cat === 'owner') {
+        const m = calculateOwnerShowMetrics(sh);
+        const revSummaryEl = document.getElementById(`owner-summary-rev-${showId}`);
+        if (revSummaryEl) revSummaryEl.textContent = formatCompactMoneyPlain(m.clientPrice);
 
-      const expSummaryEl = document.getElementById(`owner-summary-exp-${showId}`);
-      if (expSummaryEl) expSummaryEl.textContent = formatCompactMoneyPlain(m.totalExpense);
+        const expSummaryEl = document.getElementById(`owner-summary-exp-${showId}`);
+        if (expSummaryEl) expSummaryEl.textContent = formatCompactMoneyPlain(m.totalExpense);
 
-      const profSummaryEl = document.getElementById(`owner-summary-prof-${showId}`);
-      if (profSummaryEl) {
-        profSummaryEl.textContent = (m.netProfit > 0 ? '+' : '') + (m.netProfit === 0 ? '0đ' : formatCompactMoneyPlain(m.netProfit));
-        profSummaryEl.className = `text-xs font-black font-mono ${m.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`;
+        const profSummaryEl = document.getElementById(`owner-summary-prof-${showId}`);
+        if (profSummaryEl) {
+          profSummaryEl.textContent = (m.netProfit > 0 ? '+' : '') + (m.netProfit === 0 ? '0đ' : formatCompactMoneyPlain(m.netProfit));
+          profSummaryEl.className = `text-xs font-black font-mono ${m.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`;
+        }
+
+        const expEl = document.getElementById(`owner-show-exp-${showId}`);
+        if (expEl) expEl.textContent = m.totalExpense.toLocaleString('vi-VN') + 'đ';
+
+        const profEl = document.getElementById(`owner-show-profit-${showId}`);
+        if (profEl) {
+          profEl.textContent = (m.netProfit >= 0 ? '+' : '') + m.netProfit.toLocaleString('vi-VN') + 'đ';
+          profEl.className = `text-xs sm:text-sm font-black font-mono ${m.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`;
+        }
+
+        const debtEl = document.getElementById(`owner-show-debt-${showId}`);
+        if (debtEl) {
+          debtEl.textContent = m.remainingClientDebt > 0
+            ? `Khách còn thiếu: ${m.remainingClientDebt.toLocaleString('vi-VN')}đ`
+            : (m.clientPrice > 0 ? 'Đã thu đủ 100%' : 'Chưa nhập giá báo khách');
+        }
+      } else {
+        const cm = calculateCrewShowMetrics(sh);
+        const grossSummaryEl = document.getElementById(`crew-summary-gross-${showId}`);
+        if (grossSummaryEl) grossSummaryEl.textContent = formatCompactMoneyPlain(cm.grossCtp);
+
+        const selfSummaryEl = document.getElementById(`crew-summary-self-${showId}`);
+        if (selfSummaryEl) selfSummaryEl.textContent = formatCompactMoneyPlain(cm.selfExpense);
+
+        const netSummaryEl = document.getElementById(`crew-summary-net-${showId}`);
+        if (netSummaryEl) {
+          netSummaryEl.textContent = (cm.netPocket > 0 ? '+' : '') + (cm.netPocket === 0 ? '0đ' : formatCompactMoneyPlain(cm.netPocket));
+          netSummaryEl.className = `text-xs font-black font-mono ${cm.netPocket >= 0 ? 'text-emerald-700' : 'text-rose-600'}`;
+        }
+
+        const grossFootEl = document.getElementById(`crew-show-gross-${showId}`);
+        if (grossFootEl) grossFootEl.textContent = cm.grossCtp.toLocaleString('vi-VN') + 'đ';
+
+        const netFootEl = document.getElementById(`crew-show-net-${showId}`);
+        if (netFootEl) {
+          netFootEl.textContent = (cm.netPocket >= 0 ? '+' : '') + cm.netPocket.toLocaleString('vi-VN') + 'đ';
+          netFootEl.className = `text-xs sm:text-sm font-black font-mono ${cm.netPocket >= 0 ? 'text-emerald-700' : 'text-rose-600'}`;
+        }
       }
 
-      const expEl = document.getElementById(`owner-show-exp-${showId}`);
-      if (expEl) expEl.textContent = m.totalExpense.toLocaleString('vi-VN') + 'đ';
+      // Cập nhật 4 ô Dashboard tổng hợp trên đầu trang
+      const allMyShows = getAllMyInvolvedShows(false);
+      let totalNetIncome = 0;
+      let ownerProfitSum = 0;
+      let crewNetSum = 0;
+      let totalUncollectedDebt = 0;
 
-      const profEl = document.getElementById(`owner-show-profit-${showId}`);
-      if (profEl) {
-        profEl.textContent = (m.netProfit >= 0 ? '+' : '') + m.netProfit.toLocaleString('vi-VN') + 'đ';
-        profEl.className = `text-xs sm:text-sm font-black font-mono ${m.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`;
-      }
-
-      const debtEl = document.getElementById(`owner-show-debt-${showId}`);
-      if (debtEl) {
-        debtEl.textContent = m.remainingClientDebt > 0
-          ? `Khách còn thiếu: ${m.remainingClientDebt.toLocaleString('vi-VN')}đ`
-          : (m.clientPrice > 0 ? 'Đã thu đủ 100%' : 'Chưa nhập giá báo khách');
-      }
-
-      // Cập nhật 4 ô Dashboard trên đầu trang
-      const allMyShows = getMyOwnedShowsList();
-      let sumRev = 0, sumExp = 0, sumProf = 0, sumDebt = 0;
       allMyShows.forEach(s => {
-        const sm = calculateOwnerShowMetrics(s);
-        sumRev += sm.clientPrice;
-        sumExp += sm.totalExpense;
-        sumProf += sm.netProfit;
-        sumDebt += sm.remainingClientDebt;
+        const c = getMyShowRoleCategory(s);
+        if (c === 'owner') {
+          const sm = calculateOwnerShowMetrics(s);
+          ownerProfitSum += sm.netProfit;
+          totalNetIncome += sm.netProfit;
+          totalUncollectedDebt += sm.remainingClientDebt;
+        } else {
+          const cm = calculateCrewShowMetrics(s);
+          crewNetSum += cm.netPocket;
+          totalNetIncome += cm.netPocket;
+          totalUncollectedDebt += cm.pendingCtpDebt;
+        }
       });
 
-      const dRev = document.getElementById('owner-dash-rev');
-      const dExp = document.getElementById('owner-dash-exp');
-      const dProf = document.getElementById('owner-dash-prof');
+      const dTotal = document.getElementById('owner-dash-total-income');
+      const dOwner = document.getElementById('owner-dash-owner-profit');
+      const dCrew = document.getElementById('owner-dash-crew-ctp');
       const dDebt = document.getElementById('owner-dash-debt');
-      if (dRev) dRev.textContent = sumRev.toLocaleString('vi-VN') + 'đ';
-      if (dExp) dExp.textContent = sumExp.toLocaleString('vi-VN') + 'đ';
-      if (dProf) dProf.textContent = (sumProf >= 0 ? '+' : '') + sumProf.toLocaleString('vi-VN') + 'đ';
-      if (dDebt) dDebt.textContent = sumDebt.toLocaleString('vi-VN') + 'đ';
+      if (dTotal) dTotal.textContent = (totalNetIncome >= 0 ? '+' : '') + totalNetIncome.toLocaleString('vi-VN') + 'đ';
+      if (dOwner) dOwner.textContent = (ownerProfitSum >= 0 ? '+' : '') + ownerProfitSum.toLocaleString('vi-VN') + 'đ';
+      if (dCrew) dCrew.textContent = (crewNetSum >= 0 ? '+' : '') + crewNetSum.toLocaleString('vi-VN') + 'đ';
+      if (dDebt) dDebt.textContent = totalUncollectedDebt.toLocaleString('vi-VN') + 'đ';
     }
 
     window.ownerActions = {
@@ -2649,6 +2766,17 @@ function renderHeaderHtml() {
         state.ownerFilterStatus = st;
         renderApp();
       },
+      setCustomShowMode(showId, mode, event) {
+        if (event) event.stopPropagation();
+        const sh = findAnyCtpShow(showId);
+        if (!sh) return;
+        const rec = ensureOwnerFinRecord(sh);
+        rec.customMode = mode;
+        if (mode === 'owner') sh.ownerId = state.currentUserId;
+        saveOwnerFinanceState(showId);
+        saveCtpStateToLocal();
+        renderApp();
+      },
       setStatus(showId, newStatus, event) {
         if (event) event.stopPropagation();
         const sh = findAnyCtpShow(showId);
@@ -2660,6 +2788,41 @@ function renderHeaderHtml() {
         }
         saveOwnerFinanceState(showId);
         renderApp();
+      },
+      setCrewCtpStatus(showId, newStatus, event) {
+        if (event) event.stopPropagation();
+        const sh = findAnyCtpShow(showId);
+        if (!sh) return;
+        const meta = ensureCrewMemberMeta(sh);
+        meta.ctpStatus = newStatus;
+        saveOwnerFinanceState(showId);
+        renderApp();
+      },
+      handleCrewSelfExpenseInput(showId, el) {
+        const sh = findAnyCtpShow(showId);
+        if (!sh) return;
+        const meta = ensureCrewMemberMeta(sh);
+        const digits = String(el.value || '').replace(/\D/g, '');
+        const numVal = digits ? parseInt(digits, 10) : 0;
+        meta.selfExpense = numVal;
+        el.value = digits ? numVal.toLocaleString('vi-VN') : '';
+        saveOwnerFinanceState(showId);
+        refreshOwnerLiveDom(showId);
+      },
+      handleCrewSelfNoteInput(showId, el) {
+        const sh = findAnyCtpShow(showId);
+        if (!sh) return;
+        const meta = ensureCrewMemberMeta(sh);
+        meta.selfExpenseNote = el.value;
+        saveOwnerFinanceState(showId);
+      },
+      handleCrewTaskPriceLive(showId, taskKey, el) {
+        ctpActions.handleTaskPriceInput(showId, taskKey, el);
+        refreshOwnerLiveDom(showId);
+      },
+      handleCrewExtraAmountLive(showId, exIdx, el) {
+        ctpActions.handleExtraAmountInput(showId, exIdx, el);
+        refreshOwnerLiveDom(showId);
       },
       handleMoneyInput(showId, field, el) {
         const sh = findAnyCtpShow(showId);
@@ -2728,95 +2891,129 @@ function renderHeaderHtml() {
         saveOwnerFinanceState(showId);
         refreshOwnerLiveDom(showId);
       },
+      openAddOutsideShowFromOwnerTab() {
+        state.ctpMonth = state.ownerMonth;
+        ctpActions.openAddCustomShowModal();
+      },
       exportOwnerExcel() {
         if (typeof XLSX === 'undefined') return;
         const curMem = getMember(state.currentUserId);
-        const list = getMyOwnedShowsList();
+        const list = getAllMyInvolvedShows(true);
         const periodLabel = state.ownerAllMonths ? 'CẢ NĂM 2026' : `THÁNG ${state.ownerMonth}/2026`;
 
         const wsData = [
-          [`BÁNG KÊ QUẢN LÝ THU CHI CHỦ SHOW (${curMem.name.toUpperCase()}) - ${periodLabel}`],
+          [`BẢNG TỔNG HỢP THU NHẬP & QUẢN LÝ SHOW (${curMem.name.toUpperCase()}) - ${periodLabel}`],
           [],
-          ['STT', 'Ngày', 'Show / Địa điểm', 'Đối tác', 'Trạng thái Thanh lý', 'Giá báo khách (Thu)', 'Đã cọc / Đã thu', 'Khách còn nợ', 'Tổng CTP Anh Em', 'Chi phí Hậu kỳ', 'Chi phí khác', 'Tổng Chi Dự Kiến', 'CÒN LẠI (Lợi nhuận ròng)']
+          ['STT', 'Ngày', 'Phân loại', 'Show / Địa điểm', 'Đối tác / Chủ show', 'Trạng thái Thanh lý', 'Tổng Thu (Báo khách / Bill CTP)', 'Tổng Chi (CTP đoàn / Tự túc)', 'Còn Nợ Chưa Thu', 'THỰC NHẬN BỎ TÚI (VNĐ)']
         ];
 
-        let sRev = 0, sDep = 0, sDebt = 0, sCrew = 0, sPost = 0, sOther = 0, sExp = 0, sProf = 0;
+        let sGross = 0, sExp = 0, sDebt = 0, sNet = 0;
         list.forEach((sh, i) => {
-          const m = calculateOwnerShowMetrics(sh);
-          const stObj = OWNER_STATUS_OPTIONS.find(o => o.id === m.rec.status) || OWNER_STATUS_OPTIONS[0];
+          const cat = getMyShowRoleCategory(sh);
           const dateStr = `${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' - ' + formatDayMonth(sh.endDate) : ''}`;
-          sRev += m.clientPrice;
-          sDep += m.depositPaid;
-          sDebt += m.remainingClientDebt;
-          sCrew += m.crewCtpTotal;
-          sPost += m.postCost;
-          sOther += m.otherExpTotal;
-          sExp += m.totalExpense;
-          sProf += m.netProfit;
-
-          wsData.push([
-            i + 1,
-            dateStr,
-            sh.location || '',
-            sh.partner || '',
-            stObj.label,
-            m.clientPrice,
-            m.depositPaid,
-            m.remainingClientDebt,
-            m.crewCtpTotal,
-            m.postCost,
-            m.otherExpTotal,
-            m.totalExpense,
-            m.netProfit
-          ]);
+          if (cat === 'owner') {
+            const m = calculateOwnerShowMetrics(sh);
+            const stObj = OWNER_STATUS_OPTIONS.find(o => o.id === m.rec.status) || OWNER_STATUS_OPTIONS[0];
+            sGross += m.clientPrice;
+            sExp += m.totalExpense;
+            sDebt += m.remainingClientDebt;
+            sNet += m.netProfit;
+            wsData.push([
+              i + 1,
+              dateStr,
+              sh.isCustomCtp ? 'Show ngoài (Làm Chủ)' : '👑 Chủ Show',
+              sh.location || '',
+              sh.partner || 'Khách trực tiếp',
+              stObj.label,
+              m.clientPrice,
+              m.totalExpense,
+              m.remainingClientDebt,
+              m.netProfit
+            ]);
+          } else {
+            const cm = calculateCrewShowMetrics(sh);
+            const stObj = CREW_CTP_STATUS_OPTIONS.find(o => o.id === cm.meta.ctpStatus) || CREW_CTP_STATUS_OPTIONS[0];
+            const ownerName = getMember(sh.ownerId)?.name || '';
+            sGross += cm.grossCtp;
+            sExp += cm.selfExpense;
+            sDebt += cm.pendingCtpDebt;
+            sNet += cm.netPocket;
+            wsData.push([
+              i + 1,
+              dateStr,
+              sh.isCustomCtp ? 'Show ngoài (Nhận CTP)' : '🎥 Đi nhận CTP',
+              sh.location || '',
+              `Chủ show: ${ownerName}`,
+              stObj.label,
+              cm.grossCtp,
+              cm.selfExpense,
+              cm.pendingCtpDebt,
+              cm.netPocket
+            ]);
+          }
         });
 
         wsData.push([
-          '', '', 'TỔNG CỘNG', '', '',
-          sRev, sDep, sDebt, sCrew, sPost, sOther, sExp, sProf
+          '', '', '', 'TỔNG CỘNG TOÀN BỘ', '', '',
+          sGross, sExp, sDebt, sNet
         ]);
 
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet(wsData);
         ws['!cols'] = [
-          { wch: 5 }, { wch: 13 }, { wch: 24 }, { wch: 15 }, { wch: 18 },
-          { wch: 16 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 18 }
+          { wch: 5 }, { wch: 13 }, { wch: 20 }, { wch: 24 }, { wch: 18 },
+          { wch: 18 }, { wch: 22 }, { wch: 22 }, { wch: 16 }, { wch: 20 }
         ];
-        XLSX.utils.book_append_sheet(wb, ws, 'QuanLy_ChuShow');
-        XLSX.writeFile(wb, `ThuChi_ChuShow_${curMem.name}_${state.ownerAllMonths ? '2026' : 'T' + state.ownerMonth}.xlsx`);
-        showToast('📥 Đã tải file Excel Thống kê Thu Chi Chủ Show!');
+        XLSX.utils.book_append_sheet(wb, ws, 'TongHop_ThuNhap');
+        XLSX.writeFile(wb, `TongHop_Show_${curMem.name}_${state.ownerAllMonths ? '2026' : 'T' + state.ownerMonth}.xlsx`);
+        showToast('📥 Đã tải file Excel Tổng Hợp Thu Nhập & Show!');
       }
     };
 
     function renderOwnerStatsTabHtml() {
       const curMem = getMember(state.currentUserId);
-      const myShows = getMyOwnedShowsList();
+      const allInvolved = getAllMyInvolvedShows(false);
+      const myShows = getAllMyInvolvedShows(true);
 
-      let totalRevenue = 0;
-      let totalExpense = 0;
-      let totalNetProfit = 0;
-      let totalClientDebt = 0;
+      let totalNetIncome = 0;
+      let ownerProfitSum = 0;
+      let ownerShowCount = 0;
+      let crewNetSum = 0;
+      let crewShowCount = 0;
+      let customShowCount = 0;
+      let totalUncollectedDebt = 0;
       let settledCount = 0;
 
-      myShows.forEach(sh => {
-        const m = calculateOwnerShowMetrics(sh);
-        totalRevenue += m.clientPrice;
-        totalExpense += m.totalExpense;
-        totalNetProfit += m.netProfit;
-        totalClientDebt += m.remainingClientDebt;
-        if (m.rec.status === 'settled') settledCount++;
+      allInvolved.forEach(sh => {
+        if (sh.isCustomCtp) customShowCount++;
+        const cat = getMyShowRoleCategory(sh);
+        if (cat === 'owner') {
+          ownerShowCount++;
+          const m = calculateOwnerShowMetrics(sh);
+          ownerProfitSum += m.netProfit;
+          totalNetIncome += m.netProfit;
+          totalUncollectedDebt += m.remainingClientDebt;
+          if (m.rec.status === 'settled') settledCount++;
+        } else {
+          crewShowCount++;
+          const cm = calculateCrewShowMetrics(sh);
+          crewNetSum += cm.netPocket;
+          totalNetIncome += cm.netPocket;
+          totalUncollectedDebt += cm.pendingCtpDebt;
+          if (cm.isSettled) settledCount++;
+        }
       });
 
       return `
         <div class="flex-1 flex flex-col min-h-0 bg-slate-100 text-xs font-sans">
-          <!-- Thanh điều khiển & lọc tháng dành riêng cho Chủ Show -->
+          <!-- Thanh điều khiển & lọc tháng dành cho Ví & Chủ Show -->
           <div class="bg-white px-3 py-2.5 border-b border-slate-200 shrink-0 space-y-2 shadow-xs">
             <div class="flex items-center justify-between gap-2">
               <div class="flex items-center gap-1.5 min-w-0">
                 <span class="w-6 h-6 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center font-black text-xs shrink-0"><i class="fa-solid fa-crown"></i></span>
                 <div class="truncate">
-                  <span class="font-black text-xs text-slate-900 uppercase block truncate">CHỦ SHOW: ${escapeHtml(curMem.name)}</span>
-                  <span class="text-[9.5px] text-slate-500 font-semibold">${myShows.length} show (${settledCount} đã thanh lý)</span>
+                  <span class="font-black text-xs text-slate-900 uppercase block truncate">QUẢN LÝ SHOW: ${escapeHtml(curMem.name)}</span>
+                  <span class="text-[9.5px] text-slate-500 font-semibold">${allInvolved.length} show (${settledCount} đã tất toán)</span>
                 </div>
               </div>
 
@@ -2828,248 +3025,435 @@ function renderHeaderHtml() {
               </div>
             </div>
 
-            <!-- Bộ lọc tình trạng thanh lý & nút xuất Excel -->
+            <!-- Bộ lọc thông minh: Tất cả | Làm Chủ | Đi nhận CTP | Show ngoài | Chưa thu -->
             <div class="flex items-center justify-between gap-1.5 pt-1 border-t border-slate-100">
               <div class="flex items-center gap-1 overflow-x-auto no-scrollbar">
                 ${[
-                  { id: 'all', label: 'Tất cả' },
-                  { id: 'unsettled', label: '⏳ Chưa tất toán' },
-                  { id: 'settled', label: '✅ Đã thanh lý' }
+                  { id: 'all',         label: `Tất cả (${allInvolved.length})` },
+                  { id: 'role_owner',  label: `👑 Làm Chủ (${ownerShowCount})` },
+                  { id: 'role_crew',   label: `🎥 Nhận CTP (${crewShowCount})` },
+                  { id: 'role_custom', label: `📝 Show ngoài (${customShowCount})` },
+                  { id: 'unsettled',   label: `⏳ Chưa thu` },
+                  { id: 'settled',     label: `✅ Đã thanh lý` }
                 ].map(f => `
                   <button onclick="ownerActions.setFilterStatus('${f.id}')" class="px-2.5 py-1 rounded-full text-[10px] font-extrabold border shrink-0 transition-all ${state.ownerFilterStatus === f.id ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-600 border-slate-200'}">${f.label}</button>
                 `).join('')}
               </div>
               <button onclick="ownerActions.exportOwnerExcel()" class="px-2.5 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-extrabold shrink-0 flex items-center gap-1">
                 <i class="fa-solid fa-file-excel text-emerald-600"></i>
-                <span>Xuất Excel</span>
+                <span>.XLSX</span>
               </button>
             </div>
           </div>
 
-          <!-- Khu vực cuộn: Dashboard 4 ô Bento + Danh sách từng Show thu gọn (bấm vào mới bung full nội dung) -->
+          <!-- Khu vực cuộn: Dashboard 4 ô Tổng Thu Nhập + Danh sách Accordion -->
           <div id="owner-shows-scroll-list" class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-2.5">
-            <!-- 4 Ô Thống Kê Tổng Quan Thu - Chi - Còn Lại -->
+            <!-- 4 Ô Bento Tổng Hợp Mọi Nguồn Thu Của Thành Viên -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div class="bg-white p-2.5 rounded-2xl border border-slate-200">
-                <span class="text-[9px] font-extrabold text-slate-400 uppercase block">💰 Tổng Báo Khách</span>
-                <span id="owner-dash-rev" class="text-xs sm:text-sm font-black text-slate-900 font-mono mt-0.5 block">${totalRevenue.toLocaleString('vi-VN')}đ</span>
-              </div>
-              <div class="bg-white p-2.5 rounded-2xl border border-slate-200">
-                <span class="text-[9px] font-extrabold text-slate-400 uppercase block">💸 Dự Kiến Chi</span>
-                <span id="owner-dash-exp" class="text-xs sm:text-sm font-black text-rose-600 font-mono mt-0.5 block">${totalExpense.toLocaleString('vi-VN')}đ</span>
-              </div>
               <div class="bg-emerald-50/90 p-2.5 rounded-2xl border border-emerald-200">
-                <span class="text-[9px] font-extrabold text-emerald-800 uppercase block">💎 CÒN LẠI (Lãi)</span>
-                <span id="owner-dash-prof" class="text-xs sm:text-sm font-black text-emerald-700 font-mono mt-0.5 block">${totalNetProfit >= 0 ? '+' : ''}${totalNetProfit.toLocaleString('vi-VN')}đ</span>
+                <span class="text-[9px] font-extrabold text-emerald-800 uppercase block">💎 TỔNG BỎ TÚI (Ròng)</span>
+                <span id="owner-dash-total-income" class="text-xs sm:text-sm font-black text-emerald-700 font-mono mt-0.5 block">${totalNetIncome >= 0 ? '+' : ''}${totalNetIncome.toLocaleString('vi-VN')}đ</span>
+              </div>
+              <div class="bg-white p-2.5 rounded-2xl border border-slate-200">
+                <span class="text-[9px] font-extrabold text-slate-400 uppercase block">👑 Lãi Làm Chủ Show</span>
+                <span id="owner-dash-owner-profit" class="text-xs sm:text-sm font-black text-slate-900 font-mono mt-0.5 block">${ownerProfitSum >= 0 ? '+' : ''}${ownerProfitSum.toLocaleString('vi-VN')}đ</span>
+              </div>
+              <div class="bg-white p-2.5 rounded-2xl border border-slate-200">
+                <span class="text-[9px] font-extrabold text-slate-400 uppercase block">🎥 Lương CTP Đi Làm</span>
+                <span id="owner-dash-crew-ctp" class="text-xs sm:text-sm font-black text-indigo-700 font-mono mt-0.5 block">${crewNetSum >= 0 ? '+' : ''}${crewNetSum.toLocaleString('vi-VN')}đ</span>
               </div>
               <div class="bg-amber-50/90 p-2.5 rounded-2xl border border-amber-200">
-                <span class="text-[9px] font-extrabold text-amber-800 uppercase block">⏳ Khách Còn Nợ</span>
-                <span id="owner-dash-debt" class="text-xs sm:text-sm font-black text-amber-800 font-mono mt-0.5 block">${totalClientDebt.toLocaleString('vi-VN')}đ</span>
+                <span class="text-[9px] font-extrabold text-amber-800 uppercase block">⏳ Chưa Thu Về Ví</span>
+                <span id="owner-dash-debt" class="text-xs sm:text-sm font-black text-amber-800 font-mono mt-0.5 block">${totalUncollectedDebt.toLocaleString('vi-VN')}đ</span>
               </div>
             </div>
 
             ${myShows.length === 0 ? `
-              <div class="text-center py-12 bg-white rounded-3xl border border-slate-200 p-5 space-y-2.5 max-w-sm mx-auto">
-                <div class="text-3xl">👑</div>
-                <div class="text-slate-900 font-extrabold text-xs">Chưa có show nào do ${escapeHtml(curMem.name)} làm Chủ Show trong kỳ này</div>
-                <p class="text-[11px] text-slate-500">Khi bạn tạo show và chọn Chủ Show là <b>${escapeHtml(curMem.name)}</b> (hoặc đổi sang tên bạn qua nút Mã PIN trên góc phải), show sẽ tự động hiện tại đây để bạn tính thu chi.</p>
-                <button onclick="appActions.openAddModal()" class="px-4 py-2 bg-indigo-600 text-white rounded-full text-xs font-extrabold inline-flex items-center gap-1.5">
-                  <i class="fa-solid fa-bolt"></i><span>Nổ Show Mới Ngay</span>
-                </button>
+              <div class="text-center py-10 bg-white rounded-3xl border border-slate-200 p-5 space-y-2.5 max-w-sm mx-auto">
+                <div class="text-3xl">📭</div>
+                <div class="text-slate-900 font-extrabold text-xs">Chưa có show nào trong danh mục lọc này</div>
+                <div class="flex items-center justify-center gap-2 pt-1">
+                  <button onclick="appActions.openAddModal()" class="px-3.5 py-2 bg-indigo-600 text-white rounded-full text-[11px] font-extrabold inline-flex items-center gap-1">
+                    <i class="fa-solid fa-bolt"></i><span>Nổ Show Lịch Chung</span>
+                  </button>
+                  <button onclick="ownerActions.openAddOutsideShowFromOwnerTab()" class="px-3.5 py-2 bg-slate-100 text-slate-800 border border-slate-300 rounded-full text-[11px] font-extrabold inline-flex items-center gap-1">
+                    <i class="fa-solid fa-plus"></i><span>Note Show Ngoài</span>
+                  </button>
+                </div>
               </div>
             ` : myShows.map((sh, idx) => {
-              const m = calculateOwnerShowMetrics(sh);
-              const rec = m.rec;
+              const cat = getMyShowRoleCategory(sh);
               const days = getShowDays(sh);
               const dayRate = days === 1 ? 1500000 : 1200000 * days;
               const isExpanded = state.ownerExpandedShowId === sh.id;
-              const curStatusObj = OWNER_STATUS_OPTIONS.find(o => o.id === rec.status) || OWNER_STATUS_OPTIONS[0];
+              const ownerObj = getMember(sh.ownerId);
+
+              // ===============================================================
+              // TRƯỜNG HỢP 1: MÌNH LÀ CHỦ SHOW (Quản lý Giá báo khách - Chi đoàn)
+              // ===============================================================
+              if (cat === 'owner') {
+                const m = calculateOwnerShowMetrics(sh);
+                const rec = m.rec;
+                const curStatusObj = OWNER_STATUS_OPTIONS.find(o => o.id === rec.status) || OWNER_STATUS_OPTIONS[0];
+
+                return `
+                  <div class="bg-white rounded-2xl border transition-all ${isExpanded ? 'border-slate-900 ring-1 ring-slate-900/10 shadow-md' : (rec.status === 'settled' ? 'border-emerald-200' : 'border-slate-200')} overflow-hidden">
+                    <!-- Dòng tiêu đề thu gọn (Chủ Show) -->
+                    <div onclick="ownerActions.toggleExpandShow('${sh.id}')" class="p-3 cursor-pointer hover:bg-slate-50/80 active:bg-slate-100/80 transition-colors flex items-center justify-between gap-2">
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                          <span class="px-1.5 py-0.5 rounded-md bg-slate-100 font-mono font-bold text-[9.5px] text-slate-600">#${idx + 1}</span>
+                          <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[9px] font-black">👑 Chủ Show${sh.isCustomCtp ? ' (Ngoài)' : ''}</span>
+                          <span class="font-mono font-bold text-slate-700 text-[10px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? '-' + formatDayMonth(sh.endDate) : ''} (${days}n)</span>
+                          <span class="px-2 py-0.5 rounded-full border text-[9px] font-extrabold ${curStatusObj.badgeCls}">${curStatusObj.label}</span>
+                        </div>
+                        <h4 class="font-black text-slate-900 text-xs sm:text-sm mt-1 truncate">📍 ${escapeHtml(sh.location)} ${sh.partner ? `<span class="text-slate-500 font-semibold">(${escapeHtml(sh.partner)})</span>` : ''}</h4>
+                      </div>
+
+                      <div class="flex items-center gap-2.5 shrink-0">
+                        <div class="text-right">
+                          <div class="text-[9.5px] text-slate-400 font-semibold whitespace-nowrap">
+                            Thu: <b id="owner-summary-rev-${sh.id}" class="text-slate-700 font-mono">${formatCompactMoneyPlain(m.clientPrice)}</b> • Chi: <b id="owner-summary-exp-${sh.id}" class="text-rose-600 font-mono">${formatCompactMoneyPlain(m.totalExpense)}</b>
+                          </div>
+                          <div class="flex items-center justify-end gap-1 mt-0.5">
+                            <span class="text-[9px] text-slate-400 font-bold uppercase">Lãi:</span>
+                            <span id="owner-summary-prof-${sh.id}" class="text-xs font-black font-mono ${m.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}">
+                              ${m.netProfit > 0 ? '+' : ''}${m.netProfit === 0 ? '0đ' : formatCompactMoneyPlain(m.netProfit)}
+                            </span>
+                          </div>
+                        </div>
+                        <div class="w-7 h-7 rounded-full ${isExpanded ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'} flex items-center justify-center">
+                          <i class="fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} text-[10px]"></i>
+                        </div>
+                      </div>
+                    </div>
+
+                    ${isExpanded ? `
+                      <div class="px-3.5 pb-3.5 pt-2.5 border-t border-slate-100 space-y-3.5 bg-white">
+                        ${sh.isCustomCtp ? `
+                          <div class="flex items-center justify-between gap-2 bg-amber-50/70 p-2 rounded-xl border border-amber-200">
+                            <span class="text-[10px] font-bold text-amber-900">📝 Đây là Show tự note ngoài lịch:</span>
+                            <div class="flex items-center gap-1">
+                              <button type="button" onclick="ownerActions.setCustomShowMode('${sh.id}', 'owner', event)" class="px-2 py-0.5 rounded-lg text-[9.5px] font-extrabold bg-slate-900 text-white">👑 Tôi làm Chủ</button>
+                              <button type="button" onclick="ownerActions.setCustomShowMode('${sh.id}', 'crew', event)" class="px-2 py-0.5 rounded-lg text-[9.5px] font-bold bg-white text-slate-600 border border-slate-300">🎥 Đi nhận CTP</button>
+                              <button type="button" onclick="ctpActions.openEditCustomShowModal('${sh.id}')" class="px-2 py-0.5 rounded-lg text-[9.5px] font-bold bg-white text-slate-700 border border-slate-300">✏️ Sửa</button>
+                            </div>
+                          </div>
+                        ` : ''}
+
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                          <span class="text-[10px] font-black text-slate-400 uppercase">Tình trạng thanh lý khách:</span>
+                          <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
+                            ${OWNER_STATUS_OPTIONS.map(st => `
+                              <button
+                                type="button"
+                                onclick="ownerActions.setStatus('${sh.id}', '${st.id}', event)"
+                                class="px-2.5 py-1 rounded-xl text-[10px] font-extrabold transition-all ${rec.status === st.id ? st.badgeCls + ' border shadow-2xs' : 'text-slate-500 hover:text-slate-800'}"
+                              >${st.label}</button>
+                            `).join('')}
+                          </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
+                          <div>
+                            <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">💰 Giá Báo Khách Hàng (VNĐ):</label>
+                            <input
+                              type="tel"
+                              inputmode="numeric"
+                              value="${rec.clientPrice ? Number(rec.clientPrice).toLocaleString('vi-VN') : ''}"
+                              oninput="ownerActions.handleMoneyInput('${sh.id}', 'clientPrice', this)"
+                              placeholder="Nhập giá trị hợp đồng báo khách..."
+                              class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono font-black text-sm text-slate-900 focus:outline-none focus:border-slate-900"
+                            />
+                          </div>
+                          <div>
+                            <div class="flex items-center justify-between mb-1">
+                              <label class="text-[10px] font-black text-slate-500 uppercase">💵 Khách Đã Cọc / Đã Trả:</label>
+                              <span id="owner-show-debt-${sh.id}" class="text-[9.5px] font-bold ${m.remainingClientDebt > 0 ? 'text-amber-700' : 'text-emerald-700'}">
+                                ${m.remainingClientDebt > 0 ? `Khách còn thiếu: ${m.remainingClientDebt.toLocaleString('vi-VN')}đ` : (m.clientPrice > 0 ? 'Đã thu đủ 100%' : 'Chưa nhập giá báo khách')}
+                              </span>
+                            </div>
+                            <input
+                              type="tel"
+                              inputmode="numeric"
+                              value="${rec.depositPaid ? Number(rec.depositPaid).toLocaleString('vi-VN') : ''}"
+                              oninput="ownerActions.handleMoneyInput('${sh.id}', 'depositPaid', this)"
+                              placeholder="Số tiền khách đã chuyển..."
+                              class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono font-bold text-sm text-emerald-700 focus:outline-none focus:border-slate-900"
+                            />
+                          </div>
+                        </div>
+
+                        <div class="space-y-2">
+                          <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">🎥 Dự Kiến Chi CTP Anh Em Tham Gia (${(sh.memberIds || []).length} người):</span>
+                            <span class="text-[10px] font-bold text-slate-400">Bấm số để sửa trực tiếp</span>
+                          </div>
+
+                          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            ${(sh.memberIds || []).map(mid => {
+                              const memCost = rec.crewCosts?.[mid] !== undefined ? rec.crewCosts[mid] : dayRate;
+                              const roleTag = sh.roles?.[mid] || '';
+                              const isSelf = mid === state.currentUserId;
+                              return `
+                                <div class="p-2 rounded-2xl border ${isSelf ? 'bg-amber-50/40 border-amber-200' : 'bg-slate-50/70 border-slate-200'} flex items-center justify-between gap-2">
+                                  <div class="min-w-0 flex-1">
+                                    <div class="flex items-center gap-1 flex-wrap">
+                                      ${renderPillHtml(mid, 'xs', '', '', roleTag)}
+                                      ${isSelf ? `<span class="text-[9px] font-bold text-amber-700">(Chủ show)</span>` : ''}
+                                    </div>
+                                    <div class="flex items-center gap-1 mt-1">
+                                      <button type="button" onclick="ownerActions.setQuickCrewRate('${sh.id}', '${mid}', 0)" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-500">0đ</button>
+                                      <button type="button" onclick="ownerActions.setQuickCrewRate('${sh.id}', '${mid}', ${dayRate})" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">${formatCompactMoneyPlain(dayRate)}</button>
+                                      <button type="button" onclick="ownerActions.setQuickCrewRate('${sh.id}', '${mid}', ${dayRate + 1000000})" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">+Fly/Dựng</button>
+                                    </div>
+                                  </div>
+                                  <input
+                                    type="tel"
+                                    inputmode="numeric"
+                                    value="${memCost ? Number(memCost).toLocaleString('vi-VN') : '0'}"
+                                    oninput="ownerActions.handleCrewCostInput('${sh.id}', '${mid}', this)"
+                                    class="w-28 px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-mono font-black text-right text-xs text-slate-900 focus:outline-none"
+                                  />
+                                </div>
+                              `;
+                            }).join('')}
+
+                            <div class="p-2 rounded-2xl border border-slate-200 bg-slate-50/70 flex items-center justify-between gap-2">
+                              <div class="min-w-0 flex-1">
+                                <span class="font-extrabold text-[10.5px] text-slate-700 block">🎬 Chi Phí Dựng / Làm Hình</span>
+                                <div class="flex items-center gap-1 mt-1">
+                                  <button type="button" onclick="state.ownerFinanceMap['${sh.id}'].postCost=0; saveOwnerFinanceState('${sh.id}'); renderApp();" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-500">0đ</button>
+                                  <button type="button" onclick="state.ownerFinanceMap['${sh.id}'].postCost=1000000; saveOwnerFinanceState('${sh.id}'); renderApp();" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">1tr (Dựng)</button>
+                                  <button type="button" onclick="state.ownerFinanceMap['${sh.id}'].postCost=1300000; saveOwnerFinanceState('${sh.id}'); renderApp();" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">1.3tr (Dựng+Hình)</button>
+                                </div>
+                              </div>
+                              <input
+                                type="tel"
+                                inputmode="numeric"
+                                value="${rec.postCost ? Number(rec.postCost).toLocaleString('vi-VN') : '0'}"
+                                oninput="ownerActions.handleMoneyInput('${sh.id}', 'postCost', this)"
+                                class="w-28 px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-mono font-black text-right text-xs text-slate-900 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="space-y-2 pt-1 border-t border-slate-100">
+                          <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">🚐 Chi Phí Khác (Xe, Khách sạn, Ăn uống, Thuê đồ...):</span>
+                            <button type="button" onclick="ownerActions.addExpenseRow('${sh.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-[10px] font-black flex items-center gap-1">
+                              <i class="fa-solid fa-plus text-[9px]"></i> Thêm khoản chi
+                            </button>
+                          </div>
+
+                          ${(rec.otherExpenses || []).length > 0 ? `
+                            <div class="space-y-1.5 bg-rose-50/40 p-2.5 rounded-2xl border border-rose-200/70">
+                              ${rec.otherExpenses.map((ex, exIdx) => `
+                                <div class="flex items-center gap-1.5">
+                                  <input
+                                    type="text"
+                                    value="${escapeHtml(ex.name || '')}"
+                                    oninput="ownerActions.handleExpenseName('${sh.id}', ${exIdx}, this)"
+                                    placeholder="Tên khoản chi (VD: Xe 16 chỗ, KS, Ăn...)"
+                                    class="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-rose-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none"
+                                  />
+                                  <input
+                                    type="tel"
+                                    inputmode="numeric"
+                                    value="${ex.amount ? Number(ex.amount).toLocaleString('vi-VN') : ''}"
+                                    oninput="ownerActions.handleExpenseAmount('${sh.id}', ${exIdx}, this)"
+                                    placeholder="Số tiền"
+                                    class="w-28 shrink-0 px-2.5 py-1.5 bg-white border border-rose-200 rounded-xl text-xs font-mono font-black text-right text-rose-700 focus:outline-none"
+                                  />
+                                  <button type="button" onclick="ownerActions.removeExpenseRow('${sh.id}', ${exIdx})" class="w-7 h-7 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0"><i class="fa-solid fa-xmark text-xs"></i></button>
+                                </div>
+                              `).join('')}
+                            </div>
+                          ` : ''}
+                        </div>
+
+                        <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-slate-200 bg-slate-50/70 -mx-3.5 -mb-3.5 px-3.5 py-2.5">
+                          <div>
+                            <span class="text-[9px] font-extrabold text-slate-400 uppercase block">Tổng Chi Dự Kiến:</span>
+                            <span id="owner-show-exp-${sh.id}" class="text-xs font-black text-rose-600 font-mono">${m.totalExpense.toLocaleString('vi-VN')}đ</span>
+                          </div>
+                          <button type="button" onclick="ownerActions.toggleExpandShow('${sh.id}')" class="px-3 py-1 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 font-extrabold text-[10px]">
+                            Thu gọn ▲
+                          </button>
+                          <div class="text-right">
+                            <span class="text-[9px] font-extrabold text-slate-500 uppercase block">💎 CÒN LẠI (Lãi Chủ Show):</span>
+                            <span id="owner-show-profit-${sh.id}" class="text-xs sm:text-sm font-black font-mono ${m.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}">
+                              ${m.netProfit >= 0 ? '+' : ''}${m.netProfit.toLocaleString('vi-VN')}đ
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ` : ''}
+                  </div>
+                `;
+              }
+
+              // ===============================================================
+              // TRƯỜNG HỢP 2: MÌNH ĐI LÀM NHẬN CTP (Đồng bộ trực tiếp với tab Tính CTP)
+              // ===============================================================
+              const cm = calculateCrewShowMetrics(sh);
+              const curCrewSt = CREW_CTP_STATUS_OPTIONS.find(o => o.id === cm.meta.ctpStatus) || CREW_CTP_STATUS_OPTIONS[0];
+              const item = cm.ctpItem;
+              const extras = Array.isArray(item.extras) ? item.extras : [];
+
+              const taskList = [
+                { key: 'quay', label: `Quay (${days === 1 ? '1.5tr' : days + 'n x 1.2tr'})`, def: dayRate },
+                { key: 'dung', label: 'Dựng (1tr)', def: 1000000 },
+                { key: 'chup', label: `Chụp (${days === 1 ? '1.5tr' : days + 'n x 1.2tr'})`, def: dayRate },
+                { key: 'lamhinh', label: 'Làm hình (300k)', def: 300000 },
+                { key: 'flycam', label: 'Flycam (1tr)', def: 1000000 },
+                { key: 'gimbal', label: 'Gimbal (200k)', def: 200000 }
+              ];
 
               return `
-                <div class="bg-white rounded-2xl border transition-all ${isExpanded ? 'border-slate-900 ring-1 ring-slate-900/10 shadow-md' : (rec.status === 'settled' ? 'border-emerald-200' : 'border-slate-200')} overflow-hidden">
-                  <!-- THANH TIÊU ĐỀ THU GỌN (Bấm vào để Mở / Đóng nội dung chi tiết) -->
+                <div class="bg-white rounded-2xl border transition-all ${isExpanded ? 'border-slate-900 ring-1 ring-slate-900/10 shadow-md' : (cm.isSettled ? 'border-emerald-200' : 'border-slate-200')} overflow-hidden">
+                  <!-- Dòng tiêu đề thu gọn (Show Đi Nhận CTP) -->
                   <div onclick="ownerActions.toggleExpandShow('${sh.id}')" class="p-3 cursor-pointer hover:bg-slate-50/80 active:bg-slate-100/80 transition-colors flex items-center justify-between gap-2">
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center gap-1.5 flex-wrap">
                         <span class="px-1.5 py-0.5 rounded-md bg-slate-100 font-mono font-bold text-[9.5px] text-slate-600">#${idx + 1}</span>
+                        <span class="px-2 py-0.5 rounded-full ${sh.isCustomCtp ? 'bg-purple-100 text-purple-900' : 'bg-indigo-50 text-indigo-800'} text-[9px] font-black">
+                          ${sh.isCustomCtp ? '📝 Show ngoài' : `🎥 Chủ: ${escapeHtml(ownerObj.name)}`}
+                        </span>
                         <span class="font-mono font-bold text-slate-700 text-[10px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? '-' + formatDayMonth(sh.endDate) : ''} (${days}n)</span>
-                        <span class="px-2 py-0.5 rounded-full border text-[9px] font-extrabold ${curStatusObj.badgeCls}">${curStatusObj.label}</span>
+                        <span class="px-2 py-0.5 rounded-full border text-[9px] font-extrabold ${curCrewSt.badgeCls}">${curCrewSt.label}</span>
                       </div>
                       <h4 class="font-black text-slate-900 text-xs sm:text-sm mt-1 truncate">📍 ${escapeHtml(sh.location)} ${sh.partner ? `<span class="text-slate-500 font-semibold">(${escapeHtml(sh.partner)})</span>` : ''}</h4>
                     </div>
 
-                    <!-- Tóm tắt nhanh Thu / Chi / Còn lại ngay trên dòng thu gọn -->
                     <div class="flex items-center gap-2.5 shrink-0">
                       <div class="text-right">
                         <div class="text-[9.5px] text-slate-400 font-semibold whitespace-nowrap">
-                          Thu: <b id="owner-summary-rev-${sh.id}" class="text-slate-700 font-mono">${formatCompactMoneyPlain(m.clientPrice)}</b> • Chi: <b id="owner-summary-exp-${sh.id}" class="text-rose-600 font-mono">${formatCompactMoneyPlain(m.totalExpense)}</b>
+                          CTP: <b id="crew-summary-gross-${sh.id}" class="text-slate-700 font-mono">${formatCompactMoneyPlain(cm.grossCtp)}</b> • Tự chi: <b id="crew-summary-self-${sh.id}" class="text-rose-600 font-mono">${formatCompactMoneyPlain(cm.selfExpense)}</b>
                         </div>
                         <div class="flex items-center justify-end gap-1 mt-0.5">
-                          <span class="text-[9px] text-slate-400 font-bold uppercase">Còn:</span>
-                          <span id="owner-summary-prof-${sh.id}" class="text-xs font-black font-mono ${m.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}">
-                            ${m.netProfit > 0 ? '+' : ''}${m.netProfit === 0 ? '0đ' : formatCompactMoneyPlain(m.netProfit)}
+                          <span class="text-[9px] text-slate-400 font-bold uppercase">Bỏ túi:</span>
+                          <span id="crew-summary-net-${sh.id}" class="text-xs font-black font-mono ${cm.netPocket >= 0 ? 'text-emerald-700' : 'text-rose-600'}">
+                            ${cm.netPocket > 0 ? '+' : ''}${cm.netPocket === 0 ? '0đ' : formatCompactMoneyPlain(cm.netPocket)}
                           </span>
                         </div>
                       </div>
-                      <div class="w-7 h-7 rounded-full ${isExpanded ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'} flex items-center justify-center transition-transform">
+                      <div class="w-7 h-7 rounded-full ${isExpanded ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'} flex items-center justify-center">
                         <i class="fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} text-[10px]"></i>
                       </div>
                     </div>
                   </div>
 
                   ${isExpanded ? `
-                    <!-- NỘI DUNG CHI TIẾT CỦA SHOW (Chỉ hiện khi được bấm mở) -->
                     <div class="px-3.5 pb-3.5 pt-2.5 border-t border-slate-100 space-y-3.5 bg-white">
-                      <!-- Hàng chọn nhanh Tình trạng thanh lý -->
+                      ${sh.isCustomCtp ? `
+                        <div class="flex items-center justify-between gap-2 bg-purple-50/70 p-2 rounded-xl border border-purple-200 flex-wrap">
+                          <span class="text-[10px] font-bold text-purple-900">📝 Chế độ tính cho Show ngoài này:</span>
+                          <div class="flex items-center gap-1">
+                            <button type="button" onclick="ownerActions.setCustomShowMode('${sh.id}', 'crew', event)" class="px-2 py-0.5 rounded-lg text-[9.5px] font-extrabold bg-slate-900 text-white">🎥 Nhận CTP</button>
+                            <button type="button" onclick="ownerActions.setCustomShowMode('${sh.id}', 'owner', event)" class="px-2 py-0.5 rounded-lg text-[9.5px] font-bold bg-white text-slate-600 border border-slate-300">👑 Tôi làm Chủ</button>
+                            <button type="button" onclick="ctpActions.openEditCustomShowModal('${sh.id}')" class="px-2 py-0.5 rounded-lg text-[9.5px] font-bold bg-white text-slate-700 border border-slate-300">✏️ Sửa</button>
+                            <button type="button" onclick="ctpActions.removeCustomShow('${sh.id}')" class="px-2 py-0.5 rounded-lg text-[9.5px] font-bold bg-rose-50 text-rose-600 border border-rose-200">🗑️ Xoá</button>
+                          </div>
+                        </div>
+                      ` : ''}
+
+                      <!-- Trạng thái Chủ Show đã trả tiền CTP chưa -->
                       <div class="flex items-center justify-between gap-2 flex-wrap">
-                        <span class="text-[10px] font-black text-slate-400 uppercase">Tình trạng hợp đồng:</span>
+                        <span class="text-[10px] font-black text-slate-400 uppercase">Chủ show (${escapeHtml(ownerObj.name)}) thanh toán:</span>
                         <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
-                          ${OWNER_STATUS_OPTIONS.map(st => `
+                          ${CREW_CTP_STATUS_OPTIONS.map(st => `
                             <button
                               type="button"
-                              onclick="ownerActions.setStatus('${sh.id}', '${st.id}', event)"
-                              class="px-2.5 py-1 rounded-xl text-[10px] font-extrabold transition-all ${rec.status === st.id ? st.badgeCls + ' border shadow-2xs' : 'text-slate-500 hover:text-slate-800'}"
+                              onclick="ownerActions.setCrewCtpStatus('${sh.id}', '${st.id}', event)"
+                              class="px-2.5 py-1 rounded-xl text-[10px] font-extrabold transition-all ${cm.meta.ctpStatus === st.id ? st.badgeCls + ' border shadow-2xs' : 'text-slate-500 hover:text-slate-800'}"
                             >${st.label}</button>
                           `).join('')}
                         </div>
                       </div>
 
-                      <!-- Phần 1: GIÁ BÁO KHÁCH HÀNG (THU) & TIỀN CỌC -->
-                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
-                        <div>
-                          <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">💰 Giá Báo Khách Hàng (VNĐ):</label>
-                          <input
-                            type="tel"
-                            inputmode="numeric"
-                            value="${rec.clientPrice ? Number(rec.clientPrice).toLocaleString('vi-VN') : ''}"
-                            oninput="ownerActions.handleMoneyInput('${sh.id}', 'clientPrice', this)"
-                            placeholder="Nhập giá trị hợp đồng báo khách..."
-                            class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono font-black text-sm text-slate-900 focus:outline-none focus:border-slate-900"
-                          />
-                        </div>
-                        <div>
-                          <div class="flex items-center justify-between mb-1">
-                            <label class="text-[10px] font-black text-slate-500 uppercase">💵 Khách Đã Cọc / Đã Trả:</label>
-                            <span id="owner-show-debt-${sh.id}" class="text-[9.5px] font-bold ${m.remainingClientDebt > 0 ? 'text-amber-700' : 'text-emerald-700'}">
-                              ${m.remainingClientDebt > 0 ? `Khách còn thiếu: ${m.remainingClientDebt.toLocaleString('vi-VN')}đ` : (m.clientPrice > 0 ? 'Đã thu đủ 100%' : 'Chưa nhập giá báo khách')}
-                            </span>
-                          </div>
-                          <input
-                            type="tel"
-                            inputmode="numeric"
-                            value="${rec.depositPaid ? Number(rec.depositPaid).toLocaleString('vi-VN') : ''}"
-                            oninput="ownerActions.handleMoneyInput('${sh.id}', 'depositPaid', this)"
-                            placeholder="Số tiền khách đã chuyển..."
-                            class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono font-bold text-sm text-emerald-700 focus:outline-none focus:border-slate-900"
-                          />
-                        </div>
-                      </div>
-
-                      <!-- Phần 2: DỰ KIẾN CHI CTP CHO ANH EM TRONG ĐOÀN & HẬU KỲ -->
-                      <div class="space-y-2">
-                        <div class="flex items-center justify-between">
-                          <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">🎥 Dự Kiến Chi CTP Anh Em Tham Gia (${(sh.memberIds || []).length} người):</span>
-                          <span class="text-[10px] font-bold text-slate-400">Bấm số để sửa trực tiếp</span>
-                        </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          ${(sh.memberIds || []).map(mid => {
-                            const memCost = rec.crewCosts?.[mid] !== undefined ? rec.crewCosts[mid] : dayRate;
-                            const roleTag = sh.roles?.[mid] || '';
-                            const isSelf = mid === state.currentUserId;
+                      <!-- Tích chọn nhiệm vụ CTP (Đồng bộ trực tiếp với tab Tính CTP) -->
+                      <div class="space-y-1.5">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Nhiệm Vụ Tham Gia (Tự đồng bộ qua tab Tính CTP):</span>
+                        <div class="flex flex-wrap gap-1.5 items-start">
+                          ${taskList.map(t => {
+                            const isChecked = item.tasks && item.tasks[t.key] !== undefined;
+                            const curVal = isChecked ? item.tasks[t.key] : t.def;
                             return `
-                              <div class="p-2 rounded-2xl border ${isSelf ? 'bg-amber-50/40 border-amber-200' : 'bg-slate-50/70 border-slate-200'} flex items-center justify-between gap-2">
-                                <div class="min-w-0 flex-1">
-                                  <div class="flex items-center gap-1 flex-wrap">
-                                    ${renderPillHtml(mid, 'xs', '', '', roleTag)}
-                                    ${isSelf ? `<span class="text-[9px] font-bold text-amber-700">(Chủ show)</span>` : ''}
-                                  </div>
-                                  <div class="flex items-center gap-1 mt-1">
-                                    <button type="button" onclick="ownerActions.setQuickCrewRate('${sh.id}', '${mid}', 0)" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-500">0đ</button>
-                                    <button type="button" onclick="ownerActions.setQuickCrewRate('${sh.id}', '${mid}', ${dayRate})" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">${formatCompactMoneyPlain(dayRate)}</button>
-                                    <button type="button" onclick="ownerActions.setQuickCrewRate('${sh.id}', '${mid}', ${dayRate + 1000000})" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">+Fly/Dựng</button>
-                                  </div>
-                                </div>
-                                <input
-                                  type="tel"
-                                  inputmode="numeric"
-                                  value="${memCost ? Number(memCost).toLocaleString('vi-VN') : '0'}"
-                                  oninput="ownerActions.handleCrewCostInput('${sh.id}', '${mid}', this)"
-                                  class="w-28 px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-mono font-black text-right text-xs text-slate-900 focus:outline-none"
-                                />
+                              <div class="inline-flex flex-col items-start">
+                                <button type="button" onclick="ctpActions.toggleTask('${sh.id}', '${t.key}')" class="px-2.5 py-1.5 rounded-full text-[10px] font-extrabold border transition-all flex items-center gap-1 ${isChecked ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-slate-50 text-slate-600 border-slate-200'}">
+                                  <span>${t.label}</span>
+                                  <i class="fa-solid ${isChecked ? 'fa-check text-[9px]' : 'fa-plus text-[8px] opacity-60'}"></i>
+                                </button>
+                                ${isChecked ? `
+                                  <input type="tel" inputmode="numeric" pattern="[0-9.]*" value="${curVal ? Number(curVal).toLocaleString('vi-VN') : ''}" oninput="ownerActions.handleCrewTaskPriceLive('${sh.id}', '${t.key}', this)" class="mt-1 w-24 px-2 py-0.5 bg-indigo-50 border border-indigo-300 rounded-lg text-[10px] font-mono font-black text-right text-indigo-700 focus:outline-none" />
+                                ` : ''}
                               </div>
                             `;
                           }).join('')}
-
-                          <!-- Ô chi phí Dựng phim / Làm hình hậu kỳ riêng cho show -->
-                          <div class="p-2 rounded-2xl border border-slate-200 bg-slate-50/70 flex items-center justify-between gap-2">
-                            <div class="min-w-0 flex-1">
-                              <span class="font-extrabold text-[10.5px] text-slate-700 block">🎬 Chi Phí Dựng / Làm Hình</span>
-                              <div class="flex items-center gap-1 mt-1">
-                                <button type="button" onclick="state.ownerFinanceMap['${sh.id}'].postCost=0; saveOwnerFinanceState('${sh.id}'); renderApp();" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-500">0đ</button>
-                                <button type="button" onclick="state.ownerFinanceMap['${sh.id}'].postCost=1000000; saveOwnerFinanceState('${sh.id}'); renderApp();" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">1tr (Dựng)</button>
-                                <button type="button" onclick="state.ownerFinanceMap['${sh.id}'].postCost=1300000; saveOwnerFinanceState('${sh.id}'); renderApp();" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">1.3tr (Dựng+Hình)</button>
-                              </div>
-                            </div>
-                            <input
-                              type="tel"
-                              inputmode="numeric"
-                              value="${rec.postCost ? Number(rec.postCost).toLocaleString('vi-VN') : '0'}"
-                              oninput="ownerActions.handleMoneyInput('${sh.id}', 'postCost', this)"
-                              class="w-28 px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-mono font-black text-right text-xs text-slate-900 focus:outline-none"
-                            />
-                          </div>
                         </div>
                       </div>
 
-                      <!-- Phần 3: CHI PHÍ VẬN HÀNH / PHÁT SINH KHÁC (Xe cộ, ăn ở, thuê đồ...) -->
+                      <!-- Khoản phát sinh tính vào Bill Chủ Show -->
                       <div class="space-y-2 pt-1 border-t border-slate-100">
                         <div class="flex items-center justify-between">
-                          <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">🚐 Chi Phí Khác (Xe, Khách sạn, Ăn uống, Thuê đồ...):</span>
-                          <button type="button" onclick="ownerActions.addExpenseRow('${sh.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-[10px] font-black flex items-center gap-1">
-                            <i class="fa-solid fa-plus text-[9px]"></i> Thêm khoản chi
+                          <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Phát Sinh Tính Vào Bill Chủ Show:</span>
+                          <button type="button" onclick="ctpActions.addExtraItem('${sh.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-[10px] font-black flex items-center gap-1">
+                            <i class="fa-solid fa-plus text-[9px]"></i> Thêm phát sinh
                           </button>
                         </div>
-
-                        ${(rec.otherExpenses || []).length > 0 ? `
-                          <div class="space-y-1.5 bg-rose-50/40 p-2.5 rounded-2xl border border-rose-200/70">
-                            ${rec.otherExpenses.map((ex, exIdx) => `
+                        ${extras.length > 0 ? `
+                          <div class="space-y-1.5 bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200">
+                            ${extras.map((ex, exIdx) => `
                               <div class="flex items-center gap-1.5">
-                                <input
-                                  type="text"
-                                  value="${escapeHtml(ex.name || '')}"
-                                  oninput="ownerActions.handleExpenseName('${sh.id}', ${exIdx}, this)"
-                                  placeholder="Tên khoản chi (VD: Xe 16 chỗ, KS, Ăn...)"
-                                  class="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-rose-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none"
-                                />
-                                <input
-                                  type="tel"
-                                  inputmode="numeric"
-                                  value="${ex.amount ? Number(ex.amount).toLocaleString('vi-VN') : ''}"
-                                  oninput="ownerActions.handleExpenseAmount('${sh.id}', ${exIdx}, this)"
-                                  placeholder="Số tiền"
-                                  class="w-28 shrink-0 px-2.5 py-1.5 bg-white border border-rose-200 rounded-xl text-xs font-mono font-black text-right text-rose-700 focus:outline-none"
-                                />
-                                <button type="button" onclick="ownerActions.removeExpenseRow('${sh.id}', ${exIdx})" class="w-7 h-7 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0"><i class="fa-solid fa-xmark text-xs"></i></button>
+                                <input type="text" value="${escapeHtml(ex.name || '')}" oninput="ctpActions.saveExtraField('${sh.id}', ${exIdx}, 'name', this)" placeholder="Tên phí (vd: Xe, Ăn...)" class="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-amber-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none" />
+                                <input type="tel" inputmode="numeric" value="${ex.amount ? Number(ex.amount).toLocaleString('vi-VN') : ''}" oninput="ownerActions.handleCrewExtraAmountLive('${sh.id}', ${exIdx}, this)" placeholder="Số tiền" class="w-24 shrink-0 px-2.5 py-1.5 bg-white border border-amber-300 rounded-xl text-xs font-mono font-black text-right text-amber-900 focus:outline-none" />
+                                <button type="button" onclick="ctpActions.removeExtraItem('${sh.id}', ${exIdx})" class="w-7 h-7 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0"><i class="fa-solid fa-xmark text-xs"></i></button>
                               </div>
                             `).join('')}
                           </div>
                         ` : ''}
                       </div>
 
-                      <!-- Phần Chân Thẻ: TỔNG KẾT TÀI CHÍNH CỦA SHOW + NÚT THU GỌN -->
+                      <!-- Chi phí cá nhân tự túc (nếu có) -->
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-2xl border border-slate-200/80">
+                        <div>
+                          <label class="text-[9.5px] font-black text-slate-500 uppercase block mb-1">💸 Chi Phí Cá Nhân Tự Túc (Không報 Bill):</label>
+                          <input
+                            type="tel"
+                            inputmode="numeric"
+                            value="${cm.selfExpense ? Number(cm.selfExpense).toLocaleString('vi-VN') : ''}"
+                            oninput="ownerActions.handleCrewSelfExpenseInput('${sh.id}', this)"
+                            placeholder="VD: Xăng xe, ăn uống riêng..."
+                            class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-mono font-bold text-xs text-rose-600 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label class="text-[9.5px] font-black text-slate-500 uppercase block mb-1">📝 Ghi chú cá nhân:</label>
+                          <input
+                            type="text"
+                            value="${escapeHtml(cm.meta.selfExpenseNote || '')}"
+                            oninput="ownerActions.handleCrewSelfNoteInput('${sh.id}', this)"
+                            placeholder="Ghi chú thêm..."
+                            class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-semibold text-xs text-slate-700 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <!-- Chân thẻ (Show Đi Nhận CTP) -->
                       <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-slate-200 bg-slate-50/70 -mx-3.5 -mb-3.5 px-3.5 py-2.5">
                         <div>
-                          <span class="text-[9px] font-extrabold text-slate-400 uppercase block">Tổng Chi Dự Kiến:</span>
-                          <span id="owner-show-exp-${sh.id}" class="text-xs font-black text-rose-600 font-mono">${m.totalExpense.toLocaleString('vi-VN')}đ</span>
+                          <span class="text-[9px] font-extrabold text-slate-400 uppercase block">Tổng Bill CTP:</span>
+                          <span id="crew-show-gross-${sh.id}" class="text-xs font-black text-slate-800 font-mono">${cm.grossCtp.toLocaleString('vi-VN')}đ</span>
                         </div>
                         <button type="button" onclick="ownerActions.toggleExpandShow('${sh.id}')" class="px-3 py-1 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 font-extrabold text-[10px]">
                           Thu gọn ▲
                         </button>
                         <div class="text-right">
-                          <span class="text-[9px] font-extrabold text-slate-500 uppercase block">💎 CÒN LẠI (Lãi Ròng):</span>
-                          <span id="owner-show-profit-${sh.id}" class="text-xs sm:text-sm font-black font-mono ${m.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}">
-                            ${m.netProfit >= 0 ? '+' : ''}${m.netProfit.toLocaleString('vi-VN')}đ
+                          <span class="text-[9px] font-extrabold text-slate-500 uppercase block">💎 BỎ TÚI THỰC NHẬN:</span>
+                          <span id="crew-show-net-${sh.id}" class="text-xs sm:text-sm font-black font-mono ${cm.netPocket >= 0 ? 'text-emerald-700' : 'text-rose-600'}">
+                            ${cm.netPocket >= 0 ? '+' : ''}${cm.netPocket.toLocaleString('vi-VN')}đ
                           </span>
                         </div>
                       </div>
@@ -3078,6 +3462,14 @@ function renderHeaderHtml() {
                 </div>
               `;
             }).join('')}
+
+            <!-- Nút thêm nhanh Show ngoài lịch ở cuối danh sách -->
+            <div class="pt-1 pb-2 text-center">
+              <button type="button" onclick="ownerActions.openAddOutsideShowFromOwnerTab()" class="w-full py-3 rounded-3xl border-2 border-dashed border-slate-300 hover:border-slate-500 bg-white/70 text-slate-700 font-extrabold text-xs flex items-center justify-center gap-2 transition-all active:scale-98">
+                <i class="fa-solid fa-circle-plus text-emerald-600"></i>
+                <span>Tự note thêm Show ngoài lịch (Làm Chủ hoặc Nhận CTP)</span>
+              </button>
+            </div>
           </div>
         </div>
       `;
