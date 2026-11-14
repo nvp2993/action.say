@@ -382,6 +382,7 @@
       ownerFinanceMap: window.__BAKED_OWNER_FINANCE__ || {},
 
       detailShowId: null,
+      matrixCellModal: null,
       formModal: null,
       pinModal: null,
       selfChangePinModal: null,
@@ -394,11 +395,24 @@
       toast: null
     };
 
+    // Tự động gán Người tạo = Chủ show cho các dòng dữ liệu cũ (Excel import hoặc chưa có creatorId)
+    function normalizeShowsCreatorList(list = []) {
+      return (list || []).map(sh => {
+        const isExcelImportedRow = /^sh_xl_\d+$/.test(String(sh.id || '')) && (!sh.creatorId || sh.creatorId === 'khoa');
+        if (!sh.creatorId || isExcelImportedRow) {
+          return { ...sh, creatorId: sh.ownerId };
+        }
+        return sh;
+      });
+    }
+
+    state.shows = normalizeShowsCreatorList(state.shows);
+
     try {
       const savedLocalShows = localStorage.getItem('as_shows_backup_2026');
       if (savedLocalShows) {
         const parsed = JSON.parse(savedLocalShows);
-        if (Array.isArray(parsed) && parsed.length > 0) state.shows = parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) state.shows = normalizeShowsCreatorList(parsed);
       }
       const savedLocalPins = localStorage.getItem('as_pins_backup_2026');
       if (savedLocalPins) state.pinsMap = { ...state.pinsMap, ...JSON.parse(savedLocalPins) };
@@ -469,8 +483,23 @@
               );
             } catch (err) { console.error(err); }
           } else if (!snap.empty) {
-            state.shows = snap.docs.map(d => d.data());
+            const rawList = snap.docs.map(d => d.data());
+            const toFix = [];
+            state.shows = rawList.map(sh => {
+              const isOldExcelRow = /^sh_xl_\d+$/.test(String(sh.id || '')) && (!sh.creatorId || sh.creatorId === 'khoa') && sh.ownerId && sh.creatorId !== sh.ownerId;
+              if (!sh.creatorId || isOldExcelRow) {
+                const fixed = { ...sh, creatorId: sh.ownerId };
+                toFix.push(fixed);
+                return fixed;
+              }
+              return sh;
+            });
             saveShowsToLocalBackup();
+            if (toFix.length > 0) {
+              Promise.all(
+                toFix.map(sh => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh))
+              ).catch(() => {});
+            }
           }
           renderApp();
         },
@@ -515,8 +544,9 @@
         const sDoc = snap.docs.find(d => d.id === 'active_profile');
         if (sDoc) {
           const d = sDoc.data();
-          if (d.memberId) state.currentUserId = d.memberId;
-          if (typeof d.isAdmin === 'boolean') state.isAdminMode = d.isAdmin;
+          if (d.memberId && !localStorage.getItem('as_user_backup_2026')) {
+            state.currentUserId = d.memberId;
+          }
           renderApp();
         }
       });
@@ -530,11 +560,13 @@
       return [...state.members].sort((a, b) => (a.order || 99) - (b.order || 99));
     }
 
-    // CHỈ NGƯỜI TẠO (creatorId) hoặc Admin mới được quyền sửa/xóa. Chủ show chỉ để thông tin.
+    // Quyền chỉnh sửa Show: CHỈ DUY NHẤT NGƯỜI TẠO SHOW (creatorId) mới được quyền sửa / xoá.
+    // (Chủ show chỉ là thông tin người phụ trách, không có quyền sửa nếu không phải là người tạo).
     function canEditShow(show) {
       if (!show) return false;
-      if (state.isAdminMode) return true;
+      if (state.isAdminMode && state.isBackendPortal) return true;
       const currentId = String(state.currentUserId || '').trim();
+      if (!currentId) return false;
       const creatorId = String(show.creatorId || show.ownerId || '').trim();
       return creatorId !== '' && creatorId === currentId;
     }
@@ -777,11 +809,28 @@
         }
       },
       openShowDetail(showId) {
+        state.matrixCellModal = null;
         state.detailShowId = showId;
         renderApp();
       },
       closeShowDetail() {
         state.detailShowId = null;
+        renderApp();
+      },
+      openMatrixCell(day, memId) {
+        const dateStr = `${state.selectedYear}-${String(state.selectedMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const { matrix } = getMatrixData();
+        const cellShows = matrix[day]?.[memId] || [];
+        if (cellShows.length === 0) {
+          this.openAddModal(dateStr, memId);
+        } else {
+          // Mở cửa sổ danh sách các show trong ngày của nhân sự đó (hỗ trợ xem cả sáng 1 show, chiều 1 show + nút nổ thêm show thứ 2 trong ngày)
+          state.matrixCellModal = { day, dateStr, memId };
+          renderApp();
+        }
+      },
+      closeMatrixCellModal() {
+        state.matrixCellModal = null;
         renderApp();
       },
       openAddModal(prefillDate = null, prefillMemberId = null) {
@@ -825,6 +874,7 @@
           roles: JSON.parse(JSON.stringify(sh.roles || {})),
           postStatus: sh.postStatus || 'pending',
           ownerId: sh.ownerId,
+          creatorId: sh.creatorId || state.currentUserId,
           color: sh.color || '#c9bee8',
           note: sh.note || '',
           error: ''
@@ -934,6 +984,7 @@
             roles: f.roles || {},
             postStatus: f.postStatus || 'pending',
             ownerId: f.ownerId,
+            creatorId: f.creatorId || existing.creatorId || state.currentUserId,
             color: f.color,
             note: f.note.trim()
           };
@@ -1348,6 +1399,7 @@
             const finalStart = startStr || '2026-06-01';
             const finalEnd = endStr && endStr >= finalStart ? endStr : finalStart;
 
+            const resolvedOwner = resolveOwnerIdFromName(ownerLabel, memIds);
             imported.push({
               id: `sh_xl_${i + 1}`,
               stt: sttNum,
@@ -1359,8 +1411,8 @@
               memberIds: memIds,
               roles: {},
               postStatus: 'pending',
-              ownerId: resolveOwnerIdFromName(ownerLabel, memIds),
-              creatorId: state.currentUserId,
+              ownerId: resolvedOwner,
+              creatorId: resolvedOwner,
               ownerLabel,
               color: getAutoHighlightColor(location, partner),
               note: ''
@@ -1617,14 +1669,22 @@ function renderHeaderHtml() {
                         const cellShows = matrix[day]?.[mem.id] || [];
                         const hasShow = cellShows.length > 0;
                         const firstShow = cellShows[0];
-                        const cellLabel = cellShows.map(s => s.location).join(', ');
                         const bg = hasShow ? (firstShow.color || getAutoHighlightColor(firstShow.location, firstShow.partner)) : 'transparent';
                         const onClickAttr = hasShow
-                          ? `onclick="appActions.openShowDetail('${firstShow.id}')"`
+                          ? (cellShows.length === 1
+                              ? `onclick="appActions.openShowDetail('${firstShow.id}')"`
+                              : `onclick="appActions.openMatrixCell(${day}, '${mem.id}')"`)
                           : `onclick="appActions.openAddModal('${dateStr}', '${mem.id}')"`;
                         return `
-                          <td ${onClickAttr} style="background-color:${bg};" class="border-r border-slate-200 cursor-pointer px-1 py-1 text-[9px] leading-tight">
-                            ${hasShow ? `<div class="font-semibold text-slate-900 break-words line-clamp-2">${escapeHtml(cellLabel)}</div>` : ''}
+                          <td ${onClickAttr} style="background-color:${bg};" class="border-r border-slate-200 cursor-pointer px-1 py-1 text-[9px] leading-tight align-top">
+                            ${hasShow ? (
+                              cellShows.length === 1
+                                ? `<div class="font-semibold text-slate-900 break-words line-clamp-2">${escapeHtml(firstShow.location)}</div>`
+                                : `<div class="space-y-0.5">
+                                    <span class="inline-block px-1 py-0.2 rounded bg-slate-900 text-white font-extrabold text-[8px] mb-0.5">${cellShows.length} SHOW</span>
+                                    ${cellShows.map((s, idx) => `<div class="font-bold text-slate-900 truncate ${idx > 0 ? 'border-t border-black/15 pt-0.5' : ''}">${idx + 1}. ${escapeHtml(s.location)}</div>`).join('')}
+                                  </div>`
+                            ) : ''}
                           </td>
                         `;
                       }).join('')}
@@ -3605,12 +3665,67 @@ function renderHeaderHtml() {
       `;
     }
 
+    function renderMatrixCellModalHtml() {
+      const mc = state.matrixCellModal;
+      if (!mc) return '';
+      const { matrix } = getMatrixData();
+      const cellShows = matrix[mc.day]?.[mc.memId] || [];
+      const mem = getMember(mc.memId);
+
+      return `
+        <div onclick="appActions.closeMatrixCellModal()" class="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div onclick="event.stopPropagation()" class="ios-sheet bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-4 space-y-3 text-xs shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div>
+                <div class="flex items-center gap-1.5">
+                  ${renderPillHtml(mc.memId, 'sm')}
+                  <span class="font-mono font-black text-slate-700 text-xs">Ngày ${formatDayMonth(mc.dateStr)}</span>
+                </div>
+                <p class="text-[10.5px] text-slate-500 font-semibold mt-1">Có <b>${cellShows.length} show</b> trong ngày này — Bấm vào từng show để xem chi tiết:</p>
+              </div>
+              <button onclick="appActions.closeMatrixCellModal()" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="space-y-2 max-h-[60dvh] overflow-y-auto custom-scroll">
+              ${cellShows.map((sh, i) => {
+                const owner = getMember(sh.ownerId);
+                const roleStr = formatMemberRolesClean(sh.roles?.[mc.memId]);
+                const visPartner = getVisiblePartnerText(sh);
+                return `
+                  <div onclick="appActions.openShowDetail('${sh.id}')" class="p-3 rounded-2xl border border-slate-200 hover:border-slate-900 bg-slate-50/70 active:bg-slate-100 cursor-pointer flex items-center justify-between gap-2 transition-all">
+                    <div class="min-w-0 flex-1 space-y-1">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="px-2 py-0.5 rounded-full bg-slate-900 text-white font-mono font-black text-[9.5px]">Show #${i + 1}</span>
+                        <span class="font-mono text-[10px] font-bold text-slate-600">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) : ''}</span>
+                        ${roleStr ? `<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9.5px] font-extrabold">${escapeHtml(roleStr)}</span>` : ''}
+                      </div>
+                      <h4 class="font-black text-sm text-slate-900 break-words">📍 ${escapeHtml(sh.location)} ${visPartner ? `<span class="text-slate-500 font-semibold">(${escapeHtml(visPartner)})</span>` : ''}</h4>
+                      <div class="text-[10px] text-slate-500">Chủ show: <b class="text-slate-800">${escapeHtml(owner.name)}</b></div>
+                    </div>
+                    <div class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
+                      <i class="fa-solid fa-chevron-right text-xs"></i>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+
+            <button onclick="state.matrixCellModal=null; appActions.openAddModal('${mc.dateStr}', '${mc.memId}')" class="w-full py-2.5 bg-indigo-600 text-white rounded-full font-extrabold text-xs flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-plus"></i>
+              <span>Nổ thêm Show khác cho ${escapeHtml(mem.name)} ngày ${formatDayMonth(mc.dateStr)}</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
     function renderDetailModalHtml() {
       if (!state.detailShowId) return '';
       const sh = state.shows.find(s => s.id === state.detailShowId);
       if (!sh) return '';
       const editable = canEditShow(sh);
       const owner = getMember(sh.ownerId);
+      const creator = getMember(sh.creatorId || sh.ownerId);
       const curPostStatus = sh.postStatus || 'pending';
       return `
         <div onclick="appActions.closeShowDetail()" class="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center">
@@ -3661,13 +3776,16 @@ function renderHeaderHtml() {
               <span>📅 Lưu vào Lịch iPhone (Báo thức 20h hôm trước)</span>
             </button>
 
-            <div class="text-[11px] text-slate-500">Chủ show: <b>${escapeHtml(owner.name)}</b></div>
+            <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+              <span>Chủ show: <b class="text-slate-800">${escapeHtml(owner.name)}</b></span>
+              <span>Người tạo: <b class="text-slate-800">${escapeHtml(creator.name)}</b></span>
+            </div>
             ${editable ? `
               <div class="flex gap-2">
                 <button onclick="appActions.openEditModal('${sh.id}')" class="flex-1 bg-indigo-600 text-white font-extrabold py-2.5 rounded-xl text-xs">Chỉnh sửa</button>
                 <button onclick="appActions.deleteShow('${sh.id}')" class="px-3.5 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-xs"><i class="fa-solid fa-trash-can"></i></button>
               </div>
-            ` : `<div class="bg-slate-100 p-2 rounded-xl text-center text-xs font-bold text-slate-600">🔒 Chỉ người tạo show hoặc Admin mới được sửa</div>`}
+            ` : `<div class="bg-slate-100 p-2 rounded-xl text-center text-xs font-bold text-slate-600">🔒 Chỉ Người tạo show (${escapeHtml(creator.name)}) mới được chỉnh sửa</div>`}
           </div>
         </div>
       `;
@@ -3752,11 +3870,21 @@ function renderHeaderHtml() {
               </div>
             </div>
             
-            <div class="space-y-1">
-              <label class="text-[10px] text-slate-500 font-bold">Chọn Chủ Show (Người phụ trách thông tin):</label>
-              <select onchange="appActions.updateFormField('ownerId', this.value)" class="w-full px-3 py-2 border rounded-xl font-bold text-xs bg-white">
-                ${state.members.map(m => `<option value="${m.id}" ${f.ownerId === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
-              </select>
+            <div class="grid grid-cols-1 ${f.mode === 'edit' ? 'sm:grid-cols-2' : ''} gap-2">
+              <div class="space-y-1">
+                <label class="text-[10px] text-slate-500 font-bold">📌 Chọn Chủ Show (Phụ trách show):</label>
+                <select onchange="appActions.updateFormField('ownerId', this.value)" class="w-full px-3 py-2 border rounded-xl font-bold text-xs bg-white">
+                  ${state.members.map(m => `<option value="${m.id}" ${f.ownerId === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
+                </select>
+              </div>
+              ${f.mode === 'edit' ? `
+                <div class="space-y-1">
+                  <label class="text-[10px] text-slate-500 font-bold">✍️ Người Tạo Show (Quyền sửa lịch):</label>
+                  <select onchange="appActions.updateFormField('creatorId', this.value)" class="w-full px-3 py-2 border rounded-xl font-bold text-xs bg-white">
+                    ${state.members.map(m => `<option value="${m.id}" ${(f.creatorId || f.ownerId) === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
+                  </select>
+                </div>
+              ` : ''}
             </div>
 
             ${f.error ? `<div class="text-rose-600 font-bold">${escapeHtml(f.error)}</div>` : ''}
@@ -4009,7 +4137,7 @@ function renderHeaderHtml() {
       else if (state.activeTab === 'ctp') main = renderCtpTabHtml();
       else if (state.activeTab === 'owner_stats') main = renderOwnerStatsTabHtml();
 
-      root.innerHTML = `${renderHeaderHtml()}${main}${renderBottomNavHtml()}${renderDetailModalHtml()}${renderFormModalHtml()}${renderZaloTomorrowModalHtml()}${renderPinModalHtml()}${renderSelfChangePinModalHtml()}${renderGuideModalHtml()}${renderCtpAddShowModalHtml()}${renderCtpBillModalHtml()}${renderToastHtml()}`;
+      root.innerHTML = `${renderHeaderHtml()}${main}${renderBottomNavHtml()}${renderMatrixCellModalHtml()}${renderDetailModalHtml()}${renderFormModalHtml()}${renderZaloTomorrowModalHtml()}${renderPinModalHtml()}${renderSelfChangePinModalHtml()}${renderGuideModalHtml()}${renderCtpAddShowModalHtml()}${renderCtpBillModalHtml()}${renderToastHtml()}`;
 
       // Khôi phục chính xác vị trí cuộn ngay lập tức để màn hình đứng yên tại chỗ đang thao tác
       const newScrollEls = root.querySelectorAll('.custom-scroll, .no-scrollbar, .overflow-y-auto, .overflow-auto');
