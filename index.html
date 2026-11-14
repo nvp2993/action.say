@@ -1889,15 +1889,16 @@ function renderHeaderHtml() {
       generateBill() {
         const curMem = getMember(state.currentUserId);
         const filteredShows = getCombinedCtpShows();
+        const isSingleOwner = state.ctpOwnerId !== 'all';
 
         let grandTotal = 0;
         let billLines = [];
         let rows = [];
-        const ownerTitle = state.ctpOwnerId !== 'all' ? getMember(state.ctpOwnerId).name : 'Tất cả Chủ Show';
+        const ownerTitle = isSingleOwner ? getMember(state.ctpOwnerId).name : 'Tất cả Chủ Show';
         
         billLines.push(`💰 **BILL CÔNG TÁC PHÍ THÁNG ${state.ctpMonth}/2026**`);
         billLines.push(`👤 Người nhận: ${curMem.name}`);
-        if (state.ctpOwnerId !== 'all') {
+        if (isSingleOwner) {
           billLines.push(`📌 Chủ show: ${ownerTitle}`);
         }
         billLines.push(`-----------------------------------`);
@@ -1943,7 +1944,7 @@ function renderHeaderHtml() {
           const dateLabel = `${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' - ' + formatDayMonth(sh.endDate) : ''}`;
           const ownerObj = getMember(sh.ownerId);
           const locName = (sh.location || 'Show ngoài lịch').trim();
-          const fullLoc = locName + (sh.partner ? ` (${sh.partner})` : '') + (sh.isCustomCtp ? ' [Ngoài lịch]' : '');
+          const fullLoc = locName + (sh.partner ? ` (${sh.partner})` : '') + (sh.isCustomCtp ? ' [Ngoài]' : '');
 
           if (showSum > 0 || filteredShows.length > 0) {
             stt++;
@@ -1978,14 +1979,25 @@ function renderHeaderHtml() {
         billLines.push(`-----------------------------------`);
         billLines.push(`🔥 **TỔNG CỘNG CTP LỤM: ${grandTotal.toLocaleString('vi-VN')} VNĐ**`);
 
-        // Tạo chuỗi TSV chuẩn để dán thẳng vào Excel / Google Sheets
-        const tsvHeader = ['STT', 'Ngày', 'Địa điểm / Show', 'Chủ show', 'Quay', 'Dựng', 'Chụp', 'Làm hình', 'Flycam', 'Gimbal', 'Phát sinh', 'Ghi chú PS', 'Thành tiền'].join('\t');
-        const tsvRows = rows.map(r => [
-          r.stt, r.dateLabel, r.location, r.ownerName,
-          r.quay || 0, r.dung || 0, r.chup || 0, r.lamhinh || 0, r.flycam || 0, r.gimbal || 0,
-          r.extraSum || 0, r.extraNote || '', r.showSum || 0
-        ].join('\t'));
-        tsvRows.push(['', '', 'TỔNG CỘNG', '', '', '', '', '', '', '', '', '', grandTotal].join('\t'));
+        // Tạo chuỗi TSV chuẩn để dán thẳng vào Excel / Google Sheets (tự ẩn cột Chủ show nếu đã lọc 1 chủ)
+        const tsvCols = ['STT', 'Ngày', 'Địa điểm / Show'];
+        if (!isSingleOwner) tsvCols.push('Chủ show');
+        tsvCols.push('Quay', 'Dựng', 'Chụp', 'Làm hình', 'Flycam', 'Gimbal', 'Phát sinh', 'Ghi chú PS', 'Thành tiền');
+        const tsvHeader = tsvCols.join('\t');
+
+        const tsvRows = rows.map(r => {
+          const arr = [r.stt, r.dateLabel, r.location];
+          if (!isSingleOwner) arr.push(r.ownerName);
+          arr.push(
+            r.quay || 0, r.dung || 0, r.chup || 0, r.lamhinh || 0, r.flycam || 0, r.gimbal || 0,
+            r.extraSum || 0, r.extraNote || '', r.showSum || 0
+          );
+          return arr.join('\t');
+        });
+        const footerArr = ['', '', 'TỔNG CỘNG LỤM'];
+        if (!isSingleOwner) footerArr.push('');
+        footerArr.push('', '', '', '', '', '', '', '', grandTotal);
+        tsvRows.push(footerArr.join('\t'));
         const tsvText = [tsvHeader, ...tsvRows].join('\n');
 
         state.ctpBillModal = {
@@ -1993,6 +2005,7 @@ function renderHeaderHtml() {
           tsvText,
           total: grandTotal,
           rows,
+          isSingleOwner,
           memberName: curMem.name,
           ownerTitle,
           month: state.ctpMonth
@@ -2028,38 +2041,33 @@ function renderHeaderHtml() {
       exportBillExcelFile() {
         const bm = state.ctpBillModal;
         if (!bm || typeof XLSX === 'undefined') return;
+        const isSingle = bm.isSingleOwner;
+        const headerRow = ['STT', 'Ngày', 'Số ngày', 'Địa điểm / Show'];
+        if (!isSingle) headerRow.push('Chủ show');
+        headerRow.push('Quay', 'Dựng', 'Chụp', 'Làm hình', 'Flycam', 'Gimbal', 'Phát sinh', 'Chi tiết phát sinh', 'Thành tiền (VNĐ)');
+
         const wsData = [
           [`BẢNG KÊ CÔNG TÁC PHÍ THÁNG ${bm.month}/2026`],
           [`Nhân sự: ${bm.memberName}`, '', `Chủ show: ${bm.ownerTitle}`],
           [],
-          ['STT', 'Ngày', 'Số ngày', 'Địa điểm / Show', 'Chủ show', 'Quay', 'Dựng', 'Chụp', 'Làm hình', 'Flycam', 'Gimbal', 'Phát sinh', 'Chi tiết phát sinh', 'Tổng cộng (VNĐ)']
+          headerRow
         ];
         bm.rows.forEach(r => {
-          wsData.push([
-            r.stt, r.dateLabel, r.days, r.location, r.ownerName,
+          const rowArr = [r.stt, r.dateLabel, r.days, r.location];
+          if (!isSingle) rowArr.push(r.ownerName);
+          rowArr.push(
             r.quay || '', r.dung || '', r.chup || '', r.lamhinh || '', r.flycam || '', r.gimbal || '',
             r.extraSum || '', r.extraNote || '', r.showSum
-          ]);
+          );
+          wsData.push(rowArr);
         });
-        wsData.push([
-          '', '', '', 'TỔNG CỘNG LỤM', '',
-          bm.rows.reduce((s, r) => s + r.quay, 0) || '',
-          bm.rows.reduce((s, r) => s + r.dung, 0) || '',
-          bm.rows.reduce((s, r) => s + r.chup, 0) || '',
-          bm.rows.reduce((s, r) => s + r.lamhinh, 0) || '',
-          bm.rows.reduce((s, r) => s + r.flycam, 0) || '',
-          bm.rows.reduce((s, r) => s + r.gimbal, 0) || '',
-          bm.rows.reduce((s, r) => s + r.extraSum, 0) || '',
-          '',
-          bm.total
-        ]);
+        const totalRow = ['', '', '', 'TỔNG CỘNG CTP LỤM'];
+        if (!isSingle) totalRow.push('');
+        totalRow.push('', '', '', '', '', '', '', '', bm.total);
+        wsData.push(totalRow);
+
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet(wsData);
-        ws['!cols'] = [
-          { wch: 5 }, { wch: 13 }, { wch: 8 }, { wch: 26 }, { wch: 12 },
-          { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
-          { wch: 12 }, { wch: 20 }, { wch: 15 }
-        ];
         XLSX.utils.book_append_sheet(wb, ws, `CTP_T${bm.month}`);
         XLSX.writeFile(wb, `Bill_CTP_${bm.memberName}_Thang_${bm.month}_2026.xlsx`);
         showToast('📥 Đã tải xuống file Excel (.xlsx) thành công!');
@@ -2296,82 +2304,101 @@ function renderHeaderHtml() {
       `;
     }
     
+    // Hàm rút gọn số tiền chuẩn đẹp cho bảng điện thoại (VD: 200.000 -> 200k, 1.500.000 -> 1.5tr, 10.000.000 -> 10tr)
+    function formatCompactMoney(val) {
+      const n = Number(val) || 0;
+      if (n <= 0) return '<span class="text-slate-300">-</span>';
+      if (n >= 1000000) {
+        const tr = n / 1000000;
+        const trStr = Number.isInteger(tr)
+          ? String(tr)
+          : tr.toFixed(2).replace(/\.?0+$/, '');
+        return `${trStr}tr`;
+      }
+      if (n >= 1000) {
+        const k = Math.round(n / 1000);
+        return `${k}k`;
+      }
+      return `${n.toLocaleString('vi-VN')}đ`;
+    }
+
     function renderCtpBillModalHtml() {
       const bm = state.ctpBillModal;
       if (!bm) return '';
       const rows = bm.rows || [];
-      const sumCol = (k) => rows.reduce((s, r) => s + (Number(r[k]) || 0), 0);
-      const fmtCell = (v) => v > 0 ? v.toLocaleString('vi-VN') : '<span class="text-slate-300">-</span>';
+      const showOwnerCol = !bm.isSingleOwner;
+      // Tổng số cột trước cột THÀNH TIỀN:
+      // STT(1) + NGÀY(1) + SHOW(1) + [CHỦ(1)] + QUAY(1) + DỰNG(1) + CHỤP(1) + HÌNH(1) + FLY(1) + GIM(1) + PS(1) = 10 hoặc 11 cột
+      const labelColSpan = showOwnerCol ? 11 : 10;
 
       return `
-        <div onclick="ctpActions.closeBillModal()" class="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
-          <div onclick="event.stopPropagation()" class="bg-white w-full max-w-4xl rounded-3xl p-4 sm:p-5 space-y-3.5 text-xs shadow-2xl flex flex-col max-h-[90dvh]">
-            <!-- Header Modal -->
-            <div class="flex justify-between items-center border-b border-slate-200 pb-2.5 shrink-0">
+        <div onclick="ctpActions.closeBillModal()" class="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-3">
+          <div onclick="event.stopPropagation()" class="ios-sheet bg-white w-full max-w-4xl rounded-t-3xl sm:rounded-3xl p-3 sm:p-5 space-y-3 text-xs shadow-2xl flex flex-col max-h-[92dvh]">
+            <!-- Header Modal gọn gàng -->
+            <div class="flex justify-between items-center border-b border-slate-200 pb-2 shrink-0 px-1">
               <div>
-                <h3 class="font-black text-sm sm:text-base text-slate-900 flex items-center gap-2">
-                  <span class="w-6 h-6 rounded-lg bg-emerald-600 text-white inline-flex items-center justify-center text-xs"><i class="fa-solid fa-table"></i></span>
+                <h3 class="font-black text-xs sm:text-base text-slate-900 flex items-center gap-1.5">
+                  <span class="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-emerald-600 text-white inline-flex items-center justify-center text-[10px] sm:text-xs"><i class="fa-solid fa-table"></i></span>
                   <span>BẢNG KÊ BILL CTP THÁNG ${bm.month}/2026</span>
                 </h3>
-                <p class="text-[11px] text-slate-500 font-semibold mt-0.5">
-                  👤 Nhân sự: <b class="text-slate-900">${escapeHtml(bm.memberName)}</b> • 📌 Chủ show: <b class="text-slate-900">${escapeHtml(bm.ownerTitle)}</b>
+                <p class="text-[10.5px] sm:text-[11px] text-slate-500 font-semibold mt-0.5">
+                  👤 Nhân sự: <b class="text-slate-900">${escapeHtml(bm.memberName)}</b> • 📌 Chủ show: <b class="text-emerald-700">${escapeHtml(bm.ownerTitle)}</b>
                 </p>
               </div>
-              <button onclick="ctpActions.closeBillModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+              <button onclick="ctpActions.closeBillModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 shrink-0"><i class="fa-solid fa-xmark"></i></button>
             </div>
 
-            <!-- Bảng lưới chuẩn Excel -->
-            <div class="flex-1 min-h-0 overflow-auto custom-scroll border border-slate-300 rounded-xl bg-white">
-              <table class="w-full border-collapse text-[11px] min-w-[680px]">
-                <thead class="sticky top-0 z-10">
-                  <tr class="bg-[#107c41] text-white font-extrabold text-[10px] uppercase tracking-wider">
-                    <th class="py-2 px-1.5 border border-emerald-700 w-9 text-center">STT</th>
-                    <th class="py-2 px-2 border border-emerald-700 text-center w-20">NGÀY</th>
-                    <th class="py-2 px-2.5 border border-emerald-700 text-left">ĐỊA ĐIỂM / SHOW</th>
-                    <th class="py-2 px-2 border border-emerald-700 text-center w-20">CHỦ SHOW</th>
-                    <th class="py-2 px-2 border border-emerald-700 text-right w-20">QUAY</th>
-                    <th class="py-2 px-2 border border-emerald-700 text-right w-20">DỰNG</th>
-                    <th class="py-2 px-2 border border-emerald-700 text-right w-20">CHỤP</th>
-                    <th class="py-2 px-2 border border-emerald-700 text-right w-20">HÌNH/FLY/GIM</th>
-                    <th class="py-2 px-2 border border-emerald-700 text-right w-24">PHÁT SINH</th>
-                    <th class="py-2 px-2.5 border border-emerald-700 text-right w-28 bg-emerald-900">THÀNH TIỀN</th>
+            <!-- Bảng lưới chuẩn Excel - Tối ưu siêu gọn cho màn hình điện thoại (200k, 1.5tr, 10tr) + Ghim cột Tên Show -->
+            <div class="flex-1 min-h-0 overflow-auto custom-scroll border border-slate-300 rounded-2xl bg-white">
+              <table class="w-full border-collapse text-[10px] sm:text-[11px]">
+                <thead class="sticky top-0 z-20">
+                  <tr class="bg-[#107c41] text-white font-extrabold text-[9px] sm:text-[10px] uppercase tracking-tight">
+                    <th class="py-2 px-1 border border-emerald-700 w-6 text-center">#</th>
+                    <th class="py-2 px-1 border border-emerald-700 text-center w-11">NGÀY</th>
+                    <th class="sticky left-0 z-20 bg-[#107c41] py-2 px-2 border border-emerald-700 text-left min-w-[92px] max-w-[130px] sticky-col-shadow">SHOW</th>
+                    ${showOwnerCol ? `<th class="py-2 px-1 border border-emerald-700 text-center w-12">CHỦ</th>` : ''}
+                    <th class="py-2 px-1 border border-emerald-700 text-right w-11">QUAY</th>
+                    <th class="py-2 px-1 border border-emerald-700 text-right w-11">DỰNG</th>
+                    <th class="py-2 px-1 border border-emerald-700 text-right w-11">CHỤP</th>
+                    <th class="py-2 px-1 border border-emerald-700 text-right w-11">HÌNH</th>
+                    <th class="py-2 px-1 border border-emerald-700 text-right w-11">FLY</th>
+                    <th class="py-2 px-1 border border-emerald-700 text-right w-11">GIM</th>
+                    <th class="py-2 px-1 border border-emerald-700 text-right w-12">P.SINH</th>
+                    <th class="py-2 px-1.5 border border-emerald-700 text-right w-16 bg-emerald-900">TỔNG</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 font-mono">
                   ${rows.length === 0 ? `
                     <tr>
-                      <td colspan="10" class="py-8 text-center text-slate-400 font-sans">Chưa có show nào được tích chọn nhiệm vụ tính CTP.</td>
+                      <td colspan="${labelColSpan + 1}" class="py-8 text-center text-slate-400 font-sans">Chưa có show nào được tích chọn nhiệm vụ tính CTP.</td>
                     </tr>
                   ` : rows.map((r, i) => {
-                    const otherTaskSum = (r.lamhinh || 0) + (r.flycam || 0) + (r.gimbal || 0);
+                    const rowBg = i % 2 === 0 ? 'bg-white' : 'bg-slate-50';
                     return `
-                      <tr class="${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-emerald-50/40">
-                        <td class="py-1.5 px-1.5 border border-slate-200 text-center font-bold text-slate-500">${r.stt}</td>
-                        <td class="py-1.5 px-2 border border-slate-200 text-center font-bold text-slate-700">${escapeHtml(r.dateLabel)}</td>
-                        <td class="py-1.5 px-2.5 border border-slate-200 font-sans font-extrabold text-slate-900">${escapeHtml(r.location)}</td>
-                        <td class="py-1.5 px-2 border border-slate-200 font-sans text-center font-semibold text-slate-600">${escapeHtml(r.ownerName)}</td>
-                        <td class="py-1.5 px-2 border border-slate-200 text-right font-semibold text-slate-800">${fmtCell(r.quay)}</td>
-                        <td class="py-1.5 px-2 border border-slate-200 text-right font-semibold text-slate-800">${fmtCell(r.dung)}</td>
-                        <td class="py-1.5 px-2 border border-slate-200 text-right font-semibold text-slate-800">${fmtCell(r.chup)}</td>
-                        <td class="py-1.5 px-2 border border-slate-200 text-right font-semibold text-slate-800">${fmtCell(otherTaskSum)}</td>
-                        <td class="py-1.5 px-2 border border-slate-200 text-right font-semibold text-amber-800" title="${escapeHtml(r.extraNote)}">
-                          ${fmtCell(r.extraSum)}
-                          ${r.extraNote ? `<div class="text-[9px] font-sans text-slate-400 truncate max-w-[90px]">${escapeHtml(r.extraNote)}</div>` : ''}
+                      <tr class="${rowBg} hover:bg-emerald-50/40">
+                        <td class="py-1.5 px-1 border border-slate-200 text-center font-bold text-slate-400">${r.stt}</td>
+                        <td class="py-1.5 px-1 border border-slate-200 text-center font-bold text-slate-600 whitespace-nowrap">${escapeHtml(r.dateLabel)}</td>
+                        <td class="sticky left-0 z-10 ${rowBg} py-1.5 px-2 border border-slate-200 font-sans font-extrabold text-slate-900 truncate max-w-[125px] sticky-col-shadow" title="${escapeHtml(r.location)}">${escapeHtml(r.location)}</td>
+                        ${showOwnerCol ? `<td class="py-1.5 px-1 border border-slate-200 font-sans text-center font-semibold text-slate-600 whitespace-nowrap">${escapeHtml(r.ownerName)}</td>` : ''}
+                        <td class="py-1.5 px-1 border border-slate-200 text-right font-semibold text-slate-800 whitespace-nowrap">${formatCompactMoney(r.quay)}</td>
+                        <td class="py-1.5 px-1 border border-slate-200 text-right font-semibold text-slate-800 whitespace-nowrap">${formatCompactMoney(r.dung)}</td>
+                        <td class="py-1.5 px-1 border border-slate-200 text-right font-semibold text-slate-800 whitespace-nowrap">${formatCompactMoney(r.chup)}</td>
+                        <td class="py-1.5 px-1 border border-slate-200 text-right font-semibold text-slate-800 whitespace-nowrap">${formatCompactMoney(r.lamhinh)}</td>
+                        <td class="py-1.5 px-1 border border-slate-200 text-right font-semibold text-slate-800 whitespace-nowrap">${formatCompactMoney(r.flycam)}</td>
+                        <td class="py-1.5 px-1 border border-slate-200 text-right font-semibold text-slate-800 whitespace-nowrap">${formatCompactMoney(r.gimbal)}</td>
+                        <td class="py-1.5 px-1 border border-slate-200 text-right font-semibold text-amber-800 whitespace-nowrap" title="${escapeHtml(r.extraNote)}">
+                          ${formatCompactMoney(r.extraSum)}
+                          ${r.extraNote ? `<div class="text-[8px] font-sans text-slate-400 truncate max-w-[56px]">${escapeHtml(r.extraNote)}</div>` : ''}
                         </td>
-                        <td class="py-1.5 px-2.5 border border-slate-200 text-right font-black text-emerald-700 bg-emerald-50/40">${r.showSum.toLocaleString('vi-VN')}đ</td>
+                        <td class="py-1.5 px-1.5 border border-slate-200 text-right font-black text-emerald-700 bg-emerald-50/50 whitespace-nowrap" title="${r.showSum.toLocaleString('vi-VN')}đ">${formatCompactMoney(r.showSum)}</td>
                       </tr>
                     `;
                   }).join('')}
                 </tbody>
-                <tfoot class="sticky bottom-0 z-10">
+                <tfoot class="sticky bottom-0 z-20">
                   <tr class="bg-slate-900 text-white font-mono font-black text-[11px]">
-                    <td colspan="4" class="py-2.5 px-3 border border-slate-700 font-sans text-right uppercase tracking-wider text-amber-300">🔥 Tổng Cộng CTP Lụm:</td>
-                    <td class="py-2.5 px-2 border border-slate-700 text-right">${sumCol('quay') > 0 ? sumCol('quay').toLocaleString('vi-VN') : '-'}</td>
-                    <td class="py-2.5 px-2 border border-slate-700 text-right">${sumCol('dung') > 0 ? sumCol('dung').toLocaleString('vi-VN') : '-'}</td>
-                    <td class="py-2.5 px-2 border border-slate-700 text-right">${sumCol('chup') > 0 ? sumCol('chup').toLocaleString('vi-VN') : '-'}</td>
-                    <td class="py-2.5 px-2 border border-slate-700 text-right">${(sumCol('lamhinh') + sumCol('flycam') + sumCol('gimbal')) > 0 ? (sumCol('lamhinh') + sumCol('flycam') + sumCol('gimbal')).toLocaleString('vi-VN') : '-'}</td>
-                    <td class="py-2.5 px-2 border border-slate-700 text-right">${sumCol('extraSum') > 0 ? sumCol('extraSum').toLocaleString('vi-VN') : '-'}</td>
-                    <td class="py-2.5 px-2.5 border border-slate-700 text-right text-emerald-400 text-xs">${bm.total.toLocaleString('vi-VN')}đ</td>
+                    <td colspan="${labelColSpan}" class="py-2.5 px-3 border border-slate-800 font-sans text-right uppercase tracking-wider text-amber-300">🔥 Tổng Cộng CTP Lụm:</td>
+                    <td class="py-2.5 px-2 border border-slate-800 text-right text-emerald-400 text-xs whitespace-nowrap">${bm.total.toLocaleString('vi-VN')}đ</td>
                   </tr>
                 </tfoot>
               </table>
@@ -2380,19 +2407,19 @@ function renderHeaderHtml() {
             <!-- Textarea ẩn phục vụ lệnh Copy -->
             <textarea id="ctp-bill-textarea" class="sr-only" readonly>${escapeHtml(bm.text)}</textarea>
 
-            <!-- Cụm nút hành động tiện lợi -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 shrink-0">
-              <button onclick="ctpActions.copyBillText()" class="bg-emerald-600 text-white font-black py-2.5 px-3 rounded-full uppercase tracking-wide flex items-center justify-center gap-1.5 text-[11px]">
+            <!-- Cụm nút hành động gọn đẹp cho điện thoại -->
+            <div class="grid grid-cols-3 gap-1.5 sm:gap-2 pt-0.5 shrink-0">
+              <button onclick="ctpActions.copyBillText()" class="bg-emerald-600 text-white font-black py-2.5 px-2 rounded-full uppercase tracking-tight flex items-center justify-center gap-1 text-[10px] sm:text-[11px]">
                 <i class="fa-regular fa-copy"></i>
-                <span>📋 Copy Tin Nhắn Zalo</span>
+                <span>Copy Zalo</span>
               </button>
-              <button onclick="ctpActions.copyExcelTable()" class="bg-indigo-600 text-white font-black py-2.5 px-3 rounded-full uppercase tracking-wide flex items-center justify-center gap-1.5 text-[11px]">
+              <button onclick="ctpActions.copyExcelTable()" class="bg-indigo-600 text-white font-black py-2.5 px-2 rounded-full uppercase tracking-tight flex items-center justify-center gap-1 text-[10px] sm:text-[11px]">
                 <i class="fa-solid fa-table-cells"></i>
-                <span>📊 Copy Bảng Dán Excel/Sheets</span>
+                <span>Copy Bảng</span>
               </button>
-              <button onclick="ctpActions.exportBillExcelFile()" class="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-black py-2.5 px-3 rounded-full uppercase tracking-wide flex items-center justify-center gap-1.5 text-[11px]">
+              <button onclick="ctpActions.exportBillExcelFile()" class="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-black py-2.5 px-2 rounded-full uppercase tracking-tight flex items-center justify-center gap-1 text-[10px] sm:text-[11px]">
                 <i class="fa-solid fa-file-excel text-emerald-600"></i>
-                <span>📥 Tải File Excel (.xlsx)</span>
+                <span>Tải .XLSX</span>
               </button>
             </div>
           </div>
