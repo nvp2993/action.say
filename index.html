@@ -30,7 +30,7 @@
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .sticky-col-shadow { box-shadow: 2px 0 5px -2px rgba(0,0,0,0.1); }
-    .ios-sheet { animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .ios-sheet { transform: none; }
     @keyframes slideUp {
       from { transform: translateY(100%); }
       to { transform: translateY(0); }
@@ -2519,7 +2519,7 @@ function renderHeaderHtml() {
 
       return `
         <div onclick="appActions.closeFormModal()" class="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center">
-          <div onclick="event.stopPropagation()" class="ios-sheet bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-4 space-y-3 max-h-[90dvh] overflow-y-auto text-xs">
+          <div id="show-form-modal-scroll" onclick="event.stopPropagation()" class="ios-sheet custom-scroll bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-4 space-y-3 max-h-[90dvh] overflow-y-auto text-xs">
             <div class="flex justify-between items-center border-b pb-2">
               <h3 class="font-black text-sm uppercase text-indigo-700">${f.mode === 'edit' ? `Sửa Show #${f.stt}` : '⚡ NỔ SHOW MỚI'}</h3>
               <button onclick="appActions.closeFormModal()" class="w-7 h-7 rounded-full bg-slate-100"><i class="fa-solid fa-xmark"></i></button>
@@ -2820,7 +2820,7 @@ function renderHeaderHtml() {
 
       // Lưu lại vị trí cuộn hiện tại của danh sách (đặc biệt là danh sách CTP và các bảng) trước khi vẽ lại DOM
       const savedScrolls = [];
-      root.querySelectorAll('.custom-scroll, .no-scrollbar').forEach((el, idx) => {
+      root.querySelectorAll('.custom-scroll, .no-scrollbar, .overflow-y-auto, .overflow-auto').forEach((el, idx) => {
         savedScrolls.push({
           id: el.id || null,
           idx,
@@ -2842,7 +2842,7 @@ function renderHeaderHtml() {
       root.innerHTML = `${renderHeaderHtml()}${main}${renderBottomNavHtml()}${renderDetailModalHtml()}${renderFormModalHtml()}${renderZaloTomorrowModalHtml()}${renderPinModalHtml()}${renderSelfChangePinModalHtml()}${renderGuideModalHtml()}${renderCtpAddShowModalHtml()}${renderCtpBillModalHtml()}${renderToastHtml()}`;
 
       // Khôi phục chính xác vị trí cuộn ngay lập tức để màn hình đứng yên tại chỗ đang thao tác
-      const newScrollEls = root.querySelectorAll('.custom-scroll, .no-scrollbar');
+      const newScrollEls = root.querySelectorAll('.custom-scroll, .no-scrollbar, .overflow-y-auto, .overflow-auto');
       savedScrolls.forEach(s => {
         let target = s.id ? document.getElementById(s.id) : null;
         if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
