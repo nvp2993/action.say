@@ -345,6 +345,8 @@
       cloudSynced: false,
       members: window.__BAKED_MEMBERS_DATA__ || [...INITIAL_TEAM_MEMBERS],
       shows: [...INITIAL_SHOWS_DATA],
+      localShowEditsMap: {},
+      localDeletedShowIds: [],
       pinsMap: window.__BAKED_PINS_DATA__ || { ...DEFAULT_PINS_MAP },
       customLogoUrl: window.__BAKED_CUSTOM_LOGO__ || null,
       adminAuth: { ...DEFAULT_ADMIN_AUTH },
@@ -405,9 +407,11 @@
       });
     }
 
-    state.shows = normalizeShowsCreatorList(state.shows);
-
     try {
+      const savedEdits = localStorage.getItem('as_local_show_edits_2026');
+      if (savedEdits) state.localShowEditsMap = JSON.parse(savedEdits) || {};
+      const savedDeleted = localStorage.getItem('as_local_deleted_shows_2026');
+      if (savedDeleted) state.localDeletedShowIds = JSON.parse(savedDeleted) || [];
       const savedLocalShows = localStorage.getItem('as_shows_backup_2026');
       if (savedLocalShows) {
         const parsed = JSON.parse(savedLocalShows);
@@ -424,6 +428,56 @@
       const savedOwnerFin = localStorage.getItem('as_owner_finance_2026');
       if (savedOwnerFin) state.ownerFinanceMap = { ...state.ownerFinanceMap, ...(JSON.parse(savedOwnerFin) || {}) };
     } catch (e) {}
+
+    function mergeShowsWithLocalEdits(remoteShows = []) {
+      const deletedSet = new Set(state.localDeletedShowIds || []);
+      const editsMap = state.localShowEditsMap || {};
+      const mergedMap = new Map();
+
+      normalizeShowsCreatorList(remoteShows).forEach(sh => {
+        if (!sh || !sh.id || deletedSet.has(sh.id)) return;
+        const localEdit = editsMap[sh.id];
+        if (localEdit && (Number(localEdit.updatedAt) || 0) >= (Number(sh.updatedAt) || 0)) {
+          mergedMap.set(sh.id, localEdit);
+        } else {
+          mergedMap.set(sh.id, sh);
+        }
+      });
+
+      Object.keys(editsMap).forEach(id => {
+        if (!deletedSet.has(id) && !mergedMap.has(id)) {
+          mergedMap.set(id, editsMap[id]);
+        }
+      });
+
+      return Array.from(mergedMap.values());
+    }
+
+    state.shows = mergeShowsWithLocalEdits(state.shows);
+
+    function recordLocalShowUpsert(showObj) {
+      if (!showObj || !showObj.id) return;
+      showObj.updatedAt = Date.now();
+      state.localShowEditsMap[showObj.id] = showObj;
+      state.localDeletedShowIds = (state.localDeletedShowIds || []).filter(id => id !== showObj.id);
+      try {
+        localStorage.setItem('as_local_show_edits_2026', JSON.stringify(state.localShowEditsMap));
+        localStorage.setItem('as_local_deleted_shows_2026', JSON.stringify(state.localDeletedShowIds));
+      } catch (e) {}
+      saveShowsToLocalBackup();
+    }
+
+    function recordLocalShowDelete(showId) {
+      if (!showId) return;
+      delete state.localShowEditsMap[showId];
+      if (!Array.isArray(state.localDeletedShowIds)) state.localDeletedShowIds = [];
+      if (!state.localDeletedShowIds.includes(showId)) state.localDeletedShowIds.push(showId);
+      try {
+        localStorage.setItem('as_local_show_edits_2026', JSON.stringify(state.localShowEditsMap));
+        localStorage.setItem('as_local_deleted_shows_2026', JSON.stringify(state.localDeletedShowIds));
+      } catch (e) {}
+      saveShowsToLocalBackup();
+    }
 
     function saveShowsToLocalBackup() {
       try {
@@ -451,16 +505,29 @@
           auth = getAuth(app);
           db = getFirestore(app);
 
-          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            await signInWithCustomToken(auth, __initial_auth_token);
-          } else {
-            await signInAnonymously(auth);
-          }
+          let listenersAttached = false;
+          const ensureListeners = (u) => {
+            state.user = u || { uid: 'anon_local_device' };
+            if (!listenersAttached && db) {
+              listenersAttached = true;
+              attachFirestoreListeners(state.user);
+            }
+          };
 
           onAuthStateChanged(auth, (u) => {
-            state.user = u;
-            if (u && db) attachFirestoreListeners(u);
+            if (u) ensureListeners(u);
           });
+
+          try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+              await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+              await signInAnonymously(auth);
+            }
+          } catch (authErr) {
+            console.warn('Firebase Auth fallback:', authErr);
+            ensureListeners(null);
+          }
         }
       } catch (e) {
         console.warn('Chế độ chạy độc lập:', e);
@@ -483,19 +550,21 @@
             } catch (err) { console.error(err); }
           } else if (!snap.empty) {
             const rawList = snap.docs.map(d => d.data());
-            const toFix = [];
-            state.shows = rawList.map(sh => {
-              if (!sh.creatorId && sh.ownerId) {
-                const fixed = { ...sh, creatorId: sh.ownerId };
-                toFix.push(fixed);
-                return fixed;
-              }
-              return sh;
-            });
+            const remoteMap = new Map(rawList.map(d => [d.id, d]));
+            state.shows = mergeShowsWithLocalEdits(rawList);
             saveShowsToLocalBackup();
-            if (toFix.length > 0) {
+
+            // Đồng bộ đẩy các thay đổi mới hơn ở máy lên Cloud
+            const toPush = [];
+            state.shows.forEach(sh => {
+              const rem = remoteMap.get(sh.id);
+              if (!rem || (Number(sh.updatedAt) || 0) > (Number(rem.updatedAt) || 0) || (!rem.creatorId && sh.creatorId)) {
+                toPush.push(sh);
+              }
+            });
+            if (toPush.length > 0) {
               Promise.all(
-                toFix.map(sh => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh))
+                toPush.map(sh => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh))
               ).catch(() => {});
             }
           }
@@ -996,12 +1065,13 @@
             color: f.color || getAutoHighlightColor(locClean, partClean),
             note: noteClean
           };
+          recordLocalShowUpsert(updated);
           state.shows = state.shows.map(s => s.id === updated.id ? updated : s);
           saveShowsToLocalBackup();
           state.formModal = null;
           renderApp();
           showToast('✅ Đã lưu chỉnh sửa & đồng bộ vĩnh viễn!');
-          if (state.user && db) {
+          if (db) {
             try {
               await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', updated.id), updated);
             } catch (e) {
@@ -1030,6 +1100,7 @@
             color: f.color || getAutoHighlightColor(locClean, partClean),
             note: noteClean
           };
+          recordLocalShowUpsert(newShow);
           state.shows.push(newShow);
           saveShowsToLocalBackup();
           const createdMonth = parseInt(f.startDate.split('-')[1], 10);
@@ -1037,7 +1108,7 @@
           state.formModal = null;
           renderApp();
           showToast('🎉 Đã NỔ SHOW mới & lưu vĩnh viễn!');
-          if (state.user && db) {
+          if (db) {
             try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newShow.id), newShow); } catch (e) {}
           }
         }
@@ -1049,10 +1120,10 @@
           return;
         }
         sh.postStatus = newStatus;
-        saveShowsToLocalBackup();
+        recordLocalShowUpsert(sh);
         renderApp();
         showToast('Đã cập nhật tiến độ Hậu kỳ!');
-        if (state.user && db) {
+        if (db) {
           try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh); } catch (e) {}
         }
       },
@@ -1132,12 +1203,12 @@
         const sh = state.shows.find(s => s.id === showId);
         if (!sh || !canEditShow(sh)) return;
         state.shows = state.shows.filter(s => s.id !== showId);
-        saveShowsToLocalBackup();
+        recordLocalShowDelete(showId);
         state.detailShowId = null;
         state.formModal = null;
         renderApp();
         showToast('Đã xoá dòng lịch show!');
-        if (state.user && db) {
+        if (db) {
           try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', showId)); } catch (e) {}
         }
       },
@@ -1360,11 +1431,18 @@
       },
       async resetAllCreatorToOwner() {
         if (!state.isAdminMode) return;
-        state.shows = state.shows.map(sh => ({
-          ...sh,
-          creatorId: sh.ownerId,
-          ownerLabel: getMember(sh.ownerId)?.name || ''
-        }));
+        const nowTs = Date.now();
+        state.shows = state.shows.map(sh => {
+          const updated = {
+            ...sh,
+            creatorId: sh.ownerId,
+            ownerLabel: getMember(sh.ownerId)?.name || '',
+            updatedAt: nowTs
+          };
+          state.localShowEditsMap[sh.id] = updated;
+          return updated;
+        });
+        try { localStorage.setItem('as_local_show_edits_2026', JSON.stringify(state.localShowEditsMap)); } catch (e) {}
         saveShowsToLocalBackup();
         renderApp();
         showToast('✍️ Đã gán Người tạo = Chủ show cho toàn bộ lịch hiện có!');
@@ -2007,6 +2085,7 @@ function renderHeaderHtml() {
               color: getAutoHighlightColor(m.location.trim(), ''),
               note: ''
             };
+            recordLocalShowUpsert(newSchedShow);
             state.shows.push(newSchedShow);
             saveShowsToLocalBackup();
             state.ctpItems[schedId] = { tasks: {}, extras: [] };
