@@ -367,6 +367,7 @@
       ownerMonth: new Date().getMonth() + 1,
       ownerAllMonths: false,
       ownerFilterStatus: 'all',
+      ownerExpandedShowId: null,
       ownerFinanceMap: window.__BAKED_OWNER_FINANCE__ || {},
 
       detailShowId: null,
@@ -2580,6 +2581,19 @@ function renderHeaderHtml() {
       if (!sh) return;
       const m = calculateOwnerShowMetrics(sh);
 
+      // Cập nhật cả phần tóm tắt trên Header thẻ và phần Chân thẻ
+      const revSummaryEl = document.getElementById(`owner-summary-rev-${showId}`);
+      if (revSummaryEl) revSummaryEl.textContent = formatCompactMoneyPlain(m.clientPrice);
+
+      const expSummaryEl = document.getElementById(`owner-summary-exp-${showId}`);
+      if (expSummaryEl) expSummaryEl.textContent = formatCompactMoneyPlain(m.totalExpense);
+
+      const profSummaryEl = document.getElementById(`owner-summary-prof-${showId}`);
+      if (profSummaryEl) {
+        profSummaryEl.textContent = (m.netProfit > 0 ? '+' : '') + (m.netProfit === 0 ? '0đ' : formatCompactMoneyPlain(m.netProfit));
+        profSummaryEl.className = `text-xs font-black font-mono ${m.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`;
+      }
+
       const expEl = document.getElementById(`owner-show-exp-${showId}`);
       if (expEl) expEl.textContent = m.totalExpense.toLocaleString('vi-VN') + 'đ';
 
@@ -2618,6 +2632,10 @@ function renderHeaderHtml() {
     }
 
     window.ownerActions = {
+      toggleExpandShow(showId) {
+        state.ownerExpandedShowId = (state.ownerExpandedShowId === showId) ? null : showId;
+        renderApp();
+      },
       setMonth(m) {
         state.ownerMonth = Number(m);
         state.ownerAllMonths = false;
@@ -2631,7 +2649,8 @@ function renderHeaderHtml() {
         state.ownerFilterStatus = st;
         renderApp();
       },
-      setStatus(showId, newStatus) {
+      setStatus(showId, newStatus, event) {
+        if (event) event.stopPropagation();
         const sh = findAnyCtpShow(showId);
         if (!sh) return;
         const rec = ensureOwnerFinRecord(sh);
@@ -2827,24 +2846,24 @@ function renderHeaderHtml() {
             </div>
           </div>
 
-          <!-- Khu vực cuộn: Dashboard 4 ô Bento + Danh sách từng Show của Chủ Show -->
-          <div id="owner-shows-scroll-list" class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-3">
+          <!-- Khu vực cuộn: Dashboard 4 ô Bento + Danh sách từng Show thu gọn (bấm vào mới bung full nội dung) -->
+          <div id="owner-shows-scroll-list" class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-2.5">
             <!-- 4 Ô Thống Kê Tổng Quan Thu - Chi - Còn Lại -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div class="bg-white p-3 rounded-2xl border border-slate-200">
-                <span class="text-[9.5px] font-extrabold text-slate-400 uppercase block">💰 Tổng Báo Khách (Thu)</span>
+              <div class="bg-white p-2.5 rounded-2xl border border-slate-200">
+                <span class="text-[9px] font-extrabold text-slate-400 uppercase block">💰 Tổng Báo Khách</span>
                 <span id="owner-dash-rev" class="text-xs sm:text-sm font-black text-slate-900 font-mono mt-0.5 block">${totalRevenue.toLocaleString('vi-VN')}đ</span>
               </div>
-              <div class="bg-white p-3 rounded-2xl border border-slate-200">
-                <span class="text-[9.5px] font-extrabold text-slate-400 uppercase block">💸 Dự Kiến Chi (CTP+Phí)</span>
+              <div class="bg-white p-2.5 rounded-2xl border border-slate-200">
+                <span class="text-[9px] font-extrabold text-slate-400 uppercase block">💸 Dự Kiến Chi</span>
                 <span id="owner-dash-exp" class="text-xs sm:text-sm font-black text-rose-600 font-mono mt-0.5 block">${totalExpense.toLocaleString('vi-VN')}đ</span>
               </div>
-              <div class="bg-emerald-50/90 p-3 rounded-2xl border border-emerald-200">
-                <span class="text-[9.5px] font-extrabold text-emerald-800 uppercase block">💎 CÒN LẠI (Lợi Nhuận)</span>
+              <div class="bg-emerald-50/90 p-2.5 rounded-2xl border border-emerald-200">
+                <span class="text-[9px] font-extrabold text-emerald-800 uppercase block">💎 CÒN LẠI (Lãi)</span>
                 <span id="owner-dash-prof" class="text-xs sm:text-sm font-black text-emerald-700 font-mono mt-0.5 block">${totalNetProfit >= 0 ? '+' : ''}${totalNetProfit.toLocaleString('vi-VN')}đ</span>
               </div>
-              <div class="bg-amber-50/90 p-3 rounded-2xl border border-amber-200">
-                <span class="text-[9.5px] font-extrabold text-amber-800 uppercase block">⏳ Khách Chưa Thanh Lý</span>
+              <div class="bg-amber-50/90 p-2.5 rounded-2xl border border-amber-200">
+                <span class="text-[9px] font-extrabold text-amber-800 uppercase block">⏳ Khách Còn Nợ</span>
                 <span id="owner-dash-debt" class="text-xs sm:text-sm font-black text-amber-800 font-mono mt-0.5 block">${totalClientDebt.toLocaleString('vi-VN')}đ</span>
               </div>
             </div>
@@ -2863,168 +2882,199 @@ function renderHeaderHtml() {
               const rec = m.rec;
               const days = getShowDays(sh);
               const dayRate = days === 1 ? 1500000 : 1200000 * days;
+              const isExpanded = state.ownerExpandedShowId === sh.id;
+              const curStatusObj = OWNER_STATUS_OPTIONS.find(o => o.id === rec.status) || OWNER_STATUS_OPTIONS[0];
 
               return `
-                <div class="bg-white rounded-3xl border ${rec.status === 'settled' ? 'border-emerald-300' : 'border-slate-200'} p-4 space-y-3.5 shadow-2xs">
-                  <!-- Phần Đầu Thẻ: Tên Show + Ngày + Trạng thái Thanh Lý Hợp Đồng -->
-                  <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 border-b border-slate-100 pb-3">
+                <div class="bg-white rounded-2xl border transition-all ${isExpanded ? 'border-slate-900 ring-1 ring-slate-900/10 shadow-md' : (rec.status === 'settled' ? 'border-emerald-200' : 'border-slate-200')} overflow-hidden">
+                  <!-- THANH TIÊU ĐỀ THU GỌN (Bấm vào để Mở / Đóng nội dung chi tiết) -->
+                  <div onclick="ownerActions.toggleExpandShow('${sh.id}')" class="p-3 cursor-pointer hover:bg-slate-50/80 active:bg-slate-100/80 transition-colors flex items-center justify-between gap-2">
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="px-2 py-0.5 rounded-full bg-slate-100 font-mono font-bold text-[10px] text-slate-600">#${idx + 1}</span>
-                        <span class="font-mono font-bold text-slate-700 text-[10.5px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) + ` (${days}n)` : ` (${days}n)`}</span>
-                        ${sh.isCustomCtp ? `<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9.5px] font-bold">Show ngoài</span>` : ''}
+                        <span class="px-1.5 py-0.5 rounded-md bg-slate-100 font-mono font-bold text-[9.5px] text-slate-600">#${idx + 1}</span>
+                        <span class="font-mono font-bold text-slate-700 text-[10px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? '-' + formatDayMonth(sh.endDate) : ''} (${days}n)</span>
+                        <span class="px-2 py-0.5 rounded-full border text-[9px] font-extrabold ${curStatusObj.badgeCls}">${curStatusObj.label}</span>
                       </div>
-                      <h4 class="font-black text-slate-900 text-sm mt-1 break-words">📍 ${escapeHtml(sh.location)} ${sh.partner ? `<span class="text-slate-500 font-bold">(${escapeHtml(sh.partner)})</span>` : ''}</h4>
+                      <h4 class="font-black text-slate-900 text-xs sm:text-sm mt-1 truncate">📍 ${escapeHtml(sh.location)} ${sh.partner ? `<span class="text-slate-500 font-semibold">(${escapeHtml(sh.partner)})</span>` : ''}</h4>
                     </div>
 
-                    <!-- Cụm nút gạt tình trạng thanh lý 1 chạm -->
-                    <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl shrink-0 self-start">
-                      ${OWNER_STATUS_OPTIONS.map(st => `
-                        <button
-                          type="button"
-                          onclick="ownerActions.setStatus('${sh.id}', '${st.id}')"
-                          class="px-2.5 py-1 rounded-xl text-[10px] font-extrabold transition-all ${rec.status === st.id ? st.badgeCls + ' border shadow-2xs' : 'text-slate-500 hover:text-slate-800'}"
-                        >${st.label}</button>
-                      `).join('')}
+                    <!-- Tóm tắt nhanh Thu / Chi / Còn lại ngay trên dòng thu gọn -->
+                    <div class="flex items-center gap-2.5 shrink-0">
+                      <div class="text-right">
+                        <div class="text-[9.5px] text-slate-400 font-semibold whitespace-nowrap">
+                          Thu: <b id="owner-summary-rev-${sh.id}" class="text-slate-700 font-mono">${formatCompactMoneyPlain(m.clientPrice)}</b> • Chi: <b id="owner-summary-exp-${sh.id}" class="text-rose-600 font-mono">${formatCompactMoneyPlain(m.totalExpense)}</b>
+                        </div>
+                        <div class="flex items-center justify-end gap-1 mt-0.5">
+                          <span class="text-[9px] text-slate-400 font-bold uppercase">Còn:</span>
+                          <span id="owner-summary-prof-${sh.id}" class="text-xs font-black font-mono ${m.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}">
+                            ${m.netProfit > 0 ? '+' : ''}${m.netProfit === 0 ? '0đ' : formatCompactMoneyPlain(m.netProfit)}
+                          </span>
+                        </div>
+                      </div>
+                      <div class="w-7 h-7 rounded-full ${isExpanded ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'} flex items-center justify-center transition-transform">
+                        <i class="fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} text-[10px]"></i>
+                      </div>
                     </div>
                   </div>
 
-                  <!-- Phần 1: GIÁ BÁO KHÁCH HÀNG (THU) & TIỀN CỌC -->
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
-                    <div>
-                      <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">💰 Giá Báo Khách Hàng (VNĐ):</label>
-                      <input
-                        type="tel"
-                        inputmode="numeric"
-                        value="${rec.clientPrice ? Number(rec.clientPrice).toLocaleString('vi-VN') : ''}"
-                        oninput="ownerActions.handleMoneyInput('${sh.id}', 'clientPrice', this)"
-                        placeholder="Nhập giá trị hợp đồng báo khách..."
-                        class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono font-black text-sm text-slate-900 focus:outline-none focus:border-slate-900"
-                      />
-                    </div>
-                    <div>
-                      <div class="flex items-center justify-between mb-1">
-                        <label class="text-[10px] font-black text-slate-500 uppercase">💵 Khách Đã Cọc / Đã Trả:</label>
-                        <span id="owner-show-debt-${sh.id}" class="text-[9.5px] font-bold ${m.remainingClientDebt > 0 ? 'text-amber-700' : 'text-emerald-700'}">
-                          ${m.remainingClientDebt > 0 ? `Khách còn thiếu: ${m.remainingClientDebt.toLocaleString('vi-VN')}đ` : (m.clientPrice > 0 ? 'Đã thu đủ 100%' : 'Chưa nhập giá báo khách')}
-                        </span>
+                  ${isExpanded ? `
+                    <!-- NỘI DUNG CHI TIẾT CỦA SHOW (Chỉ hiện khi được bấm mở) -->
+                    <div class="px-3.5 pb-3.5 pt-2.5 border-t border-slate-100 space-y-3.5 bg-white">
+                      <!-- Hàng chọn nhanh Tình trạng thanh lý -->
+                      <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <span class="text-[10px] font-black text-slate-400 uppercase">Tình trạng hợp đồng:</span>
+                        <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
+                          ${OWNER_STATUS_OPTIONS.map(st => `
+                            <button
+                              type="button"
+                              onclick="ownerActions.setStatus('${sh.id}', '${st.id}', event)"
+                              class="px-2.5 py-1 rounded-xl text-[10px] font-extrabold transition-all ${rec.status === st.id ? st.badgeCls + ' border shadow-2xs' : 'text-slate-500 hover:text-slate-800'}"
+                            >${st.label}</button>
+                          `).join('')}
+                        </div>
                       </div>
-                      <input
-                        type="tel"
-                        inputmode="numeric"
-                        value="${rec.depositPaid ? Number(rec.depositPaid).toLocaleString('vi-VN') : ''}"
-                        oninput="ownerActions.handleMoneyInput('${sh.id}', 'depositPaid', this)"
-                        placeholder="Số tiền khách đã chuyển..."
-                        class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono font-bold text-sm text-emerald-700 focus:outline-none focus:border-slate-900"
-                      />
-                    </div>
-                  </div>
 
-                  <!-- Phần 2: DỰ KIẾN CHI CTP CHO ANH EM TRONG ĐOÀN & HẬU KỲ -->
-                  <div class="space-y-2">
-                    <div class="flex items-center justify-between">
-                      <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">🎥 Dự Kiến Chi CTP Anh Em Tham Gia (${(sh.memberIds || []).length} người):</span>
-                      <span class="text-[10px] font-bold text-slate-400">Bấm số để sửa trực tiếp</span>
-                    </div>
+                      <!-- Phần 1: GIÁ BÁO KHÁCH HÀNG (THU) & TIỀN CỌC -->
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
+                        <div>
+                          <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">💰 Giá Báo Khách Hàng (VNĐ):</label>
+                          <input
+                            type="tel"
+                            inputmode="numeric"
+                            value="${rec.clientPrice ? Number(rec.clientPrice).toLocaleString('vi-VN') : ''}"
+                            oninput="ownerActions.handleMoneyInput('${sh.id}', 'clientPrice', this)"
+                            placeholder="Nhập giá trị hợp đồng báo khách..."
+                            class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono font-black text-sm text-slate-900 focus:outline-none focus:border-slate-900"
+                          />
+                        </div>
+                        <div>
+                          <div class="flex items-center justify-between mb-1">
+                            <label class="text-[10px] font-black text-slate-500 uppercase">💵 Khách Đã Cọc / Đã Trả:</label>
+                            <span id="owner-show-debt-${sh.id}" class="text-[9.5px] font-bold ${m.remainingClientDebt > 0 ? 'text-amber-700' : 'text-emerald-700'}">
+                              ${m.remainingClientDebt > 0 ? `Khách còn thiếu: ${m.remainingClientDebt.toLocaleString('vi-VN')}đ` : (m.clientPrice > 0 ? 'Đã thu đủ 100%' : 'Chưa nhập giá báo khách')}
+                            </span>
+                          </div>
+                          <input
+                            type="tel"
+                            inputmode="numeric"
+                            value="${rec.depositPaid ? Number(rec.depositPaid).toLocaleString('vi-VN') : ''}"
+                            oninput="ownerActions.handleMoneyInput('${sh.id}', 'depositPaid', this)"
+                            placeholder="Số tiền khách đã chuyển..."
+                            class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono font-bold text-sm text-emerald-700 focus:outline-none focus:border-slate-900"
+                          />
+                        </div>
+                      </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      ${(sh.memberIds || []).map(mid => {
-                        const memCost = rec.crewCosts?.[mid] !== undefined ? rec.crewCosts[mid] : dayRate;
-                        const roleTag = sh.roles?.[mid] || '';
-                        const isSelf = mid === state.currentUserId;
-                        return `
-                          <div class="p-2 rounded-2xl border ${isSelf ? 'bg-amber-50/40 border-amber-200' : 'bg-slate-50/70 border-slate-200'} flex items-center justify-between gap-2">
-                            <div class="min-w-0 flex-1">
-                              <div class="flex items-center gap-1 flex-wrap">
-                                ${renderPillHtml(mid, 'xs', '', '', roleTag)}
-                                ${isSelf ? `<span class="text-[9px] font-bold text-amber-700">(Chủ show)</span>` : ''}
+                      <!-- Phần 2: DỰ KIẾN CHI CTP CHO ANH EM TRONG ĐOÀN & HẬU KỲ -->
+                      <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                          <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">🎥 Dự Kiến Chi CTP Anh Em Tham Gia (${(sh.memberIds || []).length} người):</span>
+                          <span class="text-[10px] font-bold text-slate-400">Bấm số để sửa trực tiếp</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          ${(sh.memberIds || []).map(mid => {
+                            const memCost = rec.crewCosts?.[mid] !== undefined ? rec.crewCosts[mid] : dayRate;
+                            const roleTag = sh.roles?.[mid] || '';
+                            const isSelf = mid === state.currentUserId;
+                            return `
+                              <div class="p-2 rounded-2xl border ${isSelf ? 'bg-amber-50/40 border-amber-200' : 'bg-slate-50/70 border-slate-200'} flex items-center justify-between gap-2">
+                                <div class="min-w-0 flex-1">
+                                  <div class="flex items-center gap-1 flex-wrap">
+                                    ${renderPillHtml(mid, 'xs', '', '', roleTag)}
+                                    ${isSelf ? `<span class="text-[9px] font-bold text-amber-700">(Chủ show)</span>` : ''}
+                                  </div>
+                                  <div class="flex items-center gap-1 mt-1">
+                                    <button type="button" onclick="ownerActions.setQuickCrewRate('${sh.id}', '${mid}', 0)" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-500">0đ</button>
+                                    <button type="button" onclick="ownerActions.setQuickCrewRate('${sh.id}', '${mid}', ${dayRate})" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">${formatCompactMoneyPlain(dayRate)}</button>
+                                    <button type="button" onclick="ownerActions.setQuickCrewRate('${sh.id}', '${mid}', ${dayRate + 1000000})" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">+Fly/Dựng</button>
+                                  </div>
+                                </div>
+                                <input
+                                  type="tel"
+                                  inputmode="numeric"
+                                  value="${memCost ? Number(memCost).toLocaleString('vi-VN') : '0'}"
+                                  oninput="ownerActions.handleCrewCostInput('${sh.id}', '${mid}', this)"
+                                  class="w-28 px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-mono font-black text-right text-xs text-slate-900 focus:outline-none"
+                                />
                               </div>
+                            `;
+                          }).join('')}
+
+                          <!-- Ô chi phí Dựng phim / Làm hình hậu kỳ riêng cho show -->
+                          <div class="p-2 rounded-2xl border border-slate-200 bg-slate-50/70 flex items-center justify-between gap-2">
+                            <div class="min-w-0 flex-1">
+                              <span class="font-extrabold text-[10.5px] text-slate-700 block">🎬 Chi Phí Dựng / Làm Hình</span>
                               <div class="flex items-center gap-1 mt-1">
-                                <button type="button" onclick="ownerActions.setQuickCrewRate('${sh.id}', '${mid}', 0)" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-500">0đ</button>
-                                <button type="button" onclick="ownerActions.setQuickCrewRate('${sh.id}', '${mid}', ${dayRate})" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">${formatCompactMoneyPlain(dayRate)}</button>
-                                <button type="button" onclick="ownerActions.setQuickCrewRate('${sh.id}', '${mid}', ${dayRate + 1000000})" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">+Fly/Dựng</button>
+                                <button type="button" onclick="state.ownerFinanceMap['${sh.id}'].postCost=0; saveOwnerFinanceState('${sh.id}'); renderApp();" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-500">0đ</button>
+                                <button type="button" onclick="state.ownerFinanceMap['${sh.id}'].postCost=1000000; saveOwnerFinanceState('${sh.id}'); renderApp();" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">1tr (Dựng)</button>
+                                <button type="button" onclick="state.ownerFinanceMap['${sh.id}'].postCost=1300000; saveOwnerFinanceState('${sh.id}'); renderApp();" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">1.3tr (Dựng+Hình)</button>
                               </div>
                             </div>
                             <input
                               type="tel"
                               inputmode="numeric"
-                              value="${memCost ? Number(memCost).toLocaleString('vi-VN') : '0'}"
-                              oninput="ownerActions.handleCrewCostInput('${sh.id}', '${mid}', this)"
+                              value="${rec.postCost ? Number(rec.postCost).toLocaleString('vi-VN') : '0'}"
+                              oninput="ownerActions.handleMoneyInput('${sh.id}', 'postCost', this)"
                               class="w-28 px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-mono font-black text-right text-xs text-slate-900 focus:outline-none"
                             />
                           </div>
-                        `;
-                      }).join('')}
-
-                      <!-- Ô chi phí Dựng phim / Làm hình hậu kỳ riêng cho show -->
-                      <div class="p-2 rounded-2xl border border-slate-200 bg-slate-50/70 flex items-center justify-between gap-2">
-                        <div class="min-w-0 flex-1">
-                          <span class="font-extrabold text-[10.5px] text-slate-700 block">🎬 Chi Phí Dựng / Làm Hình</span>
-                          <div class="flex items-center gap-1 mt-1">
-                            <button type="button" onclick="state.ownerFinanceMap['${sh.id}'].postCost=0; saveOwnerFinanceState('${sh.id}'); renderApp();" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-500">0đ</button>
-                            <button type="button" onclick="state.ownerFinanceMap['${sh.id}'].postCost=1000000; saveOwnerFinanceState('${sh.id}'); renderApp();" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">1tr (Dựng)</button>
-                            <button type="button" onclick="state.ownerFinanceMap['${sh.id}'].postCost=1300000; saveOwnerFinanceState('${sh.id}'); renderApp();" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[8.5px] font-bold text-slate-600">1.3tr (Dựng+Hình)</button>
-                          </div>
                         </div>
-                        <input
-                          type="tel"
-                          inputmode="numeric"
-                          value="${rec.postCost ? Number(rec.postCost).toLocaleString('vi-VN') : '0'}"
-                          oninput="ownerActions.handleMoneyInput('${sh.id}', 'postCost', this)"
-                          class="w-28 px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-mono font-black text-right text-xs text-slate-900 focus:outline-none"
-                        />
                       </div>
-                    </div>
-                  </div>
 
-                  <!-- Phần 3: CHI PHÍ VẬN HÀNH / PHÁT SINH KHÁC (Xe cộ, ăn ở, thuê đồ...) -->
-                  <div class="space-y-2 pt-1 border-t border-slate-100">
-                    <div class="flex items-center justify-between">
-                      <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">🚐 Chi Phí Khác (Xe, Khách sạn, Ăn uống, Thuê đồ...):</span>
-                      <button type="button" onclick="ownerActions.addExpenseRow('${sh.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-[10px] font-black flex items-center gap-1">
-                        <i class="fa-solid fa-plus text-[9px]"></i> Thêm khoản chi
-                      </button>
-                    </div>
+                      <!-- Phần 3: CHI PHÍ VẬN HÀNH / PHÁT SINH KHÁC (Xe cộ, ăn ở, thuê đồ...) -->
+                      <div class="space-y-2 pt-1 border-t border-slate-100">
+                        <div class="flex items-center justify-between">
+                          <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">🚐 Chi Phí Khác (Xe, Khách sạn, Ăn uống, Thuê đồ...):</span>
+                          <button type="button" onclick="ownerActions.addExpenseRow('${sh.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-[10px] font-black flex items-center gap-1">
+                            <i class="fa-solid fa-plus text-[9px]"></i> Thêm khoản chi
+                          </button>
+                        </div>
 
-                    ${(rec.otherExpenses || []).length > 0 ? `
-                      <div class="space-y-1.5 bg-rose-50/40 p-2.5 rounded-2xl border border-rose-200/70">
-                        ${rec.otherExpenses.map((ex, exIdx) => `
-                          <div class="flex items-center gap-1.5">
-                            <input
-                              type="text"
-                              value="${escapeHtml(ex.name || '')}"
-                              oninput="ownerActions.handleExpenseName('${sh.id}', ${exIdx}, this)"
-                              placeholder="Tên khoản chi (VD: Xe 16 chỗ, KS, Ăn...)"
-                              class="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-rose-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none"
-                            />
-                            <input
-                              type="tel"
-                              inputmode="numeric"
-                              value="${ex.amount ? Number(ex.amount).toLocaleString('vi-VN') : ''}"
-                              oninput="ownerActions.handleExpenseAmount('${sh.id}', ${exIdx}, this)"
-                              placeholder="Số tiền"
-                              class="w-28 shrink-0 px-2.5 py-1.5 bg-white border border-rose-200 rounded-xl text-xs font-mono font-black text-right text-rose-700 focus:outline-none"
-                            />
-                            <button type="button" onclick="ownerActions.removeExpenseRow('${sh.id}', ${exIdx})" class="w-7 h-7 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0"><i class="fa-solid fa-xmark text-xs"></i></button>
+                        ${(rec.otherExpenses || []).length > 0 ? `
+                          <div class="space-y-1.5 bg-rose-50/40 p-2.5 rounded-2xl border border-rose-200/70">
+                            ${rec.otherExpenses.map((ex, exIdx) => `
+                              <div class="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  value="${escapeHtml(ex.name || '')}"
+                                  oninput="ownerActions.handleExpenseName('${sh.id}', ${exIdx}, this)"
+                                  placeholder="Tên khoản chi (VD: Xe 16 chỗ, KS, Ăn...)"
+                                  class="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-rose-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none"
+                                />
+                                <input
+                                  type="tel"
+                                  inputmode="numeric"
+                                  value="${ex.amount ? Number(ex.amount).toLocaleString('vi-VN') : ''}"
+                                  oninput="ownerActions.handleExpenseAmount('${sh.id}', ${exIdx}, this)"
+                                  placeholder="Số tiền"
+                                  class="w-28 shrink-0 px-2.5 py-1.5 bg-white border border-rose-200 rounded-xl text-xs font-mono font-black text-right text-rose-700 focus:outline-none"
+                                />
+                                <button type="button" onclick="ownerActions.removeExpenseRow('${sh.id}', ${exIdx})" class="w-7 h-7 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0"><i class="fa-solid fa-xmark text-xs"></i></button>
+                              </div>
+                            `).join('')}
                           </div>
-                        `).join('')}
+                        ` : ''}
                       </div>
-                    ` : ''}
-                  </div>
 
-                  <!-- Phần Chân Thẻ: TỔNG KẾT TÀI CHÍNH CỦA SHOW (Tổng Chi vs Còn Lại) -->
-                  <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-slate-200 bg-slate-50/60 -mx-4 -mb-4 px-4 py-3 rounded-b-3xl">
-                    <div>
-                      <span class="text-[9.5px] font-extrabold text-slate-400 uppercase block">Tổng Chi Dự Kiến (CTP + Phí):</span>
-                      <span id="owner-show-exp-${sh.id}" class="text-xs font-black text-rose-600 font-mono">${m.totalExpense.toLocaleString('vi-VN')}đ</span>
+                      <!-- Phần Chân Thẻ: TỔNG KẾT TÀI CHÍNH CỦA SHOW + NÚT THU GỌN -->
+                      <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-slate-200 bg-slate-50/70 -mx-3.5 -mb-3.5 px-3.5 py-2.5">
+                        <div>
+                          <span class="text-[9px] font-extrabold text-slate-400 uppercase block">Tổng Chi Dự Kiến:</span>
+                          <span id="owner-show-exp-${sh.id}" class="text-xs font-black text-rose-600 font-mono">${m.totalExpense.toLocaleString('vi-VN')}đ</span>
+                        </div>
+                        <button type="button" onclick="ownerActions.toggleExpandShow('${sh.id}')" class="px-3 py-1 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 font-extrabold text-[10px]">
+                          Thu gọn ▲
+                        </button>
+                        <div class="text-right">
+                          <span class="text-[9px] font-extrabold text-slate-500 uppercase block">💎 CÒN LẠI (Lãi Ròng):</span>
+                          <span id="owner-show-profit-${sh.id}" class="text-xs sm:text-sm font-black font-mono ${m.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}">
+                            ${m.netProfit >= 0 ? '+' : ''}${m.netProfit.toLocaleString('vi-VN')}đ
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div class="text-right">
-                      <span class="text-[9.5px] font-extrabold text-slate-500 uppercase block">💎 CÒN LẠI (Lợi Nhuận Chủ Show):</span>
-                      <span id="owner-show-profit-${sh.id}" class="text-xs sm:text-sm font-black font-mono ${m.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}">
-                        ${m.netProfit >= 0 ? '+' : ''}${m.netProfit.toLocaleString('vi-VN')}đ
-                      </span>
-                    </div>
-                  </div>
+                  ` : ''}
                 </div>
               `;
             }).join('')}
