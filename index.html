@@ -1945,7 +1945,9 @@ function renderHeaderHtml() {
           });
 
           const days = getShowDays(sh);
-          const dateLabel = `${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' - ' + formatDayMonth(sh.endDate) : ''}`;
+          const startDm = formatDayMonth(sh.startDate);
+          const endDm = (sh.endDate && sh.endDate !== sh.startDate) ? formatDayMonth(sh.endDate) : '';
+          const dateLabel = `${startDm}${endDm ? '-' + endDm : ''}`;
           const ownerObj = getMember(sh.ownerId);
           const locName = (sh.location || 'Show ngoài lịch').trim();
           const fullLoc = locName + (sh.partner ? ` (${sh.partner})` : '') + (sh.isCustomCtp ? ' [Ngoài]' : '');
@@ -1955,6 +1957,8 @@ function renderHeaderHtml() {
             grandTotal += showSum;
             rows.push({
               stt,
+              startDm,
+              endDm,
               dateLabel,
               days,
               location: fullLoc,
@@ -2320,7 +2324,7 @@ function renderHeaderHtml() {
 
       return `
         <div onclick="ctpActions.closeBillModal()" class="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-3">
-          <div onclick="event.stopPropagation()" class="ios-sheet bg-white w-full max-w-2xl rounded-t-3xl sm:rounded-3xl p-3 sm:p-5 space-y-3 text-xs shadow-2xl flex flex-col max-h-[92dvh]">
+          <div onclick="event.stopPropagation()" class="ios-sheet bg-white w-full max-w-2xl rounded-t-3xl sm:rounded-3xl p-2.5 sm:p-5 space-y-2.5 text-xs shadow-2xl flex flex-col max-h-[92dvh]">
             <!-- Header Modal gọn gàng -->
             <div class="flex justify-between items-center border-b border-slate-200 pb-2 shrink-0 px-1">
               <div>
@@ -2335,17 +2339,17 @@ function renderHeaderHtml() {
               <button onclick="ctpActions.closeBillModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 shrink-0"><i class="fa-solid fa-xmark"></i></button>
             </div>
 
-            <!-- Bảng 6 cột chuẩn gọn đẹp trên cả điện thoại và máy tính -->
+            <!-- Bảng 6 cột tối ưu từng milimet diện tích cho màn hình dọc điện thoại -->
             <div class="flex-1 min-h-0 overflow-auto custom-scroll border border-slate-300 rounded-2xl bg-white">
               <table class="w-full border-collapse text-[10.5px] sm:text-xs">
                 <thead class="sticky top-0 z-20">
-                  <tr class="bg-[#107c41] text-white font-extrabold text-[9.5px] sm:text-[10.5px] uppercase tracking-tight">
-                    <th class="py-2 px-1 border border-emerald-700 w-7 text-center">STT</th>
-                    <th class="py-2 px-1.5 border border-emerald-700 text-center w-12">NGÀY</th>
-                    <th class="py-2 px-2 border border-emerald-700 text-left">SHOW</th>
-                    <th class="py-2 px-2 border border-emerald-700 text-left">NHIỆM VỤ HỆ THỐNG</th>
-                    <th class="py-2 px-1.5 border border-emerald-700 text-left w-20 sm:w-28">PHÁT SINH</th>
-                    <th class="py-2 px-2 border border-emerald-700 text-right w-16 sm:w-20 bg-emerald-900">TỔNG</th>
+                  <tr class="bg-[#107c41] text-white font-extrabold text-[9px] sm:text-[10px] uppercase tracking-tight">
+                    <th class="py-2 px-0.5 border border-emerald-700 w-6 text-center">STT</th>
+                    <th class="py-2 px-1 border border-emerald-700 text-center w-10">NGÀY</th>
+                    <th class="py-2 px-1.5 border border-emerald-700 text-left w-[24%]">SHOW</th>
+                    <th class="py-2 px-1.5 border border-emerald-700 text-left">NHIỆM VỤ HỆ THỐNG</th>
+                    <th class="py-2 px-1 border border-emerald-700 text-left w-16 sm:w-24">PHÁT SINH</th>
+                    <th class="py-2 px-1.5 border border-emerald-700 text-right w-20 sm:w-24 bg-emerald-900">TỔNG</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200">
@@ -2355,33 +2359,37 @@ function renderHeaderHtml() {
                     </tr>
                   ` : rows.map((r, i) => {
                     const rowBg = i % 2 === 0 ? 'bg-white' : 'bg-slate-50/80';
+                    const fullMoneyStr = r.showSum > 0 ? `${r.showSum.toLocaleString('vi-VN')}đ` : '<span class="text-slate-300">-</span>';
                     return `
                       <tr class="${rowBg} hover:bg-emerald-50/40 align-top">
-                        <td class="py-2 px-1 border border-slate-200 text-center font-mono font-bold text-slate-400">${r.stt}</td>
-                        <td class="py-2 px-1.5 border border-slate-200 text-center font-mono font-bold text-slate-600 whitespace-nowrap">${escapeHtml(r.dateLabel)}</td>
-                        <td class="py-2 px-2 border border-slate-200 font-sans">
+                        <td class="py-1.5 px-0.5 border border-slate-200 text-center font-mono font-bold text-slate-400 text-[10px]">${r.stt}</td>
+                        <td class="py-1.5 px-1 border border-slate-200 text-center font-mono font-bold text-slate-600 text-[10px] leading-tight whitespace-nowrap">
+                          <div>${escapeHtml(r.startDm || r.dateLabel)}</div>
+                          ${r.endDm ? `<div class="text-[9px] text-slate-400">→${escapeHtml(r.endDm)}</div>` : ''}
+                        </td>
+                        <td class="py-1.5 px-1.5 border border-slate-200 font-sans">
                           <div class="font-extrabold text-slate-900 break-words leading-snug">${escapeHtml(r.location)}</div>
                           ${!bm.isSingleOwner ? `<div class="text-[9px] text-slate-400 font-semibold mt-0.5">Chủ: ${escapeHtml(r.ownerName)}</div>` : ''}
                         </td>
-                        <td class="py-2 px-2 border border-slate-200 font-sans text-slate-800">
+                        <td class="py-1.5 px-1.5 border border-slate-200 font-sans text-slate-800">
                           ${r.taskBulletsCompact.length > 0
-                            ? `<div class="space-y-0.5 leading-snug font-semibold">${r.taskBulletsCompact.map(line => `<div class="whitespace-nowrap">${escapeHtml(line)}</div>`).join('')}</div>`
+                            ? `<div class="space-y-0.5 leading-snug font-semibold text-[10px] sm:text-[11px]">${r.taskBulletsCompact.map(line => `<div class="whitespace-nowrap">${escapeHtml(line)}</div>`).join('')}</div>`
                             : '<span class="text-slate-300 font-mono">-</span>'}
                         </td>
-                        <td class="py-2 px-1.5 border border-slate-200 font-sans text-amber-900">
+                        <td class="py-1.5 px-1 border border-slate-200 font-sans text-amber-900">
                           ${r.extraBulletsCompact.length > 0
-                            ? `<div class="space-y-0.5 leading-snug font-semibold text-[10px]">${r.extraBulletsCompact.map(line => `<div class="break-words">${escapeHtml(line)}</div>`).join('')}</div>`
+                            ? `<div class="space-y-0.5 leading-snug font-semibold text-[9.5px] sm:text-[10.5px]">${r.extraBulletsCompact.map(line => `<div class="break-words">${escapeHtml(line)}</div>`).join('')}</div>`
                             : '<span class="text-slate-300 font-mono block text-center">-</span>'}
                         </td>
-                        <td class="py-2 px-2 border border-slate-200 text-right font-mono font-black text-emerald-700 bg-emerald-50/40 whitespace-nowrap" title="${r.showSum.toLocaleString('vi-VN')}đ">${formatCompactMoney(r.showSum)}</td>
+                        <td class="py-1.5 px-1.5 border border-slate-200 text-right font-mono font-black text-emerald-700 bg-emerald-50/40 whitespace-nowrap text-[10.5px] sm:text-xs">${fullMoneyStr}</td>
                       </tr>
                     `;
                   }).join('')}
                 </tbody>
                 <tfoot class="sticky bottom-0 z-20">
                   <tr class="bg-slate-900 text-white font-mono font-black text-[11px]">
-                    <td colspan="5" class="py-2.5 px-3 border border-slate-800 font-sans text-right uppercase tracking-wider text-amber-300">🔥 TỔNG CỘNG:</td>
-                    <td class="py-2.5 px-2 border border-slate-800 text-right text-emerald-400 text-xs whitespace-nowrap">${bm.total.toLocaleString('vi-VN')}đ</td>
+                    <td colspan="5" class="py-2.5 px-2.5 border border-slate-800 font-sans text-right uppercase tracking-wider text-amber-300">🔥 TỔNG CỘNG:</td>
+                    <td class="py-2.5 px-1.5 border border-slate-800 text-right text-emerald-400 text-[11px] sm:text-xs whitespace-nowrap">${bm.total.toLocaleString('vi-VN')}đ</td>
                   </tr>
                 </tfoot>
               </table>
