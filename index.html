@@ -397,11 +397,19 @@
       toast: null
     };
 
-    // Tự động gán Người tạo = Chủ show cho các dòng dữ liệu cũ chưa có trường creatorId
+    // Tự động gán Người tạo = Chủ show 1 lần cho toàn bộ các dòng dữ liệu cũ (chưa có cờ creatorMigratedV2)
+    // Sau khi đã gán hoặc sau khi được chỉnh sửa (có creatorMigratedV2: true), hệ thống sẽ giữ nguyên 100% giá trị đã lưu!
     function normalizeShowsCreatorList(list = []) {
       return (list || []).map(sh => {
-        if (!sh.creatorId && sh.ownerId) {
-          return { ...sh, creatorId: sh.ownerId };
+        if (!sh) return sh;
+        const isLegacyUnmigrated = !sh.creatorMigratedV2 && (!sh.creatorId || /^sh_xl_\d+$/.test(String(sh.id || '')));
+        if (isLegacyUnmigrated && sh.ownerId) {
+          return {
+            ...sh,
+            creatorId: sh.ownerId,
+            ownerLabel: getMember(sh.ownerId)?.name || sh.ownerLabel || '',
+            creatorMigratedV2: true
+          };
         }
         return sh;
       });
@@ -421,6 +429,8 @@
       if (savedLocalPins) state.pinsMap = { ...state.pinsMap, ...JSON.parse(savedLocalPins) };
       const savedLocalUser = localStorage.getItem('as_user_backup_2026');
       if (savedLocalUser) state.currentUserId = savedLocalUser;
+      const savedAdminMode = localStorage.getItem('as_admin_mode_2026');
+      if (savedAdminMode === 'true') state.isAdminMode = true;
       const savedCtpItems = localStorage.getItem('as_ctp_items_2026');
       if (savedCtpItems) state.ctpItems = JSON.parse(savedCtpItems) || {};
       const savedCtpCustom = localStorage.getItem('as_ctp_custom_shows_2026');
@@ -458,6 +468,7 @@
     function recordLocalShowUpsert(showObj) {
       if (!showObj || !showObj.id) return;
       showObj.updatedAt = Date.now();
+      showObj.creatorMigratedV2 = true;
       state.localShowEditsMap[showObj.id] = showObj;
       state.localDeletedShowIds = (state.localDeletedShowIds || []).filter(id => id !== showObj.id);
       try {
@@ -558,7 +569,7 @@
             const toPush = [];
             state.shows.forEach(sh => {
               const rem = remoteMap.get(sh.id);
-              if (!rem || (Number(sh.updatedAt) || 0) > (Number(rem.updatedAt) || 0) || (!rem.creatorId && sh.creatorId)) {
+              if (!rem || (Number(sh.updatedAt) || 0) > (Number(rem.updatedAt) || 0) || (!rem.creatorMigratedV2 && sh.creatorMigratedV2)) {
                 toPush.push(sh);
               }
             });
@@ -941,7 +952,7 @@
           roles: JSON.parse(JSON.stringify(sh.roles || {})),
           postStatus: sh.postStatus || 'pending',
           ownerId: sh.ownerId,
-          creatorId: sh.creatorId || state.currentUserId,
+          creatorId: sh.creatorId || sh.ownerId || state.currentUserId,
           color: sh.color || '#c9bee8',
           note: sh.note || '',
           error: ''
@@ -1339,6 +1350,7 @@
           password === state.adminAuth.password
         ) {
           state.isAdminMode = true;
+          try { localStorage.setItem('as_admin_mode_2026', 'true'); } catch (e) {}
           state.adminLoginInput.error = '';
           renderApp();
           showToast('Đăng nhập Quản trị viên (Backend) thành công!');
@@ -1358,6 +1370,7 @@
       },
       async logoutAdmin() {
         state.isAdminMode = false;
+        try { localStorage.removeItem('as_admin_mode_2026'); } catch (e) {}
         renderApp();
         showToast('Đã tắt quyền Admin — Trở về quyền thành viên thường!');
         if (state.user && db) {
