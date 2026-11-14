@@ -528,6 +528,21 @@
       return creatorId !== '' && creatorId === currentId;
     }
 
+    // Bảo mật Đối Tác cho Show Ngoài: Nếu show bật hidePartner hoặc là show ngoài (isCustomCtp),
+    // chỉ duy nhất người tạo / người đi show đó mới thấy tên đối tác; các thành viên khác chỉ thấy lịch & địa điểm.
+    function canSeeShowPartner(show) {
+      if (!show) return false;
+      if (!show.hidePartner && !show.isCustomCtp) return true;
+      const currentId = String(state.currentUserId || '').trim();
+      const creatorId = String(show.creatorId || show.userId || show.ownerId || '').trim();
+      return creatorId !== '' && creatorId === currentId;
+    }
+
+    function getVisiblePartnerText(show) {
+      if (!show || !show.partner) return '';
+      return canSeeShowPartner(show) ? show.partner : '';
+    }
+
     function formatDayMonth(dateStr) {
       if (!dateStr) return '';
       const p = dateStr.split('-');
@@ -587,7 +602,7 @@
           if (state.searchQuery.trim() !== '') {
             const q = state.searchQuery.toLowerCase();
             const loc = (sh.location || '').toLowerCase();
-            const part = (sh.partner || '').toLowerCase();
+            const part = (getVisiblePartnerText(sh) || '').toLowerCase();
             const note = (sh.note || '').toLowerCase();
             const sttStr = String(sh.stt || '');
             const ownerName = (sh.ownerLabel || getMember(sh.ownerId)?.name || '').toLowerCase();
@@ -770,6 +785,7 @@
           mode: 'add',
           showId: null,
           partner: '',
+          hidePartner: false,
           location: '',
           startDate: defaultDate,
           endDate: defaultDate,
@@ -795,6 +811,7 @@
           showId: sh.id,
           stt: sh.stt,
           partner: sh.partner || '',
+          hidePartner: !!sh.hidePartner,
           location: sh.location || '',
           startDate: sh.startDate,
           endDate: sh.endDate,
@@ -806,6 +823,11 @@
           note: sh.note || '',
           error: ''
         };
+        renderApp();
+      },
+      toggleFormHidePartner() {
+        if (!state.formModal) return;
+        state.formModal.hidePartner = !state.formModal.hidePartner;
         renderApp();
       },
       closeFormModal() {
@@ -895,6 +917,7 @@
           const updated = {
             ...existing,
             partner: f.partner.trim(),
+            hidePartner: !!f.hidePartner,
             location: f.location.trim(),
             startDate: f.startDate,
             endDate: finalEnd,
@@ -920,6 +943,7 @@
             id: 'sh_xl_' + Date.now(),
             stt: nextStt,
             partner: f.partner.trim(),
+            hidePartner: !!f.hidePartner,
             location: f.location.trim(),
             startDate: f.startDate,
             endDate: finalEnd,
@@ -970,7 +994,8 @@
           const r = sh.roles?.[id] ? ` (${Array.isArray(sh.roles[id]) ? sh.roles[id].join(', ') : sh.roles[id]})` : '';
           return getMember(id).name + r;
         }).join(', ');
-        const title = `🎬 Show: ${sh.location}${sh.partner ? ' - ' + sh.partner : ''}`;
+        const visPartner = getVisiblePartnerText(sh);
+        const title = `🎬 Show: ${sh.location}${visPartner ? ' - ' + visPartner : ''}`;
         const desc = `Nhân sự: ${crewNames}\\nChủ show: ${getMember(sh.ownerId).name}\\nGhi chú: ${sh.note || 'Chuẩn bị pin, thẻ nhớ, thiết bị đầy đủ!'}`;
 
         const icsLines = [
@@ -1518,7 +1543,9 @@ function renderHeaderHtml() {
                         </div>
                       </td>
                       <td class="py-1.5 px-1.5 border-r border-slate-200 text-slate-700 font-semibold truncate max-w-[95px]">
-                        ${sh.partner ? escapeHtml(sh.partner) : '<span class="text-slate-300">-</span>'}
+                        ${getVisiblePartnerText(sh)
+                          ? `<div class="flex items-center gap-1 truncate"><span class="truncate">${escapeHtml(getVisiblePartnerText(sh))}</span>${sh.hidePartner ? '<i class="fa-solid fa-eye-slash text-[9px] text-slate-400 shrink-0" title="Đã ẩn với lịch chung"></i>' : ''}</div>`
+                          : '<span class="text-slate-300">-</span>'}
                       </td>
                       <td class="py-1.5 px-1 border-r border-slate-200 text-center font-bold text-slate-700">${formatDayMonth(sh.startDate)}</td>
                       <td class="py-1.5 px-1 border-r border-slate-200 text-center font-bold text-slate-700">${formatDayMonth(sh.rawEndDate || sh.endDate)}</td>
@@ -1750,6 +1777,7 @@ function renderHeaderHtml() {
           showId: null,
           location: '',
           partner: '',
+          syncToSchedule: true,
           startDate: defaultDate,
           endDate: defaultDate,
           ownerId: defaultOwner,
@@ -1765,6 +1793,7 @@ function renderHeaderHtml() {
           showId: sh.id,
           location: sh.location || '',
           partner: sh.partner || '',
+          syncToSchedule: !!sh.syncedScheduleId,
           startDate: sh.startDate,
           endDate: sh.endDate || sh.startDate,
           ownerId: sh.ownerId || state.currentUserId,
@@ -1776,6 +1805,11 @@ function renderHeaderHtml() {
         state.ctpAddShowModal = null;
         renderApp();
       },
+      toggleCustomModalSync() {
+        if (!state.ctpAddShowModal) return;
+        state.ctpAddShowModal.syncToSchedule = !state.ctpAddShowModal.syncToSchedule;
+        renderApp();
+      },
       updateCustomModalField(field, val) {
         const m = state.ctpAddShowModal;
         if (!m) return;
@@ -1785,7 +1819,7 @@ function renderHeaderHtml() {
           renderApp();
         }
       },
-      submitCustomShowModal() {
+      async submitCustomShowModal() {
         const m = state.ctpAddShowModal;
         if (!m) return;
         if (!m.location || !m.location.trim()) {
@@ -1802,6 +1836,7 @@ function renderHeaderHtml() {
           if (sh) {
             sh.location = m.location.trim();
             sh.partner = (m.partner || '').trim();
+            sh.hidePartner = true;
             sh.startDate = finalStart;
             sh.endDate = finalEnd;
             sh.ownerId = m.ownerId;
@@ -1812,34 +1847,89 @@ function renderHeaderHtml() {
               if (item.tasks['quay'] !== undefined) item.tasks['quay'] = getDefaultRateForTask('quay', sh);
               if (item.tasks['chup'] !== undefined) item.tasks['chup'] = getDefaultRateForTask('chup', sh);
             }
+
+            if (sh.syncedScheduleId) {
+              const linked = state.shows.find(s => s.id === sh.syncedScheduleId);
+              if (linked) {
+                linked.location = sh.location;
+                linked.partner = sh.partner;
+                linked.hidePartner = true;
+                linked.startDate = finalStart;
+                linked.endDate = finalEnd;
+                linked.rawEndDate = finalEnd;
+                saveShowsToLocalBackup();
+                if (state.user && db) {
+                  try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', linked.id), linked); } catch (e) {}
+                }
+              }
+            }
           }
           state.ctpAddShowModal = null;
           saveCtpStateToLocal();
           renderApp();
           showToast('✅ Đã cập nhật thông tin Show ngoài lịch!');
         } else {
-          const newId = 'ctp_ext_' + Date.now();
-          const newCustomShow = {
-            id: newId,
-            isCustomCtp: true,
-            createdAt: Date.now(),
-            userId: state.currentUserId,
-            ctpMonth: monthNum,
-            location: m.location.trim(),
-            partner: (m.partner || '').trim(),
-            startDate: finalStart,
-            endDate: finalEnd,
-            ownerId: m.ownerId,
-            memberIds: [state.currentUserId]
-          };
-          if (!Array.isArray(state.ctpCustomShows)) state.ctpCustomShows = [];
-          state.ctpCustomShows.push(newCustomShow);
-          state.ctpItems[newId] = { tasks: {}, extras: [] };
-          state.ctpMonth = monthNum;
-          state.ctpAddShowModal = null;
-          saveCtpStateToLocal();
-          renderApp();
-          showToast('🎉 Đã thêm Show ngoài xuống cuối danh sách CTP!');
+          // Nếu bật báo lịch chung (mặc định bật): đẩy lên Lịch Show chung với chế độ ẨN ĐỐI TÁC (chỉ mình người tạo thấy đối tác, anh em khác chỉ thấy lịch & địa điểm)
+          if (m.syncToSchedule) {
+            const nextStt = state.shows.length > 0 ? Math.max(...state.shows.map(s => Number(s.stt) || 300)) + 1 : 301;
+            const schedId = 'sh_ext_' + Date.now();
+            const newSchedShow = {
+              id: schedId,
+              stt: nextStt,
+              partner: (m.partner || '').trim(),
+              hidePartner: true,
+              isOutsideNote: true,
+              location: m.location.trim(),
+              startDate: finalStart,
+              endDate: finalEnd,
+              rawEndDate: finalEnd,
+              memberIds: [state.currentUserId],
+              roles: {},
+              postStatus: 'pending',
+              ownerId: m.ownerId,
+              creatorId: state.currentUserId,
+              ownerLabel: getMember(m.ownerId)?.name || '',
+              color: getAutoHighlightColor(m.location.trim(), ''),
+              note: ''
+            };
+            state.shows.push(newSchedShow);
+            saveShowsToLocalBackup();
+            state.ctpItems[schedId] = { tasks: {}, extras: [] };
+            state.ctpMonth = monthNum;
+            state.selectedMonth = monthNum;
+            state.ctpAddShowModal = null;
+            saveCtpStateToLocal();
+            renderApp();
+            showToast('🔒 Đã ghi lịch & địa điểm (Đối tác đã được ẩn riêng cho bạn)!');
+            if (state.user && db) {
+              try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newSchedShow.id), newSchedShow); } catch (e) {}
+            }
+          } else {
+            const newId = 'ctp_ext_' + Date.now();
+            const newCustomShow = {
+              id: newId,
+              isCustomCtp: true,
+              hidePartner: true,
+              createdAt: Date.now(),
+              userId: state.currentUserId,
+              creatorId: state.currentUserId,
+              ctpMonth: monthNum,
+              location: m.location.trim(),
+              partner: (m.partner || '').trim(),
+              startDate: finalStart,
+              endDate: finalEnd,
+              ownerId: m.ownerId,
+              memberIds: [state.currentUserId]
+            };
+            if (!Array.isArray(state.ctpCustomShows)) state.ctpCustomShows = [];
+            state.ctpCustomShows.push(newCustomShow);
+            state.ctpItems[newId] = { tasks: {}, extras: [] };
+            state.ctpMonth = monthNum;
+            state.ctpAddShowModal = null;
+            saveCtpStateToLocal();
+            renderApp();
+            showToast('🎉 Đã thêm Show ngoài xuống cuối danh sách CTP!');
+          }
           setTimeout(() => {
             const listEl = document.getElementById('ctp-shows-scroll-list');
             if (listEl) listEl.scrollTo({ top: listEl.scrollHeight, behavior: 'smooth' });
@@ -1973,7 +2063,8 @@ function renderHeaderHtml() {
           const dateLabel = `${startDm}${endDm ? '-' + endDm : ''}`;
           const ownerObj = getMember(sh.ownerId);
           const locName = (sh.location || 'Show ngoài lịch').trim();
-          const fullLoc = locName + (sh.partner ? ` (${sh.partner})` : '') + (sh.isCustomCtp ? ' [Ngoài]' : '');
+          const showPartnerOnBill = (!sh.hidePartner && !sh.isOutsideNote && !sh.isCustomCtp) ? getVisiblePartnerText(sh) : '';
+          const fullLoc = locName + (showPartnerOnBill ? ` (${showPartnerOnBill})` : '') + (sh.isCustomCtp ? ' [Ngoài]' : '');
 
           if (showSum > 0 || filteredShows.length > 0) {
             stt++;
@@ -1994,7 +2085,7 @@ function renderHeaderHtml() {
           }
 
           if (showSum > 0) {
-            billLines.push(`${stt}. **${locName}${sh.partner ? ' (' + sh.partner + ')' : ''}** (${dateLabel})`);
+            billLines.push(`${stt}. **${locName}${showPartnerOnBill ? ' (' + showPartnerOnBill + ')' : ''}** (${dateLabel})`);
             taskDescList.forEach(td => billLines.push(`   ${td}`));
             extraDescList.forEach(ed => billLines.push(`   ${ed}`));
             billLines.push(`   👉 Tổng show: **${showSum.toLocaleString('vi-VN')}đ**\n`);
@@ -2176,7 +2267,7 @@ function renderHeaderHtml() {
                         <span class="px-2 py-0.5 rounded-full ${sh.isCustomCtp ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'} font-mono font-bold text-[10px]">#${idx + 1}${sh.isCustomCtp ? ' • 📝 Show ngoài' : ''}</span>
                         <span class="font-mono font-bold text-indigo-600 text-[10px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? ' -> ' + formatDayMonth(sh.endDate) + ` (${days}n)` : ` (${days}n)`}</span>
                       </div>
-                      <h4 class="font-black text-slate-900 text-sm mt-1 break-words">📍 ${escapeHtml(sh.location)} ${sh.partner ? '(' + escapeHtml(sh.partner) + ')' : ''}</h4>
+                      <h4 class="font-black text-slate-900 text-sm mt-1 break-words">📍 ${escapeHtml(sh.location)} ${getVisiblePartnerText(sh) ? '(' + escapeHtml(getVisiblePartnerText(sh)) + ')' : ''} ${(sh.hidePartner || sh.isCustomCtp) && getVisiblePartnerText(sh) ? '<span class="text-[9.5px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200 ml-1" title="Chỉ mình bạn thấy đối tác này">🔒 Riêng tư</span>' : ''}</h4>
                       <div class="flex items-center gap-2 mt-1 flex-wrap">
                         <p class="text-[10px] text-slate-500">Chủ show: <b class="text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">${escapeHtml(owner.name)}</b></p>
                         ${sh.isCustomCtp ? `
@@ -2282,7 +2373,7 @@ function renderHeaderHtml() {
               </div>
 
               <div>
-                <label class="text-[10px] text-slate-500 font-bold block mb-1">🤝 Đối tác / Ghi chú (nếu có):</label>
+                <label class="text-[10px] text-slate-500 font-bold block mb-1">🤝 Đối tác / Ghi chú (Tự động ẩn trên lịch chung):</label>
                 <input type="text" value="${escapeHtml(m.partner)}" oninput="ctpActions.updateCustomModalField('partner', this.value)" placeholder="VD: PSC, Anh Khoa gọi ngoài..." class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-2xl font-semibold text-slate-800 focus:outline-none focus:border-slate-900" />
               </div>
 
@@ -2646,7 +2737,7 @@ function renderHeaderHtml() {
         const cat = getMyShowRoleCategory(sh, uid);
         if (state.ownerFilterStatus === 'role_owner') return cat === 'owner' && !sh.isCustomCtp;
         if (state.ownerFilterStatus === 'role_crew') return cat === 'crew' && !sh.isCustomCtp;
-        if (state.ownerFilterStatus === 'role_custom') return !!sh.isCustomCtp;
+        if (state.ownerFilterStatus === 'role_custom') return !!(sh.isCustomCtp || sh.hidePartner || sh.isOutsideNote);
 
         const isSettled = cat === 'owner'
           ? (ensureOwnerFinRecord(sh).status === 'settled')
@@ -2985,7 +3076,7 @@ function renderHeaderHtml() {
       let settledCount = 0;
 
       allInvolved.forEach(sh => {
-        if (sh.isCustomCtp) customShowCount++;
+        if (sh.isCustomCtp || sh.hidePartner || sh.isOutsideNote) customShowCount++;
         const cat = getMyShowRoleCategory(sh);
         if (cat === 'owner') {
           ownerShowCount++;
@@ -3107,7 +3198,7 @@ function renderHeaderHtml() {
                           <span class="font-mono font-bold text-slate-700 text-[10px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? '-' + formatDayMonth(sh.endDate) : ''} (${days}n)</span>
                           <span class="px-2 py-0.5 rounded-full border text-[9px] font-extrabold ${curStatusObj.badgeCls}">${curStatusObj.label}</span>
                         </div>
-                        <h4 class="font-black text-slate-900 text-xs sm:text-sm mt-1 truncate">📍 ${escapeHtml(sh.location)} ${sh.partner ? `<span class="text-slate-500 font-semibold">(${escapeHtml(sh.partner)})</span>` : ''}</h4>
+                        <h4 class="font-black text-slate-900 text-xs sm:text-sm mt-1 truncate">📍 ${escapeHtml(sh.location)} ${getVisiblePartnerText(sh) ? `<span class="text-slate-500 font-semibold">(${escapeHtml(getVisiblePartnerText(sh))})</span>` : ''} ${(sh.hidePartner || sh.isCustomCtp) && getVisiblePartnerText(sh) ? '<i class="fa-solid fa-eye-slash text-[9.5px] text-amber-600 ml-1" title="Đối tác chỉ hiển thị cho riêng bạn"></i>' : ''}</h4>
                       </div>
 
                       <div class="flex items-center gap-2.5 shrink-0">
@@ -3324,7 +3415,7 @@ function renderHeaderHtml() {
                         <span class="font-mono font-bold text-slate-700 text-[10px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? '-' + formatDayMonth(sh.endDate) : ''} (${days}n)</span>
                         <span class="px-2 py-0.5 rounded-full border text-[9px] font-extrabold ${curCrewSt.badgeCls}">${curCrewSt.label}</span>
                       </div>
-                      <h4 class="font-black text-slate-900 text-xs sm:text-sm mt-1 truncate">📍 ${escapeHtml(sh.location)} ${sh.partner ? `<span class="text-slate-500 font-semibold">(${escapeHtml(sh.partner)})</span>` : ''}</h4>
+                      <h4 class="font-black text-slate-900 text-xs sm:text-sm mt-1 truncate">📍 ${escapeHtml(sh.location)} ${getVisiblePartnerText(sh) ? `<span class="text-slate-500 font-semibold">(${escapeHtml(getVisiblePartnerText(sh))})</span>` : ''} ${(sh.hidePartner || sh.isCustomCtp) && getVisiblePartnerText(sh) ? '<i class="fa-solid fa-eye-slash text-[9.5px] text-amber-600 ml-1" title="Đối tác chỉ hiển thị cho riêng bạn"></i>' : ''}</h4>
                     </div>
 
                     <div class="flex items-center gap-2.5 shrink-0">
@@ -3519,7 +3610,7 @@ function renderHeaderHtml() {
               <div>
                 <span class="text-[10px] font-mono bg-slate-100 px-2 py-0.5 rounded">STT #${sh.stt}</span>
                 <h3 class="text-base font-black text-slate-900 mt-1">${escapeHtml(sh.location)}</h3>
-                ${sh.partner ? `<p class="text-xs text-slate-500">Tên show / Đối tác: <b>${escapeHtml(sh.partner)}</b></p>` : ''}
+                ${getVisiblePartnerText(sh) ? `<p class="text-xs text-slate-500">Tên show / Đối tác: <b>${escapeHtml(getVisiblePartnerText(sh))}</b></p>` : ''}
               </div>
               <button onclick="appActions.closeShowDetail()" class="w-7 h-7 rounded-full bg-slate-100"><i class="fa-solid fa-xmark"></i></button>
             </div>
@@ -3579,6 +3670,10 @@ function renderHeaderHtml() {
               <input type="text" value="${escapeHtml(f.location)}" oninput="appActions.updateFormField('location', this.value)" placeholder="Địa điểm (Hồ Tràm, SG...)" class="px-3 py-2 border rounded-xl font-bold" />
               <input type="text" value="${escapeHtml(f.partner)}" oninput="appActions.updateFormField('partner', this.value)" placeholder="Tên show - Đối tác" class="px-3 py-2 border rounded-xl" />
             </div>
+            <label class="flex items-center gap-2 px-1 py-0.5 cursor-pointer select-none text-[11px] font-bold text-slate-700">
+              <input type="checkbox" ${f.hidePartner ? 'checked' : ''} onchange="appActions.toggleFormHidePartner()" class="w-4 h-4 rounded accent-slate-900" />
+              <span>Show ngoài (Ẩn đối tác trên lịch chung, chỉ mình tôi thấy)</span>
+            </label>
             <div class="grid grid-cols-2 gap-2">
               <div>
                 <label class="text-[10px] text-slate-500 font-bold">Ngày Bắt Đầu:</label>
@@ -3670,7 +3765,8 @@ function renderHeaderHtml() {
             return getMember(id).name + r;
           }).join(', ');
           const ownerName = sh.ownerLabel || getMember(sh.ownerId).name;
-          msg += `${i + 1}. 📍 ${sh.location}${sh.partner ? ' (' + sh.partner + ')' : ''}: ${crew} [Chủ show: ${ownerName}]\n`;
+          const visPartner = getVisiblePartnerText(sh);
+          msg += `${i + 1}. 📍 ${sh.location}${visPartner ? ' (' + visPartner + ')' : ''}: ${crew} [Chủ show: ${ownerName}]\n`;
         });
       }
       msg += `----------------------------\n👉 Anh em kiểm tra kỹ thiết bị, sạc pin, thẻ nhớ đầy đủ nhé!`;
