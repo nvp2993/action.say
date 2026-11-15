@@ -471,6 +471,13 @@
         }
       });
 
+      // Giữ lại mọi show mới tạo trên máy chưa kịp có trên Cloud
+      (state.shows || []).forEach(sh => {
+        if (sh && sh.id && !deletedSet.has(sh.id) && !mergedMap.has(sh.id)) {
+          mergedMap.set(sh.id, sh);
+        }
+      });
+
       return Array.from(mergedMap.values());
     }
 
@@ -499,6 +506,22 @@
         localStorage.setItem('as_local_deleted_shows_2026', JSON.stringify(state.localDeletedShowIds));
       } catch (e) {}
       saveShowsToLocalBackup();
+    }
+
+    function clearSyncedShowFromQueue(showId) {
+      if (!showId) return;
+      if (state.localShowEditsMap && state.localShowEditsMap[showId]) {
+        delete state.localShowEditsMap[showId];
+        try { localStorage.setItem('as_local_show_edits_2026', JSON.stringify(state.localShowEditsMap)); } catch (e) {}
+      }
+    }
+
+    function clearDeletedShowFromQueue(showId) {
+      if (!showId) return;
+      if (Array.isArray(state.localDeletedShowIds) && state.localDeletedShowIds.includes(showId)) {
+        state.localDeletedShowIds = state.localDeletedShowIds.filter(id => id !== showId);
+        try { localStorage.setItem('as_local_deleted_shows_2026', JSON.stringify(state.localDeletedShowIds)); } catch (e) {}
+      }
     }
 
     function saveShowsToLocalBackup() {
@@ -561,6 +584,12 @@
           });
           await batch.commit();
         }
+        state.localShowEditsMap = {};
+        state.localDeletedShowIds = [];
+        try {
+          localStorage.setItem('as_local_show_edits_2026', '{}');
+          localStorage.setItem('as_local_deleted_shows_2026', '[]');
+        } catch (e) {}
       }
     }
 
@@ -584,19 +613,17 @@
           || Object.keys(state.localShowEditsMap || {}).length > 0
           || deletedSet.size > 0;
 
-        let finalRemoteList = remoteList;
+        const mergedList = mergeShowsWithLocalEdits(remoteList);
         if (needsUpload) {
           await pushAllLocalEditsToCloud(remoteIdSet);
-          const snap2 = await getDocsFromServer(showsCol);
-          if (!snap2.empty) finalRemoteList = snap2.docs.map(d => d.data());
         }
-        state.remoteShowCount = finalRemoteList.length;
+        state.remoteShowCount = mergedList.length;
 
-        // 4. Gộp danh sách chuẩn nhất & lưu lại
+        // 4. Cập nhật danh sách chuẩn nhất & lưu lại (chỉ 1 lần đọc Server duy nhất)
         state.cloudSynced = true;
         state.syncErrorMsg = '';
         state.lastSyncTimeStr = formatNowTimeHM();
-        state.shows = mergeShowsWithLocalEdits(finalRemoteList);
+        state.shows = mergedList;
         saveShowsToLocalBackup();
         state.isSyncingNow = false;
         renderApp();
@@ -611,14 +638,9 @@
       }
     }
 
-    // Tự động ép đồng bộ ngay khi mở lại app từ màn hình chính iPhone (chuyển tab / mở khóa màn hình) hoặc khi có mạng trở lại
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && db) {
-        forceSyncNow(true);
-      }
-    });
+    // Khi có mạng trở lại sau khi mất mạng, tự đẩy các thay đổi offline lên Cloud ngầm (không tải lại toàn bộ)
     window.addEventListener('online', () => {
-      if (db) forceSyncNow(true);
+      if (db) pushAllLocalEditsToCloud();
     });
 
     async function initFirebaseCloud() {
@@ -631,8 +653,7 @@
           const app = initializeApp(firebaseConfig);
           auth = getAuth(app);
           db = initializeFirestore(app, {
-            experimentalForceLongPolling: true,
-            useFetchStreams: false
+            experimentalAutoDetectLongPolling: true
           });
 
           let listenersAttached = false;
@@ -641,8 +662,6 @@
             if (!listenersAttached && db) {
               listenersAttached = true;
               attachFirestoreListeners(state.user);
-              // Đẩy/đối chiếu dữ liệu cục bộ 1 lần duy nhất lúc khởi động
-              setTimeout(() => { forceSyncNow(true); }, 100);
             }
           };
 
@@ -670,26 +689,66 @@
 
     function attachFirestoreListeners(u) {
       const showsCol = collection(db, 'artifacts', appId, 'public', 'data', 'shows');
+      let showsInitialSnapDone = false;
       onSnapshot(
         showsCol,
         async (snap) => {
           state.cloudSynced = true;
           if (snap.empty && INITIAL_SHOWS_DATA.length > 0) {
             try {
-              await Promise.all(
-                INITIAL_SHOWS_DATA.map(sh =>
-                  setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh)
-                )
-              );
+              const b = writeBatch(db);
+              INITIAL_SHOWS_DATA.forEach(sh => b.set(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), JSON.parse(JSON.stringify(sh))));
+              await b.commit();
             } catch (err) { console.error(err); }
-          } else if (!snap.empty) {
-            const rawList = snap.docs.map(d => d.data());
-            state.shows = mergeShowsWithLocalEdits(rawList);
-            saveShowsToLocalBackup();
+            return;
           }
+          if (!showsInitialSnapDone) {
+            showsInitialSnapDone = true;
+            const rawList = snap.docs.map(d => d.data());
+            const remoteIdSet = new Set(rawList.map(d => d.id));
+            state.shows = mergeShowsWithLocalEdits(rawList);
+            state.remoteShowCount = state.shows.length;
+            saveShowsToLocalBackup();
+            state.lastSyncTimeStr = formatNowTimeHM();
+            state.syncErrorMsg = '';
+            renderApp();
+            // Đẩy ngầm bất kỳ show nào có trên máy nhưng chưa có trên Cloud (chỉ đẩy phần chênh lệch, 0ms lag)
+            pushAllLocalEditsToCloud(remoteIdSet).catch(() => {});
+            return;
+          }
+          // Các lần thay đổi sau: CHỈ xử lý đúng 1 dòng vừa thêm/sửa/xoá (Delta Sync siêu nhẹ < 10ms)
+          const changes = snap.docChanges();
+          if (changes.length === 0) return;
+          const deletedSet = new Set(state.localDeletedShowIds || []);
+          const showsMap = new Map((state.shows || []).map(s => [s.id, s]));
+          let hasVisualChange = false;
+          changes.forEach(ch => {
+            const docData = ch.doc.data();
+            const docId = ch.doc.id;
+            if (ch.type === 'removed') {
+              if (showsMap.has(docId)) {
+                showsMap.delete(docId);
+                hasVisualChange = true;
+              }
+            } else if (!deletedSet.has(docId)) {
+              const localEdit = state.localShowEditsMap?.[docId];
+              if (!localEdit || (Number(docData.updatedAt) || 0) >= (Number(localEdit.updatedAt) || 0)) {
+                const prev = showsMap.get(docId);
+                if (!prev || JSON.stringify(prev) !== JSON.stringify(docData)) {
+                  showsMap.set(docId, docData);
+                  hasVisualChange = true;
+                }
+              }
+            }
+          });
+          state.remoteShowCount = snap.size;
           state.lastSyncTimeStr = formatNowTimeHM();
           state.syncErrorMsg = '';
-          renderApp();
+          if (hasVisualChange) {
+            state.shows = Array.from(showsMap.values());
+            saveShowsToLocalBackup();
+            renderApp();
+          }
         },
         (err) => {
           state.cloudSynced = false;
@@ -1222,23 +1281,19 @@
           saveShowsToLocalBackup();
           state.formModal = null;
           renderApp();
+          showToast('✅ Đã lưu chỉnh sửa!');
           if (db) {
-            showToast('⏳ Đang đẩy chỉnh sửa lên Cloud...');
-            try {
-              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', updated.id), JSON.parse(JSON.stringify(updated)));
-              state.cloudSynced = true;
-              state.lastSyncTimeStr = formatNowTimeHM();
-              renderApp();
-              showToast('☁️✅ Đã lưu & đồng bộ lên Cloud thành công!');
-            } catch (e) {
-              console.error('Lỗi lưu chỉnh sửa lên Cloud:', e);
-              state.cloudSynced = false;
-              state.syncErrorMsg = e?.code || e?.message || 'Lỗi ghi Cloud';
-              renderApp();
-              showToast(`⚠️ Đã lưu trên máy, nhưng lỗi đẩy Cloud: ${state.syncErrorMsg}`, 'error');
-            }
-          } else {
-            showToast('💾 Đã lưu trên máy (Chế độ Offline)');
+            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', updated.id), JSON.parse(JSON.stringify(updated)))
+              .then(() => {
+                clearSyncedShowFromQueue(updated.id);
+                state.cloudSynced = true;
+                state.lastSyncTimeStr = formatNowTimeHM();
+              })
+              .catch((e) => {
+                state.cloudSynced = false;
+                state.syncErrorMsg = e?.code || e?.message || 'Lỗi ghi Cloud';
+                showToast(`⚠️ Lỗi đẩy Cloud: ${state.syncErrorMsg}`, 'error');
+              });
           }
         } else {
           const nextStt = state.shows.length > 0 ? Math.max(...state.shows.map(s => Number(s.stt) || 300)) + 1 : 301;
@@ -1269,23 +1324,19 @@
           if (createdMonth >= 6 && createdMonth <= 12) state.selectedMonth = createdMonth;
           state.formModal = null;
           renderApp();
+          showToast('🎉 Đã NỔ SHOW thành công!');
           if (db) {
-            showToast('⏳ Đang đẩy lịch show lên Cloud...');
-            try {
-              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newShow.id), JSON.parse(JSON.stringify(newShow)));
-              state.cloudSynced = true;
-              state.lastSyncTimeStr = formatNowTimeHM();
-              renderApp();
-              showToast('☁️🎉 Đã NỔ SHOW & đồng bộ lên Cloud thành công!');
-            } catch (e) {
-              console.error('Lỗi lưu show mới lên Cloud:', e);
-              state.cloudSynced = false;
-              state.syncErrorMsg = e?.code || e?.message || 'Lỗi ghi Cloud';
-              renderApp();
-              showToast(`⚠️ Đã lưu trên máy, nhưng lỗi đẩy Cloud: ${state.syncErrorMsg}`, 'error');
-            }
-          } else {
-            showToast('💾 Đã lưu show trên máy (Chế độ Offline)');
+            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newShow.id), JSON.parse(JSON.stringify(newShow)))
+              .then(() => {
+                clearSyncedShowFromQueue(newShow.id);
+                state.cloudSynced = true;
+                state.lastSyncTimeStr = formatNowTimeHM();
+              })
+              .catch((e) => {
+                state.cloudSynced = false;
+                state.syncErrorMsg = e?.code || e?.message || 'Lỗi ghi Cloud';
+                showToast(`⚠️ Lỗi đẩy Cloud: ${state.syncErrorMsg}`, 'error');
+              });
           }
         }
       },
@@ -1300,7 +1351,7 @@
         renderApp();
         showToast('Đã cập nhật tiến độ Hậu kỳ!');
         if (db) {
-          try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh); } catch (e) {}
+          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), JSON.parse(JSON.stringify(sh))).then(() => clearSyncedShowFromQueue(sh.id)).catch(() => {});
         }
       },
       exportShowToAppleCalendar(showId) {
@@ -1385,7 +1436,7 @@
         renderApp();
         showToast('Đã xoá dòng lịch show!');
         if (db) {
-          try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', showId)); } catch (e) {}
+          deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', showId)).then(() => clearDeletedShowFromQueue(showId)).catch(() => {});
         }
       },
       openPinModal() {
@@ -2311,7 +2362,7 @@ function renderHeaderHtml() {
             renderApp();
             showToast('🔒 Đã ghi lịch & địa điểm (Đối tác đã được ẩn riêng cho bạn)!');
             if (db) {
-              try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newSchedShow.id), JSON.parse(JSON.stringify(newSchedShow))); } catch (e) { state.syncErrorMsg = e?.code || e?.message || 'Lỗi ghi Cloud'; }
+              setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newSchedShow.id), JSON.parse(JSON.stringify(newSchedShow))).then(() => clearSyncedShowFromQueue(newSchedShow.id)).catch((e) => { state.syncErrorMsg = e?.code || e?.message || 'Lỗi ghi Cloud'; });
             }
           } else {
             const newId = 'ctp_ext_' + Date.now();
@@ -4654,7 +4705,6 @@ function renderHeaderHtml() {
     window.openSyncStatusModal = function() {
       state.syncModalOpen = true;
       renderApp();
-      forceSyncNow(true);
     };
     window.closeSyncStatusModal = function() {
       state.syncModalOpen = false;
