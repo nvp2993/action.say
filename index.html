@@ -346,6 +346,8 @@
       isSyncingNow: false,
       lastSyncTimeStr: '',
       syncErrorMsg: '',
+      remoteShowCount: null,
+      syncModalOpen: false,
       members: window.__BAKED_MEMBERS_DATA__ || [...INITIAL_TEAM_MEMBERS],
       shows: [...INITIAL_SHOWS_DATA],
       localShowEditsMap: {},
@@ -541,9 +543,10 @@
 
       if (toUploadMap.size > 0) {
         await Promise.all(
-          Array.from(toUploadMap.values()).map(sh =>
-            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh)
-          )
+          Array.from(toUploadMap.values()).map(sh => {
+            const cleanSh = JSON.parse(JSON.stringify(sh));
+            return setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', cleanSh.id), cleanSh);
+          })
         );
       }
       if (deletedSet.size > 0) {
@@ -570,15 +573,23 @@
         // 2. Đẩy toàn bộ show có trên máy nhưng chưa có trên Server (hoặc mới sửa hơn) lên Cloud
         await pushAllLocalEditsToCloud(remoteIdSet);
 
-        // 3. Gộp danh sách chuẩn nhất & lưu lại
+        // 3. Nếu vừa đẩy thêm show mới lên Cloud, đọc lại từ Server để xác nhận 100% số lượng trên Cloud
+        let finalRemoteList = remoteList;
+        if (state.shows.length > remoteList.length || Object.keys(state.localShowEditsMap || {}).length > 0) {
+          const snap2 = await getDocsFromServer(showsCol);
+          if (!snap2.empty) finalRemoteList = snap2.docs.map(d => d.data());
+        }
+        state.remoteShowCount = finalRemoteList.length;
+
+        // 4. Gộp danh sách chuẩn nhất & lưu lại
         state.cloudSynced = true;
         state.syncErrorMsg = '';
         state.lastSyncTimeStr = formatNowTimeHM();
-        state.shows = mergeShowsWithLocalEdits(remoteList);
+        state.shows = mergeShowsWithLocalEdits(finalRemoteList);
         saveShowsToLocalBackup();
         state.isSyncingNow = false;
         renderApp();
-        if (!silent) showToast(`☁️ Đã đồng bộ mới nhất (${state.shows.length} show) lúc ${state.lastSyncTimeStr}!`);
+        if (!silent) showToast(`☁️ Đã đồng bộ! Máy: ${state.shows.length} | Cloud: ${state.remoteShowCount} show`);
       } catch (err) {
         console.error('Lỗi đồng bộ Cloud:', err);
         state.isSyncingNow = false;
@@ -1202,7 +1213,7 @@
           if (db) {
             showToast('⏳ Đang đẩy chỉnh sửa lên Cloud...');
             try {
-              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', updated.id), updated);
+              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', updated.id), JSON.parse(JSON.stringify(updated)));
               state.cloudSynced = true;
               state.lastSyncTimeStr = formatNowTimeHM();
               renderApp();
@@ -1249,7 +1260,7 @@
           if (db) {
             showToast('⏳ Đang đẩy lịch show lên Cloud...');
             try {
-              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newShow.id), newShow);
+              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newShow.id), JSON.parse(JSON.stringify(newShow)));
               state.cloudSynced = true;
               state.lastSyncTimeStr = formatNowTimeHM();
               renderApp();
@@ -1764,7 +1775,7 @@ function renderHeaderHtml() {
               <div class="truncate">
                 <div class="flex items-center gap-1.5">
                   <span class="text-xs font-black tracking-tight text-white uppercase truncate">LỊCH SHOW 2026</span>
-                  <button type="button" onclick="forceSyncNow(false)" title="${state.syncErrorMsg ? 'Lỗi: ' + escapeHtml(state.syncErrorMsg) : 'Bấm để đồng bộ ngay từ Cloud'}" class="inline-flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full font-extrabold cursor-pointer active:scale-95 transition-all ${state.cloudSynced ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-300/60' : 'bg-amber-500/20 text-amber-700 border border-amber-300'}">
+                  <button type="button" onclick="openSyncStatusModal()" title="${state.syncErrorMsg ? 'Lỗi: ' + escapeHtml(state.syncErrorMsg) : 'Bấm để đồng bộ ngay từ Cloud'}" class="inline-flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full font-extrabold cursor-pointer active:scale-95 transition-all ${state.cloudSynced ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-300/60' : 'bg-amber-500/20 text-amber-700 border border-amber-300'}">
                     <i class="fa-solid ${state.isSyncingNow ? 'fa-arrows-rotate fa-spin' : (state.cloudSynced ? 'fa-cloud-arrow-down' : 'fa-triangle-exclamation')} text-[8.5px]"></i>
                     <span>${state.isSyncingNow ? 'Đang tải...' : (state.cloudSynced ? (state.lastSyncTimeStr ? 'Cloud ' + state.lastSyncTimeStr.slice(0,5) : 'Cloud') : 'Chưa đồng bộ')}</span>
                   </button>
@@ -2270,7 +2281,7 @@ function renderHeaderHtml() {
             renderApp();
             showToast('🔒 Đã ghi lịch & địa điểm (Đối tác đã được ẩn riêng cho bạn)!');
             if (db) {
-              try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newSchedShow.id), newSchedShow); } catch (e) {}
+              try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newSchedShow.id), JSON.parse(JSON.stringify(newSchedShow))); } catch (e) { state.syncErrorMsg = e?.code || e?.message || 'Lỗi ghi Cloud'; }
             }
           } else {
             const newId = 'ctp_ext_' + Date.now();
@@ -4507,6 +4518,60 @@ function renderHeaderHtml() {
       `;
     }
 
+    
+    function renderSyncModalHtml() {
+      if (!state.syncModalOpen) return '';
+      const isPrivateHint = (() => {
+        try {
+          localStorage.setItem('_test_priv', '1');
+          localStorage.removeItem('_test_priv');
+          return false;
+        } catch (e) { return true; }
+      })();
+      return `
+        <div onclick="closeSyncStatusModal()" class="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4">
+          <div onclick="event.stopPropagation()" class="bg-white w-full max-w-sm rounded-3xl p-4 space-y-3 text-xs shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-2.5">
+              <h3 class="font-black text-sm text-slate-900 flex items-center gap-1.5">
+                <i class="fa-solid fa-cloud text-emerald-600"></i>
+                <span>TRẠNG THÁI ĐỒNG BỘ CLOUD</span>
+              </h3>
+              <button onclick="closeSyncStatusModal()" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-center">
+                <span class="text-[10px] font-bold text-slate-400 uppercase block">Trên thiết bị này</span>
+                <span class="text-lg font-black text-slate-900 font-mono">${state.shows.length} show</span>
+              </div>
+              <div class="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-center">
+                <span class="text-[10px] font-bold text-emerald-700 uppercase block">Trên Server Cloud</span>
+                <span class="text-lg font-black text-emerald-700 font-mono">${state.remoteShowCount !== null ? state.remoteShowCount + ' show' : (state.isSyncingNow ? '...' : 'Chưa rõ')}</span>
+              </div>
+            </div>
+
+            <div class="p-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1 text-[11px]">
+              <div>• Kết nối Firebase: <b class="${state.cloudSynced ? 'text-emerald-700' : 'text-rose-600'}">${state.cloudSynced ? '✅ Đã kết nối' : '❌ Chưa kết nối'}</b></div>
+              <div>• Đồng bộ gần nhất: <b>${state.lastSyncTimeStr || 'Chưa có'}</b></div>
+              ${isPrivateHint ? `<div class="text-amber-700 font-bold">⚠️ Trình duyệt đang bật Chế độ Riêng tư (Ẩn danh) — vẫn đọc/ghi Cloud được nhưng không lưu cache offline trên máy.</div>` : ''}
+              ${state.syncErrorMsg ? `<div class="p-2 mt-1 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-bold">🚨 Lỗi từ Firebase: ${escapeHtml(state.syncErrorMsg)}</div>` : ''}
+            </div>
+
+            <div class="space-y-2 pt-1">
+              <button type="button" onclick="forceSyncNow(false)" class="w-full py-3 rounded-full bg-emerald-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm">
+                <i class="fa-solid ${state.isSyncingNow ? 'fa-arrows-rotate fa-spin' : 'fa-cloud-arrow-up'}"></i>
+                <span>${state.isSyncingNow ? 'Đang đồng bộ...' : '1. Đẩy & Kéo Đồng Bộ Ngay'}</span>
+              </button>
+              <button type="button" onclick="hardReloadFreshApp()" class="w-full py-2.5 rounded-full bg-slate-900 text-white font-extrabold text-xs flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span>2. Tải Lại Bản Web Mới Nhất (Xoá Cache)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     function renderToastHtml() {
       if (!state.toast) return '';
       return `<div class="fixed top-12 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-3 pointer-events-none"><div class="p-2.5 rounded-xl shadow-xl text-[11px] font-bold text-white bg-slate-900 flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-400"></i><span>${escapeHtml(state.toast.message)}</span></div></div>`;
@@ -4528,7 +4593,7 @@ function renderHeaderHtml() {
       });
 
       if (state.isBackendPortal) {
-        root.innerHTML = `${renderBackendPortalHtml()}${renderToastHtml()}`;
+        root.innerHTML = `${renderBackendPortalHtml()}${renderSyncModalHtml()}${renderToastHtml()}`;
         return;
       }
       let main = '';
@@ -4538,7 +4603,7 @@ function renderHeaderHtml() {
       else if (state.activeTab === 'ctp') main = renderCtpTabHtml();
       else if (state.activeTab === 'owner_stats') main = renderOwnerStatsTabHtml();
 
-      root.innerHTML = `${renderHeaderHtml()}${main}${renderBottomNavHtml()}${renderMatrixCellModalHtml()}${renderDetailModalHtml()}${renderFormModalHtml()}${renderZaloTomorrowModalHtml()}${renderPinModalHtml()}${renderSelfChangePinModalHtml()}${renderGuideModalHtml()}${renderCtpAddShowModalHtml()}${renderCtpBillModalHtml()}${renderToastHtml()}`;
+      root.innerHTML = `${renderHeaderHtml()}${main}${renderBottomNavHtml()}${renderMatrixCellModalHtml()}${renderDetailModalHtml()}${renderFormModalHtml()}${renderZaloTomorrowModalHtml()}${renderPinModalHtml()}${renderSelfChangePinModalHtml()}${renderGuideModalHtml()}${renderCtpAddShowModalHtml()}${renderCtpBillModalHtml()}${renderSyncModalHtml()}${renderToastHtml()}`;
 
       // Khôi phục chính xác vị trí cuộn ngay lập tức để màn hình đứng yên tại chỗ đang thao tác
       const newScrollEls = root.querySelectorAll('.custom-scroll, .no-scrollbar, .overflow-y-auto, .overflow-auto');
@@ -4555,6 +4620,21 @@ function renderHeaderHtml() {
     window.state = state;
     window.saveCtpStateToLocal = saveCtpStateToLocal;
     window.forceSyncNow = forceSyncNow;
+
+    window.openSyncStatusModal = function() {
+      state.syncModalOpen = true;
+      renderApp();
+      forceSyncNow(true);
+    };
+    window.closeSyncStatusModal = function() {
+      state.syncModalOpen = false;
+      renderApp();
+    };
+    window.hardReloadFreshApp = function() {
+      const base = window.location.href.split('?')[0].split('#')[0];
+      window.location.replace(base + '?v=' + Date.now());
+    };
+
     applyHomeScreenIcon(state.customLogoUrl);
     renderApp();
     initFirebaseCloud();
