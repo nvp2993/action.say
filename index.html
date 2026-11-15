@@ -8,8 +8,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Lịch Show">
-  <link id="apple-touch-icon-link" rel="apple-touch-icon" href="app.png">
-  <link id="favicon-link" rel="icon" type="image/png" href="app.png">
+  <link id="apple-touch-icon-link" rel="apple-touch-icon" href="">
+  <link id="favicon-link" rel="icon" type="image/png" href="">
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -140,7 +140,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { initializeFirestore, doc, getDoc, getDocFromServer, setDoc, deleteDoc, onSnapshot, collection, getDocs, getDocsFromServer, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // ========================================================================
     // 1. CẤU HÌNH FIREBASE RIÊNG CỦA BẠN (Dán thông số từ Firebase Console vào đây)
@@ -343,11 +343,6 @@
     const state = {
       user: null,
       cloudSynced: false,
-      isSyncingNow: false,
-      lastSyncTimeStr: '',
-      syncErrorMsg: '',
-      remoteShowCount: null,
-      syncModalOpen: false,
       members: window.__BAKED_MEMBERS_DATA__ || [...INITIAL_TEAM_MEMBERS],
       shows: [...INITIAL_SHOWS_DATA],
       localShowEditsMap: {},
@@ -473,13 +468,6 @@
         }
       });
 
-      // Giữ lại mọi show mới tạo trên máy chưa kịp có trên Cloud
-      (state.shows || []).forEach(sh => {
-        if (sh && sh.id && !deletedSet.has(sh.id) && !mergedMap.has(sh.id)) {
-          mergedMap.set(sh.id, sh);
-        }
-      });
-
       return Array.from(mergedMap.values());
     }
 
@@ -510,22 +498,6 @@
       saveShowsToLocalBackup();
     }
 
-    function clearSyncedShowFromQueue(showId) {
-      if (!showId) return;
-      if (state.localShowEditsMap && state.localShowEditsMap[showId]) {
-        delete state.localShowEditsMap[showId];
-        try { localStorage.setItem('as_local_show_edits_2026', JSON.stringify(state.localShowEditsMap)); } catch (e) {}
-      }
-    }
-
-    function clearDeletedShowFromQueue(showId) {
-      if (!showId) return;
-      if (Array.isArray(state.localDeletedShowIds) && state.localDeletedShowIds.includes(showId)) {
-        state.localDeletedShowIds = state.localDeletedShowIds.filter(id => id !== showId);
-        try { localStorage.setItem('as_local_deleted_shows_2026', JSON.stringify(state.localDeletedShowIds)); } catch (e) {}
-      }
-    }
-
     function saveShowsToLocalBackup() {
       try {
         localStorage.setItem('as_shows_backup_2026', JSON.stringify(state.shows));
@@ -541,135 +513,6 @@
     let auth = null;
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'action-say-media-2026';
 
-    
-    function formatNowTimeHM() {
-      const d = new Date();
-      return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0');
-    }
-
-    // Lưu toàn bộ danh sách Show vào 1 Document Gốc duy nhất (1 Read / 1 Write = 370x nhanh hơn & không bao giờ hết Quota)
-    async function saveMasterBundleToCloud(showsList = state.shows) {
-      if (!db) return false;
-      const cleanList = JSON.parse(JSON.stringify(showsList || []));
-      const bundleRef = doc(db, 'artifacts', appId, 'public', 'data', 'member_pins', 'shows_master_bundle');
-      await setDoc(bundleRef, {
-        showsJson: JSON.stringify(cleanList),
-        count: cleanList.length,
-        updatedAt: Date.now(),
-        updatedBy: state.currentUserId || 'anon'
-      });
-      state.remoteShowCount = cleanList.length;
-      state.cloudSynced = true;
-      state.syncErrorMsg = '';
-      state.lastSyncTimeStr = formatNowTimeHM();
-      return true;
-    }
-
-    async function pushAllLocalEditsToCloud(remoteIdSet = null) {
-      if (!db) return;
-      const deletedSet = new Set(state.localDeletedShowIds || []);
-      const toUploadMap = new Map();
-
-      Object.values(state.localShowEditsMap || {}).forEach(sh => {
-        if (sh && sh.id && !deletedSet.has(sh.id)) toUploadMap.set(sh.id, sh);
-      });
-
-      if (remoteIdSet) {
-        (state.shows || []).forEach(sh => {
-          if (sh && sh.id && !deletedSet.has(sh.id) && !remoteIdSet.has(sh.id)) {
-            toUploadMap.set(sh.id, sh);
-          }
-        });
-      }
-
-      const itemsToUpload = Array.from(toUploadMap.values());
-      const idsToDelete = Array.from(deletedSet);
-
-      // Luôn cập nhật Gói Master 1-Document trước (nhanh tức thì < 50ms)
-      if (itemsToUpload.length > 0 || idsToDelete.length > 0 || remoteIdSet !== null) {
-        await saveMasterBundleToCloud(state.shows);
-      }
-
-      if (itemsToUpload.length > 0 || idsToDelete.length > 0) {
-        const allOps = [
-          ...itemsToUpload.map(sh => ({ type: 'set', data: JSON.parse(JSON.stringify(sh)) })),
-          ...idsToDelete.map(id => ({ type: 'del', id }))
-        ];
-        for (let i = 0; i < allOps.length; i += 450) {
-          const batch = writeBatch(db);
-          const chunk = allOps.slice(i, i + 450);
-          chunk.forEach(op => {
-            if (op.type === 'set') {
-              batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'shows', op.data.id), op.data);
-            } else {
-              batch.delete(doc(db, 'artifacts', appId, 'public', 'data', 'shows', op.id));
-            }
-          });
-          await batch.commit();
-        }
-        state.localShowEditsMap = {};
-        state.localDeletedShowIds = [];
-        try {
-          localStorage.setItem('as_local_show_edits_2026', '{}');
-          localStorage.setItem('as_local_deleted_shows_2026', '[]');
-        } catch (e) {}
-      }
-    }
-
-    async function forceSyncNow(silent = false) {
-      if (!db) {
-        if (!silent) showToast('⚠️ Chưa kết nối được Firebase Cloud!', 'error');
-        return;
-      }
-      state.isSyncingNow = true;
-      if (!silent) renderApp();
-      try {
-        // 1. Ưu tiên đọc Gói Master 1-Document trực tiếp từ Server (chỉ tốn 1 lượt đọc, tốc độ < 50ms)
-        const bundleRef = doc(db, 'artifacts', appId, 'public', 'data', 'member_pins', 'shows_master_bundle');
-        let remoteList = [];
-        try {
-          const bundleSnap = await getDocFromServer(bundleRef);
-          if (bundleSnap.exists() && bundleSnap.data()?.showsJson) {
-            remoteList = JSON.parse(bundleSnap.data().showsJson) || [];
-          }
-        } catch (e) {}
-
-        // 2. Nếu chưa có Gói Master trên Server, đọc từ bảng shows cũ để gom lại
-        if (remoteList.length === 0) {
-          const showsCol = collection(db, 'artifacts', appId, 'public', 'data', 'shows');
-          const snap = await getDocsFromServer(showsCol);
-          remoteList = snap.empty ? [] : snap.docs.map(d => d.data());
-        }
-
-        const remoteIdSet = new Set(remoteList.map(d => d.id));
-        const mergedList = mergeShowsWithLocalEdits(remoteList);
-        state.shows = mergedList;
-        saveShowsToLocalBackup();
-
-        // 3. Đẩy ngay Gói Master chuẩn nhất lên Server để mọi thiết bị (PC & iPhone) khớp 100% số lượng
-        await pushAllLocalEditsToCloud(remoteIdSet);
-
-        state.remoteShowCount = state.shows.length;
-        state.cloudSynced = true;
-        state.syncErrorMsg = '';
-        state.lastSyncTimeStr = formatNowTimeHM();
-        state.isSyncingNow = false;
-        renderApp();
-        if (!silent) showToast(`☁️ Đã đồng bộ hoàn tất (${state.shows.length} show)!`);
-      } catch (err) {
-        console.error('Lỗi đồng bộ Cloud:', err);
-        state.isSyncingNow = false;
-        state.cloudSynced = false;
-        state.syncErrorMsg = err?.code || err?.message || 'Lỗi mạng / Quyền Firebase';
-        renderApp();
-        if (!silent) showToast(`❌ Đồng bộ thất bại: ${state.syncErrorMsg}`, 'error');
-      }
-    }
-
-    window.addEventListener('online', () => {
-      if (db) forceSyncNow(true);
-    });
-
     async function initFirebaseCloud() {
       try {
         const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config)
@@ -679,9 +522,7 @@
         if (firebaseConfig && firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("AIzaSy...")) {
           const app = initializeApp(firebaseConfig);
           auth = getAuth(app);
-          db = initializeFirestore(app, {
-            experimentalAutoDetectLongPolling: true
-          });
+          db = getFirestore(app);
 
           let listenersAttached = false;
           const ensureListeners = (u) => {
@@ -693,20 +534,15 @@
           };
 
           onAuthStateChanged(auth, (u) => {
-            if (u) {
-              state.user = u;
-              ensureListeners(u);
-            }
+            if (u) ensureListeners(u);
           });
 
-          // Quan trọng: Chờ xác thực hoàn tất trước khi gắn onSnapshot (y hệt bản gốc ổn định, tránh lỗi mất kết nối ngầm)
           try {
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
               await signInWithCustomToken(auth, __initial_auth_token);
             } else {
               await signInAnonymously(auth);
             }
-            ensureListeners(auth.currentUser);
           } catch (authErr) {
             console.warn('Firebase Auth fallback:', authErr);
             ensureListeners(null);
@@ -718,109 +554,33 @@
     }
 
     function attachFirestoreListeners(u) {
-      // 1. KÊNH ĐỒNG BỘ SIÊU TỐC 1-DOCUMENT (bundleRef): Đồng bộ toàn bộ 370 show trong 1 gói tin duy nhất (< 50ms)
-      const bundleRef = doc(db, 'artifacts', appId, 'public', 'data', 'member_pins', 'shows_master_bundle');
-      let bundleLoaded = false;
-
-      onSnapshot(
-        bundleRef,
-        async (docSnap) => {
-          if (docSnap.exists() && docSnap.data()?.showsJson) {
-            try {
-              const remoteList = JSON.parse(docSnap.data().showsJson) || [];
-              if (remoteList.length > 0) {
-                const prevCount = state.shows.length;
-                bundleLoaded = true;
-                state.cloudSynced = true;
-                state.syncErrorMsg = '';
-                state.lastSyncTimeStr = formatNowTimeHM();
-                state.shows = mergeShowsWithLocalEdits(remoteList);
-                state.remoteShowCount = remoteList.length;
-                saveShowsToLocalBackup();
-                renderApp();
-
-                // Nếu máy này đang có nhiều show hơn gói trên Cloud (VD: 370 vs 367), tự động đẩy phần thiếu lên Cloud ngay!
-                if (state.shows.length > remoteList.length || Object.keys(state.localShowEditsMap || {}).length > 0) {
-                  const remoteIdSet = new Set(remoteList.map(d => d.id));
-                  pushAllLocalEditsToCloud(remoteIdSet).catch(() => {});
-                }
-              }
-            } catch (e) { console.error('Lỗi đọc gói Master:', e); }
-          } else {
-            // Chưa có gói Master trên Cloud -> Đọc từ bảng shows cũ 1 lần và khởi tạo gói Master ngay
-            try {
-              const showsCol = collection(db, 'artifacts', appId, 'public', 'data', 'shows');
-              const snap = await getDocs(showsCol);
-              const rawList = snap.empty ? [] : snap.docs.map(d => d.data());
-              state.shows = mergeShowsWithLocalEdits(rawList);
-              saveShowsToLocalBackup();
-              await saveMasterBundleToCloud(state.shows);
-              renderApp();
-            } catch (e) {}
-          }
-        },
-        (err) => {
-          state.cloudSynced = false;
-          state.syncErrorMsg = err?.code || err?.message || 'Mất kết nối Cloud';
-          renderApp();
-        }
-      );
-
-      // 2. Kênh lắng nghe bổ trợ trên bảng shows chi tiết
       const showsCol = collection(db, 'artifacts', appId, 'public', 'data', 'shows');
-      let showsInitialSnapDone = false;
       onSnapshot(
         showsCol,
         async (snap) => {
           state.cloudSynced = true;
-          if (!showsInitialSnapDone) {
-            showsInitialSnapDone = true;
-            if (!bundleLoaded && !snap.empty) {
-              const rawList = snap.docs.map(d => d.data());
-              const remoteIdSet = new Set(rawList.map(d => d.id));
-              state.shows = mergeShowsWithLocalEdits(rawList);
-              if (state.remoteShowCount === null) state.remoteShowCount = rawList.length;
-              saveShowsToLocalBackup();
-              state.lastSyncTimeStr = formatNowTimeHM();
-              state.syncErrorMsg = '';
-              renderApp();
-              if (state.shows.length > rawList.length) {
-                pushAllLocalEditsToCloud(remoteIdSet).catch(() => {});
-              }
-            }
-            return;
-          }
-          const changes = snap.docChanges();
-          if (changes.length === 0) return;
-          const deletedSet = new Set(state.localDeletedShowIds || []);
-          const showsMap = new Map((state.shows || []).map(s => [s.id, s]));
-          let hasVisualChange = false;
-          changes.forEach(ch => {
-            const docData = ch.doc.data();
-            const docId = ch.doc.id;
-            if (ch.type === 'removed') {
-              if (showsMap.has(docId)) {
-                showsMap.delete(docId);
-                hasVisualChange = true;
-              }
-            } else if (!deletedSet.has(docId)) {
-              const localEdit = state.localShowEditsMap?.[docId];
-              if (!localEdit || (Number(docData.updatedAt) || 0) >= (Number(localEdit.updatedAt) || 0)) {
-                const prev = showsMap.get(docId);
-                if (!prev || JSON.stringify(prev) !== JSON.stringify(docData)) {
-                  showsMap.set(docId, docData);
-                  hasVisualChange = true;
-                }
-              }
-            }
-          });
-          if (hasVisualChange) {
-            state.shows = Array.from(showsMap.values());
+          if (snap.empty && INITIAL_SHOWS_DATA.length > 0) {
+            try {
+              await Promise.all(
+                INITIAL_SHOWS_DATA.map(sh =>
+                  setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh)
+                )
+              );
+            } catch (err) { console.error(err); }
+          } else if (!snap.empty) {
+            const rawList = snap.docs.map(d => d.data());
+            const remoteIds = new Set(rawList.map(d => d.id));
+            state.shows = mergeShowsWithLocalEdits(rawList);
             saveShowsToLocalBackup();
-            renderApp();
+            Object.values(state.localShowEditsMap || {}).forEach(sh => {
+              if (sh && sh.id && !remoteIds.has(sh.id)) {
+                setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh).catch(() => {});
+              }
+            });
           }
+          renderApp();
         },
-        () => {}
+        () => { state.cloudSynced = false; renderApp(); }
       );
 
       const membersCol = collection(db, 'artifacts', appId, 'public', 'data', 'team_members');
@@ -898,6 +658,8 @@
           }
         }
       });
+
+      // Đã lưu phiên đăng nhập trực tiếp trên thiết bị (localStorage), không gọi renderApp() thừa từ sessionCol
     }
 
     function getMember(id) {
@@ -1351,23 +1113,13 @@
           saveShowsToLocalBackup();
           state.formModal = null;
           renderApp();
-          showToast('✅ Đã lưu chỉnh sửa!');
+          showToast('✅ Đã lưu chỉnh sửa & đồng bộ vĩnh viễn!');
           if (db) {
-            Promise.all([
-              saveMasterBundleToCloud(state.shows),
-              setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', updated.id), JSON.parse(JSON.stringify(updated)))
-            ])
-              .then(() => {
-                clearSyncedShowFromQueue(updated.id);
-                state.cloudSynced = true;
-                state.lastSyncTimeStr = formatNowTimeHM();
-                renderApp();
-              })
-              .catch((e) => {
-                state.cloudSynced = false;
-                state.syncErrorMsg = e?.code || e?.message || 'Lỗi ghi Cloud';
-                showToast(`⚠️ Lỗi đẩy Cloud: ${state.syncErrorMsg}`, 'error');
-              });
+            try {
+              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', updated.id), updated);
+            } catch (e) {
+              console.error('Lỗi lưu chỉnh sửa lên Cloud:', e);
+            }
           }
         } else {
           const nextStt = state.shows.length > 0 ? Math.max(...state.shows.map(s => Number(s.stt) || 300)) + 1 : 301;
@@ -1398,23 +1150,9 @@
           if (createdMonth >= 6 && createdMonth <= 12) state.selectedMonth = createdMonth;
           state.formModal = null;
           renderApp();
-          showToast('🎉 Đã NỔ SHOW thành công!');
+          showToast('🎉 Đã NỔ SHOW mới & lưu vĩnh viễn!');
           if (db) {
-            Promise.all([
-              saveMasterBundleToCloud(state.shows),
-              setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newShow.id), JSON.parse(JSON.stringify(newShow)))
-            ])
-              .then(() => {
-                clearSyncedShowFromQueue(newShow.id);
-                state.cloudSynced = true;
-                state.lastSyncTimeStr = formatNowTimeHM();
-                renderApp();
-              })
-              .catch((e) => {
-                state.cloudSynced = false;
-                state.syncErrorMsg = e?.code || e?.message || 'Lỗi ghi Cloud';
-                showToast(`⚠️ Lỗi đẩy Cloud: ${state.syncErrorMsg}`, 'error');
-              });
+            try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newShow.id), newShow); } catch (e) {}
           }
         }
       },
@@ -1429,7 +1167,7 @@
         renderApp();
         showToast('Đã cập nhật tiến độ Hậu kỳ!');
         if (db) {
-          Promise.all([saveMasterBundleToCloud(state.shows), setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), JSON.parse(JSON.stringify(sh)))]).then(() => clearSyncedShowFromQueue(sh.id)).catch(() => {});
+          try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh); } catch (e) {}
         }
       },
       exportShowToAppleCalendar(showId) {
@@ -1514,7 +1252,7 @@
         renderApp();
         showToast('Đã xoá dòng lịch show!');
         if (db) {
-          Promise.all([saveMasterBundleToCloud(state.shows), deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', showId))]).then(() => clearDeletedShowFromQueue(showId)).catch(() => {});
+          try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', showId)); } catch (e) {}
         }
       },
       openPinModal() {
@@ -1772,17 +1510,8 @@
         if (state.user && db) {
           const showsCol = collection(db, 'artifacts', appId, 'public', 'data', 'shows');
           const snap = await getDocs(showsCol);
-          const delDocs = snap.docs;
-          for (let i = 0; i < delDocs.length; i += 450) {
-            const b = writeBatch(db);
-            delDocs.slice(i, i + 450).forEach(d => b.delete(d.ref));
-            await b.commit();
-          }
-          for (let i = 0; i < INITIAL_SHOWS_DATA.length; i += 450) {
-            const b = writeBatch(db);
-            INITIAL_SHOWS_DATA.slice(i, i + 450).forEach(sh => b.set(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), JSON.parse(JSON.stringify(sh))));
-            await b.commit();
-          }
+          await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', d.id))));
+          await Promise.all(INITIAL_SHOWS_DATA.map(sh => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh)));
         }
       },
       triggerExcelFileUpload() {
@@ -1803,41 +1532,31 @@
         reader.onload = () => {
           const img = new Image();
           img.onload = async () => {
-            // Chuẩn hoá kích thước icon 512x512 sắc nét & nhẹ (<150KB) để lưu bền vững vào LocalStorage + Firebase Cloud
             const canvas = document.createElement('canvas');
-            const size = 512;
-            canvas.width = size;
-            canvas.height = size;
+            canvas.width = 512;
+            canvas.height = 512;
             const ctx = canvas.getContext('2d');
             let finalDataUrl = reader.result;
             if (ctx) {
-              ctx.clearRect(0, 0, size, size);
-              ctx.drawImage(img, 0, 0, size, size);
+              ctx.clearRect(0, 0, 512, 512);
+              ctx.drawImage(img, 0, 0, 512, 512);
               try {
                 finalDataUrl = canvas.toDataURL('image/png');
-                if (finalDataUrl.length > 750000) {
-                  finalDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-                }
+                if (finalDataUrl.length > 750000) finalDataUrl = canvas.toDataURL('image/jpeg', 0.92);
               } catch (e) {}
             }
             state.customLogoUrl = finalDataUrl;
             try { localStorage.setItem('as_custom_logo_2026', finalDataUrl); } catch (e) {}
             applyHomeScreenIcon(state.customLogoUrl);
             renderApp();
-            showToast('⏳ Đang lưu Logo & Icon vĩnh viễn lên Cloud...');
+            showToast('Đã cập nhật & lưu vĩnh viễn Logo App!');
             if (db) {
               try {
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'member_pins', 'app_branding'), {
                   customLogoUrl: finalDataUrl,
                   updatedAt: Date.now()
                 });
-                showToast('☁️✅ Đã lưu Logo & Icon vĩnh viễn trên mọi thiết bị!');
-              } catch (err) {
-                console.error('Lỗi lưu logo lên Cloud:', err);
-                showToast('💾 Đã lưu Logo trên trình duyệt máy này!');
-              }
-            } else {
-              showToast('💾 Đã lưu Logo & Icon thành công!');
+              } catch (e) {}
             }
           };
           img.src = reader.result;
@@ -1902,17 +1621,8 @@
             if (state.user && db) {
               const showsCol = collection(db, 'artifacts', appId, 'public', 'data', 'shows');
               const snap = await getDocs(showsCol);
-              const delDocs = snap.docs;
-              for (let i = 0; i < delDocs.length; i += 450) {
-                const b = writeBatch(db);
-                delDocs.slice(i, i + 450).forEach(d => b.delete(d.ref));
-                await b.commit();
-              }
-              for (let i = 0; i < imported.length; i += 450) {
-                const b = writeBatch(db);
-                imported.slice(i, i + 450).forEach(sh => b.set(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), JSON.parse(JSON.stringify(sh))));
-                await b.commit();
-              }
+              await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', d.id))));
+              await Promise.all(imported.map(sh => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh)));
             }
           }
         } catch (err) {
@@ -1970,10 +1680,9 @@ function renderHeaderHtml() {
               <div class="truncate">
                 <div class="flex items-center gap-1.5">
                   <span class="text-xs font-black tracking-tight text-white uppercase truncate">LỊCH SHOW 2026</span>
-                  <button type="button" onclick="openSyncStatusModal()" title="${state.syncErrorMsg ? 'Lỗi: ' + escapeHtml(state.syncErrorMsg) : 'Bấm để đồng bộ ngay từ Cloud'}" class="inline-flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full font-extrabold cursor-pointer active:scale-95 transition-all ${state.cloudSynced ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-300/60' : 'bg-amber-500/20 text-amber-700 border border-amber-300'}">
-                    <span class="w-1.5 h-1.5 rounded-full ${state.cloudSynced ? 'bg-emerald-500 animate-ping' : 'bg-amber-500'}"></span>
-                    <span>${state.isSyncingNow ? 'Đang đồng bộ...' : (state.cloudSynced ? 'LIVE • Real-time' : 'Chưa đồng bộ')}</span>
-                  </button>
+                  <span class="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-emerald-500/20 text-emerald-300">
+                    <span class="w-1.5 h-1.5 rounded-full ${state.cloudSynced ? 'bg-emerald-400' : 'bg-amber-400'}"></span>${state.cloudSynced ? 'Cloud' : 'Local'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -2476,7 +2185,7 @@ function renderHeaderHtml() {
             renderApp();
             showToast('🔒 Đã ghi lịch & địa điểm (Đối tác đã được ẩn riêng cho bạn)!');
             if (db) {
-              Promise.all([saveMasterBundleToCloud(state.shows), setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newSchedShow.id), JSON.parse(JSON.stringify(newSchedShow)))]).then(() => clearSyncedShowFromQueue(newSchedShow.id)).catch((e) => { state.syncErrorMsg = e?.code || e?.message || 'Lỗi ghi Cloud'; });
+              try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newSchedShow.id), newSchedShow); } catch (e) {}
             }
           } else {
             const newId = 'ctp_ext_' + Date.now();
@@ -4713,60 +4422,6 @@ function renderHeaderHtml() {
       `;
     }
 
-    
-    function renderSyncModalHtml() {
-      if (!state.syncModalOpen) return '';
-      const isPrivateHint = (() => {
-        try {
-          localStorage.setItem('_test_priv', '1');
-          localStorage.removeItem('_test_priv');
-          return false;
-        } catch (e) { return true; }
-      })();
-      return `
-        <div onclick="closeSyncStatusModal()" class="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4">
-          <div onclick="event.stopPropagation()" class="bg-white w-full max-w-sm rounded-3xl p-4 space-y-3 text-xs shadow-2xl">
-            <div class="flex justify-between items-center border-b border-slate-100 pb-2.5">
-              <h3 class="font-black text-sm text-slate-900 flex items-center gap-1.5">
-                <i class="fa-solid fa-cloud text-emerald-600"></i>
-                <span>TRẠNG THÁI ĐỒNG BỘ CLOUD</span>
-              </h3>
-              <button onclick="closeSyncStatusModal()" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2">
-              <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-center">
-                <span class="text-[10px] font-bold text-slate-400 uppercase block">Trên thiết bị này</span>
-                <span class="text-lg font-black text-slate-900 font-mono">${state.shows.length} show</span>
-              </div>
-              <div class="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-center">
-                <span class="text-[10px] font-bold text-emerald-700 uppercase block">Trên Server Cloud</span>
-                <span class="text-lg font-black text-emerald-700 font-mono">${state.remoteShowCount !== null ? state.remoteShowCount + ' show' : (state.isSyncingNow ? '...' : 'Chưa rõ')}</span>
-              </div>
-            </div>
-
-            <div class="p-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1 text-[11px]">
-              <div>• Kết nối Firebase: <b class="${state.cloudSynced ? 'text-emerald-700' : 'text-rose-600'}">${state.cloudSynced ? '✅ Đã kết nối' : '❌ Chưa kết nối'}</b></div>
-              <div>• Đồng bộ gần nhất: <b>${state.lastSyncTimeStr || 'Chưa có'}</b></div>
-              ${isPrivateHint ? `<div class="text-amber-700 font-bold">⚠️ Trình duyệt đang bật Chế độ Riêng tư (Ẩn danh) — vẫn đọc/ghi Cloud được nhưng không lưu cache offline trên máy.</div>` : ''}
-              ${state.syncErrorMsg ? `<div class="p-2 mt-1 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-bold">🚨 Lỗi từ Firebase: ${escapeHtml(state.syncErrorMsg)}</div>` : ''}
-            </div>
-
-            <div class="space-y-2 pt-1">
-              <button type="button" onclick="forceSyncNow(false)" class="w-full py-3 rounded-full bg-emerald-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm">
-                <i class="fa-solid ${state.isSyncingNow ? 'fa-arrows-rotate fa-spin' : 'fa-cloud-arrow-up'}"></i>
-                <span>${state.isSyncingNow ? 'Đang đồng bộ...' : '1. Đẩy & Kéo Đồng Bộ Ngay'}</span>
-              </button>
-              <button type="button" onclick="hardReloadFreshApp()" class="w-full py-2.5 rounded-full bg-slate-900 text-white font-extrabold text-xs flex items-center justify-center gap-1.5">
-                <i class="fa-solid fa-rotate-right"></i>
-                <span>2. Tải Lại Bản Web Mới Nhất (Xoá Cache)</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
     function renderToastHtml() {
       if (!state.toast) return '';
       return `<div class="fixed top-12 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-3 pointer-events-none"><div class="p-2.5 rounded-xl shadow-xl text-[11px] font-bold text-white bg-slate-900 flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-400"></i><span>${escapeHtml(state.toast.message)}</span></div></div>`;
@@ -4788,7 +4443,7 @@ function renderHeaderHtml() {
       });
 
       if (state.isBackendPortal) {
-        root.innerHTML = `${renderBackendPortalHtml()}${renderSyncModalHtml()}${renderToastHtml()}`;
+        root.innerHTML = `${renderBackendPortalHtml()}${renderToastHtml()}`;
         return;
       }
       let main = '';
@@ -4798,7 +4453,7 @@ function renderHeaderHtml() {
       else if (state.activeTab === 'ctp') main = renderCtpTabHtml();
       else if (state.activeTab === 'owner_stats') main = renderOwnerStatsTabHtml();
 
-      root.innerHTML = `${renderHeaderHtml()}${main}${renderBottomNavHtml()}${renderMatrixCellModalHtml()}${renderDetailModalHtml()}${renderFormModalHtml()}${renderZaloTomorrowModalHtml()}${renderPinModalHtml()}${renderSelfChangePinModalHtml()}${renderGuideModalHtml()}${renderCtpAddShowModalHtml()}${renderCtpBillModalHtml()}${renderSyncModalHtml()}${renderToastHtml()}`;
+      root.innerHTML = `${renderHeaderHtml()}${main}${renderBottomNavHtml()}${renderMatrixCellModalHtml()}${renderDetailModalHtml()}${renderFormModalHtml()}${renderZaloTomorrowModalHtml()}${renderPinModalHtml()}${renderSelfChangePinModalHtml()}${renderGuideModalHtml()}${renderCtpAddShowModalHtml()}${renderCtpBillModalHtml()}${renderToastHtml()}`;
 
       // Khôi phục chính xác vị trí cuộn ngay lập tức để màn hình đứng yên tại chỗ đang thao tác
       const newScrollEls = root.querySelectorAll('.custom-scroll, .no-scrollbar, .overflow-y-auto, .overflow-auto');
@@ -4814,33 +4469,7 @@ function renderHeaderHtml() {
 
     window.state = state;
     window.saveCtpStateToLocal = saveCtpStateToLocal;
-    window.forceSyncNow = forceSyncNow;
-
-    window.openSyncStatusModal = function() {
-      state.syncModalOpen = true;
-      renderApp();
-    };
-    window.closeSyncStatusModal = function() {
-      state.syncModalOpen = false;
-      renderApp();
-    };
-    window.hardReloadFreshApp = function() {
-      const base = window.location.href.split('?')[0].split('#')[0];
-      window.location.replace(base + '?v=' + Date.now());
-    };
-
     applyHomeScreenIcon(state.customLogoUrl);
-    if (!state.customLogoUrl) {
-      const probeImg = new Image();
-      probeImg.onload = () => {
-        if (!state.customLogoUrl) {
-          state.customLogoUrl = 'app.png';
-          applyHomeScreenIcon('app.png');
-          renderApp();
-        }
-      };
-      probeImg.src = 'app.png';
-    }
     renderApp();
     initFirebaseCloud();
   </script>
