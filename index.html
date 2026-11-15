@@ -140,7 +140,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, getDocs, getDocsFromServer } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // ========================================================================
     // 1. CẤU HÌNH FIREBASE RIÊNG CỦA BẠN (Dán thông số từ Firebase Console vào đây)
@@ -343,6 +343,9 @@
     const state = {
       user: null,
       cloudSynced: false,
+      isSyncingNow: false,
+      lastSyncTimeStr: '',
+      syncErrorMsg: '',
       members: window.__BAKED_MEMBERS_DATA__ || [...INITIAL_TEAM_MEMBERS],
       shows: [...INITIAL_SHOWS_DATA],
       localShowEditsMap: {},
@@ -511,6 +514,73 @@
     let auth = null;
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'action-say-media-2026';
 
+    
+    function formatNowTimeHM() {
+      const d = new Date();
+      return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0');
+    }
+
+    async function pushAllLocalEditsToCloud() {
+      if (!db) return;
+      const edits = Object.values(state.localShowEditsMap || {});
+      if (edits.length > 0) {
+        await Promise.all(
+          edits.map(sh => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh))
+        );
+      }
+      const deletedIds = state.localDeletedShowIds || [];
+      if (deletedIds.length > 0) {
+        await Promise.all(
+          deletedIds.map(id => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', id)))
+        );
+      }
+    }
+
+    async function forceSyncNow(silent = false) {
+      if (!db) {
+        if (!silent) showToast('⚠️ Chưa kết nối được Firebase Cloud!', 'error');
+        return;
+      }
+      state.isSyncingNow = true;
+      if (!silent) renderApp();
+      try {
+        // 1. Đẩy các thay đổi đang nằm ở máy lên Cloud trước (nếu có)
+        await pushAllLocalEditsToCloud();
+
+        // 2. Ép kéo dữ liệu mới nhất trực tiếp từ Server Firebase (bỏ qua cache cũ của Safari iPhone)
+        const showsCol = collection(db, 'artifacts', appId, 'public', 'data', 'shows');
+        const snap = await getDocsFromServer(showsCol);
+        state.cloudSynced = true;
+        state.syncErrorMsg = '';
+        state.lastSyncTimeStr = formatNowTimeHM();
+        if (!snap.empty) {
+          const rawList = snap.docs.map(d => d.data());
+          state.shows = mergeShowsWithLocalEdits(rawList);
+          saveShowsToLocalBackup();
+        }
+        state.isSyncingNow = false;
+        renderApp();
+        if (!silent) showToast(`☁️ Đã đồng bộ mới nhất (${state.shows.length} show) lúc ${state.lastSyncTimeStr}!`);
+      } catch (err) {
+        console.error('Lỗi đồng bộ Cloud:', err);
+        state.isSyncingNow = false;
+        state.cloudSynced = false;
+        state.syncErrorMsg = err?.code || err?.message || 'Lỗi mạng / Quyền Firebase';
+        renderApp();
+        if (!silent) showToast(`❌ Đồng bộ thất bại: ${state.syncErrorMsg}`, 'error');
+      }
+    }
+
+    // Tự động ép đồng bộ ngay khi mở lại app từ màn hình chính iPhone (chuyển tab / mở khóa màn hình) hoặc khi có mạng trở lại
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && db) {
+        forceSyncNow(true);
+      }
+    });
+    window.addEventListener('online', () => {
+      if (db) forceSyncNow(true);
+    });
+
     async function initFirebaseCloud() {
       try {
         const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config)
@@ -528,11 +598,18 @@
             if (!listenersAttached && db) {
               listenersAttached = true;
               attachFirestoreListeners(state.user);
+              forceSyncNow(true);
             }
           };
 
+          // Gắn kết nối đọc/ghi Firestore ngay lập tức không chờ Auth chậm trễ
+          ensureListeners(null);
+
           onAuthStateChanged(auth, (u) => {
-            if (u) ensureListeners(u);
+            if (u) {
+              state.user = u;
+              forceSyncNow(true);
+            }
           });
 
           try {
@@ -543,7 +620,6 @@
             }
           } catch (authErr) {
             console.warn('Firebase Auth fallback:', authErr);
-            ensureListeners(null);
           }
         }
       } catch (e) {
@@ -570,9 +646,15 @@
             state.shows = mergeShowsWithLocalEdits(rawList);
             saveShowsToLocalBackup();
           }
+          state.lastSyncTimeStr = formatNowTimeHM();
+          state.syncErrorMsg = '';
           renderApp();
         },
-        () => { state.cloudSynced = false; renderApp(); }
+        (err) => {
+          state.cloudSynced = false;
+          state.syncErrorMsg = err?.code || err?.message || 'Mất kết nối Cloud';
+          renderApp();
+        }
       );
 
       const membersCol = collection(db, 'artifacts', appId, 'public', 'data', 'team_members');
@@ -1099,13 +1181,23 @@
           saveShowsToLocalBackup();
           state.formModal = null;
           renderApp();
-          showToast('✅ Đã lưu chỉnh sửa & đồng bộ vĩnh viễn!');
           if (db) {
+            showToast('⏳ Đang đẩy chỉnh sửa lên Cloud...');
             try {
               await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', updated.id), updated);
+              state.cloudSynced = true;
+              state.lastSyncTimeStr = formatNowTimeHM();
+              renderApp();
+              showToast('☁️✅ Đã lưu & đồng bộ lên Cloud thành công!');
             } catch (e) {
               console.error('Lỗi lưu chỉnh sửa lên Cloud:', e);
+              state.cloudSynced = false;
+              state.syncErrorMsg = e?.code || e?.message || 'Lỗi ghi Cloud';
+              renderApp();
+              showToast(`⚠️ Đã lưu trên máy, nhưng lỗi đẩy Cloud: ${state.syncErrorMsg}`, 'error');
             }
+          } else {
+            showToast('💾 Đã lưu trên máy (Chế độ Offline)');
           }
         } else {
           const nextStt = state.shows.length > 0 ? Math.max(...state.shows.map(s => Number(s.stt) || 300)) + 1 : 301;
@@ -1136,9 +1228,23 @@
           if (createdMonth >= 6 && createdMonth <= 12) state.selectedMonth = createdMonth;
           state.formModal = null;
           renderApp();
-          showToast('🎉 Đã NỔ SHOW mới & lưu vĩnh viễn!');
           if (db) {
-            try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newShow.id), newShow); } catch (e) {}
+            showToast('⏳ Đang đẩy lịch show lên Cloud...');
+            try {
+              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newShow.id), newShow);
+              state.cloudSynced = true;
+              state.lastSyncTimeStr = formatNowTimeHM();
+              renderApp();
+              showToast('☁️🎉 Đã NỔ SHOW & đồng bộ lên Cloud thành công!');
+            } catch (e) {
+              console.error('Lỗi lưu show mới lên Cloud:', e);
+              state.cloudSynced = false;
+              state.syncErrorMsg = e?.code || e?.message || 'Lỗi ghi Cloud';
+              renderApp();
+              showToast(`⚠️ Đã lưu trên máy, nhưng lỗi đẩy Cloud: ${state.syncErrorMsg}`, 'error');
+            }
+          } else {
+            showToast('💾 Đã lưu show trên máy (Chế độ Offline)');
           }
         }
       },
@@ -1640,9 +1746,10 @@ function renderHeaderHtml() {
               <div class="truncate">
                 <div class="flex items-center gap-1.5">
                   <span class="text-xs font-black tracking-tight text-white uppercase truncate">LỊCH SHOW 2026</span>
-                  <span class="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-emerald-500/20 text-emerald-300">
-                    <span class="w-1.5 h-1.5 rounded-full ${state.cloudSynced ? 'bg-emerald-400' : 'bg-amber-400'}"></span>${state.cloudSynced ? 'Cloud' : 'Local'}
-                  </span>
+                  <button type="button" onclick="forceSyncNow(false)" title="${state.syncErrorMsg ? 'Lỗi: ' + escapeHtml(state.syncErrorMsg) : 'Bấm để đồng bộ ngay từ Cloud'}" class="inline-flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full font-extrabold cursor-pointer active:scale-95 transition-all ${state.cloudSynced ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-300/60' : 'bg-amber-500/20 text-amber-700 border border-amber-300'}">
+                    <i class="fa-solid ${state.isSyncingNow ? 'fa-arrows-rotate fa-spin' : (state.cloudSynced ? 'fa-cloud-arrow-down' : 'fa-triangle-exclamation')} text-[8.5px]"></i>
+                    <span>${state.isSyncingNow ? 'Đang tải...' : (state.cloudSynced ? (state.lastSyncTimeStr ? 'Cloud ' + state.lastSyncTimeStr.slice(0,5) : 'Cloud') : 'Chưa đồng bộ')}</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -4429,6 +4536,7 @@ function renderHeaderHtml() {
 
     window.state = state;
     window.saveCtpStateToLocal = saveCtpStateToLocal;
+    window.forceSyncNow = forceSyncNow;
     applyHomeScreenIcon(state.customLogoUrl);
     renderApp();
     initFirebaseCloud();
