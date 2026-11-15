@@ -350,7 +350,8 @@
       pinsMap: window.__BAKED_PINS_DATA__ || { ...DEFAULT_PINS_MAP },
       customLogoUrl: window.__BAKED_CUSTOM_LOGO__ || null,
       adminAuth: { ...DEFAULT_ADMIN_AUTH },
-      currentUserId: 'khoa',
+      currentUserId: null,
+      allUsersCtpCloudMap: {},
       isAdminMode: false,
 
       isBackendPortal: window.location.hash === '#admin',
@@ -386,7 +387,7 @@
       detailShowId: null,
       matrixCellModal: null,
       formModal: null,
-      pinModal: null,
+      pinModal: { step: 'select', selectedId: null, pinInput: '', error: '' },
       selfChangePinModal: null,
       guideModal: false,
       zaloTomorrowModal: null,
@@ -435,8 +436,7 @@
       if (savedLocalPins) state.pinsMap = { ...state.pinsMap, ...JSON.parse(savedLocalPins) };
       const savedCustomLogo = localStorage.getItem('as_custom_logo_2026');
       if (savedCustomLogo) state.customLogoUrl = savedCustomLogo;
-      const savedLocalUser = localStorage.getItem('as_user_backup_2026');
-      if (savedLocalUser) state.currentUserId = savedLocalUser;
+      try { localStorage.removeItem('as_user_backup_2026'); } catch (e) {}
       const savedAdminMode = localStorage.getItem('as_admin_mode_2026');
       if (savedAdminMode === 'true') state.isAdminMode = true;
       const savedCtpItems = localStorage.getItem('as_ctp_items_2026');
@@ -635,8 +635,9 @@
         if (!snap.empty) {
           let changed = false;
           snap.docs.forEach(d => {
-            if (d.id === state.currentUserId) {
-              const rData = d.data();
+            const rData = d.data();
+            if (rData) state.allUsersCtpCloudMap[d.id] = rData;
+            if (state.currentUserId && d.id === state.currentUserId) {
               if (rData && (Number(rData.updatedAt) || 0) > (Number(state.ctpLastUpdatedAt) || 0)) {
                 if (rData.items) state.ctpItems = { ...state.ctpItems, ...rData.items };
                 if (Array.isArray(rData.customShows) && rData.customShows.length > 0) {
@@ -1260,11 +1261,19 @@
         renderApp();
       },
       closePinModal() {
+        if (!state.currentUserId) return; // Bắt buộc đăng nhập mới được vào app
         state.pinModal = null;
         renderApp();
       },
+      logoutMember() {
+        state.currentUserId = null;
+        try { localStorage.removeItem('as_user_backup_2026'); } catch (e) {}
+        state.pinModal = { step: 'select', selectedId: null, pinInput: '', error: '' };
+        renderApp();
+        showToast('🔒 Đã đăng xuất tài khoản!');
+      },
       chooseMemberForPin(memId) {
-        if (!state.pinModal) return;
+        if (!state.pinModal) state.pinModal = { step: 'select', selectedId: null, pinInput: '', error: '' };
         state.pinModal.selectedId = memId;
         state.pinModal.step = 'pin';
         state.pinModal.pinInput = '';
@@ -1305,7 +1314,15 @@
             if (inp) inp.blur();
             setTimeout(async () => {
               state.currentUserId = chosenId;
-              try { localStorage.setItem('as_user_backup_2026', chosenId); } catch (e) {}
+              const rData = state.allUsersCtpCloudMap?.[chosenId];
+              if (rData) {
+                if (rData.items) state.ctpItems = { ...state.ctpItems, ...rData.items };
+                if (Array.isArray(rData.customShows) && rData.customShows.length > 0) {
+                  const mapC = new Map((state.ctpCustomShows || []).map(x => [x.id, x]));
+                  rData.customShows.forEach(x => { if (x && x.id) mapC.set(x.id, x); });
+                  state.ctpCustomShows = Array.from(mapC.values());
+                }
+              }
               state.pinModal = null;
               renderApp();
               showToast(`Xin chào ${getMember(chosenId).name}!`);
@@ -4255,20 +4272,44 @@ function renderHeaderHtml() {
     }
 
     function renderPinModalHtml() {
-      const pm = state.pinModal;
+      const isGate = !state.currentUserId;
+      const pm = state.pinModal || (isGate ? { step: 'select', selectedId: null, pinInput: '', error: '' } : null);
       if (!pm) return '';
-      const selMem = getMember(pm.selectedId);
+      if (isGate && !state.pinModal) state.pinModal = pm;
+      const selMem = pm.selectedId ? getMember(pm.selectedId) : null;
+      const logoContent = state.customLogoUrl
+        ? `<img src="${state.customLogoUrl}" alt="Action x Say" class="w-full h-full object-cover" />`
+        : generateActionSayLogoSvg();
+
       return `
-        <div onclick="appActions.closePinModal()" class="fixed inset-0 z-50 bg-black/65 flex items-center justify-center p-4">
-          <div onclick="event.stopPropagation()" class="bg-white w-full max-w-sm rounded-3xl p-4 space-y-3 shadow-xl">
-            <div class="flex justify-between items-center border-b pb-2">
-              <h3 class="font-black text-sm">${pm.step === 'select' ? 'Chọn Tên Của Bạn' : `Nhập PIN cho ${escapeHtml(selMem.name)}`}</h3>
-              <button onclick="appActions.closePinModal()" class="w-7 h-7 rounded-full bg-slate-100"><i class="fa-solid fa-xmark"></i></button>
-            </div>
+        <div onclick="${isGate ? '' : 'appActions.closePinModal()'}" class="fixed inset-0 z-50 ${isGate ? 'bg-slate-950' : 'bg-black/65'} flex items-center justify-center p-4">
+          <div onclick="event.stopPropagation()" class="bg-white w-full max-w-sm rounded-3xl p-5 space-y-3.5 shadow-2xl border border-slate-200">
+            ${isGate ? `
+              <div class="flex flex-col items-center text-center space-y-2 pb-2 border-b border-slate-100">
+                <div onclick="appActions.tapLogoSecret()" class="w-14 h-14 rounded-2xl bg-black overflow-hidden flex items-center justify-center shadow-md border border-slate-800 cursor-pointer active:scale-95">
+                  ${logoContent}
+                </div>
+                <div>
+                  <h2 class="font-black text-sm text-slate-900 uppercase tracking-tight">LỊCH SHOW ACTION & SAY 2026</h2>
+                  <p class="text-[11px] text-slate-500 font-medium mt-0.5">${pm.step === 'select' ? 'Vui lòng chọn tên của bạn để đăng nhập' : `Nhập mã PIN của ${escapeHtml(selMem?.name || '')}`}</p>
+                </div>
+              </div>
+            ` : `
+              <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-black text-sm">${pm.step === 'select' ? 'Đổi Tài Khoản / Cài Đặt PIN' : `Nhập PIN cho ${escapeHtml(selMem?.name || '')}`}</h3>
+                <button onclick="appActions.closePinModal()" class="w-7 h-7 rounded-full bg-slate-100"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+            `}
+
             ${pm.step === 'select' ? `
-              <button onclick="appActions.openSelfChangePinModal()" class="w-full py-2 px-3 bg-indigo-50 text-indigo-700 rounded-xl font-extrabold text-xs">🔑 Tự đổi mã PIN của tôi (${escapeHtml(getMember(state.currentUserId).name)})</button>
-              <div class="grid grid-cols-2 gap-1.5 max-h-[55dvh] overflow-y-auto">
-                ${state.members.map(m => `<button onclick="appActions.chooseMemberForPin('${m.id}')" class="p-2 rounded-xl border flex justify-between items-center">${renderPillHtml(m.id, 'sm')}<i class="fa-solid fa-chevron-right text-slate-300 text-[10px]"></i></button>`).join('')}
+              ${!isGate && state.currentUserId ? `
+                <div class="flex gap-1.5">
+                  <button onclick="appActions.openSelfChangePinModal()" class="flex-1 py-2 px-2.5 bg-indigo-50 text-indigo-700 rounded-xl font-extrabold text-[11px]">🔑 Đổi PIN (${escapeHtml(getMember(state.currentUserId).name)})</button>
+                  <button onclick="appActions.logoutMember()" class="py-2 px-3 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl font-extrabold text-[11px]">🚪 Đăng xuất</button>
+                </div>
+              ` : ''}
+              <div class="grid grid-cols-2 gap-1.5 max-h-[55dvh] overflow-y-auto custom-scroll pr-0.5">
+                ${state.members.map(m => `<button onclick="appActions.chooseMemberForPin('${m.id}')" class="p-2.5 rounded-xl border border-slate-200 hover:border-slate-900 active:scale-98 transition-all flex justify-between items-center bg-slate-50/60">${renderPillHtml(m.id, 'sm')}<i class="fa-solid fa-chevron-right text-slate-300 text-[10px]"></i></button>`).join('')}
               </div>
             ` : `
               <div class="flex flex-col items-center space-y-3 py-2">
@@ -4290,7 +4331,7 @@ function renderHeaderHtml() {
                   class="w-40 text-center text-xl tracking-widest font-mono py-2 px-3 border-2 border-indigo-500 rounded-2xl bg-slate-50 focus:outline-none"
                 />
                 <div id="pin-error-msg" class="min-h-[18px] text-xs font-bold text-rose-600 text-center">${escapeHtml(pm.error || '')}</div>
-                <button onclick="appActions.backToSelectMemberPin()" class="w-full py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">← Chọn tên thành viên khác</button>
+                <button onclick="appActions.backToSelectMemberPin()" class="w-full py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">← Chọn tên thành viên khác</button>
               </div>
             `}
           </div>
@@ -4444,6 +4485,10 @@ function renderHeaderHtml() {
 
       if (state.isBackendPortal) {
         root.innerHTML = `${renderBackendPortalHtml()}${renderToastHtml()}`;
+        return;
+      }
+      if (!state.currentUserId) {
+        root.innerHTML = `${renderPinModalHtml()}${renderToastHtml()}`;
         return;
       }
       let main = '';
