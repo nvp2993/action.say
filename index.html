@@ -600,11 +600,40 @@
       const ownerFinCol = collection(db, 'artifacts', appId, 'public', 'data', 'owner_finance');
       onSnapshot(ownerFinCol, (snap) => {
         if (!snap.empty) {
+          let changed = false;
           snap.docs.forEach(d => {
-            state.ownerFinanceMap[d.id] = d.data();
+            const remoteData = d.data();
+            const localData = state.ownerFinanceMap[d.id];
+            if (!localData || (Number(remoteData.updatedAt) || 0) > (Number(localData.updatedAt) || 0)) {
+              state.ownerFinanceMap[d.id] = remoteData;
+              changed = true;
+            }
           });
-          try { localStorage.setItem('as_owner_finance_2026', JSON.stringify(state.ownerFinanceMap)); } catch (e) {}
-          if (state.activeTab === 'owner_stats') renderApp();
+          if (changed) {
+            try { localStorage.setItem('as_owner_finance_2026', JSON.stringify(state.ownerFinanceMap)); } catch (e) {}
+            if (state.activeTab === 'owner_stats') renderApp();
+          }
+        }
+      });
+
+      const ctpCloudCol = collection(db, 'artifacts', appId, 'public', 'data', 'user_ctp_data');
+      onSnapshot(ctpCloudCol, (snap) => {
+        if (!snap.empty) {
+          let changed = false;
+          snap.docs.forEach(d => {
+            if (d.id === state.currentUserId) {
+              const rData = d.data();
+              if (rData && rData.items && (Number(rData.updatedAt) || 0) > (Number(state.ctpLastUpdatedAt) || 0)) {
+                state.ctpItems = { ...state.ctpItems, ...rData.items };
+                state.ctpLastUpdatedAt = rData.updatedAt;
+                changed = true;
+              }
+            }
+          });
+          if (changed) {
+            try { localStorage.setItem('as_ctp_items_2026', JSON.stringify(state.ctpItems)); } catch (e) {}
+            if (state.activeTab === 'ctp' || state.activeTab === 'owner_stats') renderApp();
+          }
         }
       });
 
@@ -1865,11 +1894,26 @@ function renderHeaderHtml() {
     // ========================================================================
     // LOGIC TAB TÍNH CÔNG TÁC PHÍ (CTP) + POPUP THÊM SHOW NGOÀI CUỐI DANH SÁCH
     // ========================================================================
-    function saveCtpStateToLocal() {
+    let ctpCloudSyncTimer = null;
+    function saveCtpStateToLocal(immediateCloud = false) {
+      state.ctpLastUpdatedAt = Date.now();
       try {
         localStorage.setItem('as_ctp_items_2026', JSON.stringify(state.ctpItems));
         localStorage.setItem('as_ctp_custom_shows_2026', JSON.stringify(state.ctpCustomShows));
       } catch (e) {}
+      if (db && state.currentUserId) {
+        if (ctpCloudSyncTimer) clearTimeout(ctpCloudSyncTimer);
+        const pushCtp = async () => {
+          try {
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'user_ctp_data', state.currentUserId), {
+              items: state.ctpItems,
+              updatedAt: state.ctpLastUpdatedAt
+            });
+          } catch (e) {}
+        };
+        if (immediateCloud) pushCtp();
+        else ctpCloudSyncTimer = setTimeout(pushCtp, 600);
+      }
     }
 
     function getShowDays(sh) {
@@ -2532,10 +2576,14 @@ function renderHeaderHtml() {
             ` : ''}
           </div>
 
-          <div class="p-3 bg-white border-t border-slate-200 shrink-0 shadow-lg">
-            <button type="button" onclick="ctpActions.generateBill()" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 active:scale-98 text-white font-black py-3.5 rounded-2xl shadow-md text-xs flex items-center justify-center gap-2 uppercase tracking-wider transition-all">
+          <div class="p-3 bg-white border-t border-slate-200 shrink-0 shadow-lg flex items-center gap-2">
+            <button type="button" onclick="saveCtpStateToLocal(true); showToast('💾 Đã lưu toàn bộ số liệu CTP!');" class="px-4 py-3.5 rounded-2xl bg-slate-900 active:scale-98 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm shrink-0">
+              <i class="fa-solid fa-floppy-disk"></i>
+              <span>💾 LƯU</span>
+            </button>
+            <button type="button" onclick="saveCtpStateToLocal(true); ctpActions.generateBill()" class="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 active:scale-98 text-white font-black py-3.5 rounded-2xl shadow-md text-xs flex items-center justify-center gap-2 uppercase tracking-wider transition-all">
               <i class="fa-solid fa-sack-dollar text-sm"></i>
-              <span>🔥 LỤM (TỔNG HỢP BILL GỬI CHỦ SHOW)</span>
+              <span>🔥 LỤM (TỔNG HỢP BILL)</span>
             </button>
           </div>
         </div>
@@ -2740,23 +2788,31 @@ function renderHeaderHtml() {
 
     let ownerCloudSyncTimers = {};
 
-    function saveOwnerFinanceState(showId = null) {
+    function saveOwnerFinanceState(showId = null, immediate = false) {
+      if (showId && state.ownerFinanceMap[showId]) {
+        state.ownerFinanceMap[showId].updatedAt = Date.now();
+      }
       try {
         localStorage.setItem('as_owner_finance_2026', JSON.stringify(state.ownerFinanceMap));
       } catch (e) {}
-      if (showId && state.user && db) {
+      if (showId && db) {
         if (ownerCloudSyncTimers[showId]) clearTimeout(ownerCloudSyncTimers[showId]);
-        ownerCloudSyncTimers[showId] = setTimeout(async () => {
+        const doPush = async () => {
           try {
             const dataToSave = state.ownerFinanceMap[showId];
             if (dataToSave) {
               await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'owner_finance', showId), {
                 ...dataToSave,
-                updatedAt: Date.now()
+                updatedAt: dataToSave.updatedAt || Date.now()
               });
             }
           } catch (e) {}
-        }, 500);
+        };
+        if (immediate) {
+          doPush();
+        } else {
+          ownerCloudSyncTimers[showId] = setTimeout(doPush, 500);
+        }
       }
     }
 
@@ -2818,16 +2874,9 @@ function renderHeaderHtml() {
       return rec.crewMemberMeta[userId];
     }
 
-    // Kiểm tra phân loại show đối với user hiện tại:
-    // - 'owner': Mình đứng tên Chủ Show (hoặc show ngoài đang bật chế độ Làm Chủ Show)
-    // - 'crew': Show người khác làm Chủ Show (hoặc show ngoài chế độ nhận CTP)
+    // Phân loại thống nhất cho mọi show (kể cả show ngoài):
+    // Cứ show nào mình đứng tên Chủ show (sh.ownerId === userId) thì đưa vào "Làm Chủ", ngược lại đưa vào "Nhận CTP"
     function getMyShowRoleCategory(sh, userId = state.currentUserId) {
-      if (sh.isCustomCtp) {
-        const rec = ensureOwnerFinRecord(sh);
-        if (rec.customMode === 'owner') return 'owner';
-        if (rec.customMode === 'crew') return 'crew';
-        return sh.ownerId === userId ? 'owner' : 'crew';
-      }
       return sh.ownerId === userId ? 'owner' : 'crew';
     }
 
@@ -2927,9 +2976,8 @@ function renderHeaderHtml() {
 
       return combined.filter(sh => {
         const cat = getMyShowRoleCategory(sh, uid);
-        if (state.ownerFilterStatus === 'role_owner') return cat === 'owner' && !sh.isCustomCtp;
-        if (state.ownerFilterStatus === 'role_crew') return cat === 'crew' && !sh.isCustomCtp;
-        if (state.ownerFilterStatus === 'role_custom') return !!(sh.isCustomCtp || sh.hidePartner || sh.isOutsideNote);
+        if (state.ownerFilterStatus === 'role_owner') return cat === 'owner';
+        if (state.ownerFilterStatus === 'role_crew') return cat === 'crew';
 
         const isSettled = cat === 'owner'
           ? (ensureOwnerFinRecord(sh).status === 'settled')
@@ -3174,6 +3222,14 @@ function renderHeaderHtml() {
         saveOwnerFinanceState(showId);
         refreshOwnerLiveDom(showId);
       },
+      saveShowFinanceNow(showId, event) {
+        if (event) event.stopPropagation();
+        saveOwnerFinanceState(showId, true);
+        saveCtpStateToLocal(true);
+        state.ownerExpandedShowId = null;
+        renderApp();
+        showToast('💾 Đã lưu vĩnh viễn thông tin tiền & CTP của show!');
+      },
       openAddOutsideShowFromOwnerTab() {
         state.ctpMonth = state.ownerMonth;
         ctpActions.openAddCustomShowModal();
@@ -3260,11 +3316,9 @@ function renderHeaderHtml() {
 
       let ownerShowCount = 0;
       let crewShowCount = 0;
-      let customShowCount = 0;
       let settledCount = 0;
 
       allInvolved.forEach(sh => {
-        if (sh.isCustomCtp || sh.hidePartner || sh.isOutsideNote) customShowCount++;
         const cat = getMyShowRoleCategory(sh);
         if (cat === 'owner') {
           ownerShowCount++;
@@ -3334,28 +3388,7 @@ function renderHeaderHtml() {
         card2 = { label: '⛽ CHI PHÍ TỰ TÚC', val: totSelf.toLocaleString('vi-VN') + 'đ', cls: 'text-rose-600' };
         card3 = { label: '💎 THỰC NHẬN VỀ', val: (totNetPocket >= 0 ? '+' : '') + totNetPocket.toLocaleString('vi-VN') + 'đ', cls: 'text-emerald-700' };
         card4 = { label: '⏳ CTP CHƯA NHẬN', val: totPending.toLocaleString('vi-VN') + 'đ', cls: 'text-amber-800' };
-      } else if (filterSt === 'role_custom') {
-        let totRev = 0, totExp = 0, totNet = 0, totUnsettled = 0;
-        myShows.forEach(sh => {
-          const cat = getMyShowRoleCategory(sh);
-          if (cat === 'owner') {
-            const m = calculateOwnerShowMetrics(sh);
-            totRev += m.clientPrice;
-            totExp += m.totalExpense;
-            totNet += m.netProfit;
-            totUnsettled += m.remainingClientDebt;
-          } else {
-            const cm = calculateCrewShowMetrics(sh);
-            totRev += cm.grossCtp;
-            totExp += cm.selfExpense;
-            totNet += cm.netPocket;
-            totUnsettled += cm.pendingCtpDebt;
-          }
-        });
-        card1 = { label: '📝 TỔNG THU SHOW NGOÀI', val: totRev.toLocaleString('vi-VN') + 'đ', cls: 'text-slate-900' };
-        card2 = { label: '💸 TỔNG CHI / TỰ TÚC', val: totExp.toLocaleString('vi-VN') + 'đ', cls: 'text-rose-600' };
-        card3 = { label: '💎 LÃI SHOW NGOÀI', val: (totNet >= 0 ? '+' : '') + totNet.toLocaleString('vi-VN') + 'đ', cls: 'text-emerald-700' };
-        card4 = { label: '⏳ CHƯA TẤT TOÁN', val: totUnsettled.toLocaleString('vi-VN') + 'đ', cls: 'text-amber-800' };
+
       } else if (filterSt === 'unsettled') {
         let totDebtAll = 0, clientDebt = 0, ctpDebt = 0, countUn = myShows.length;
         myShows.forEach(sh => {
@@ -3422,7 +3455,6 @@ function renderHeaderHtml() {
                   { id: 'all',         label: `Tất cả (${allInvolved.length})` },
                   { id: 'role_owner',  label: `👑 Làm Chủ (${ownerShowCount})` },
                   { id: 'role_crew',   label: `🎥 Nhận CTP (${crewShowCount})` },
-                  { id: 'role_custom', label: `📝 Show ngoài (${customShowCount})` },
                   { id: 'unsettled',   label: `⏳ Chưa thu` },
                   { id: 'settled',     label: `✅ Đã thanh lý` }
                 ].map(f => `
@@ -3493,7 +3525,7 @@ function renderHeaderHtml() {
                       <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-1.5 flex-wrap">
                           <span class="px-1.5 py-0.5 rounded-md bg-slate-100 font-mono font-bold text-[9.5px] text-slate-600">#${idx + 1}</span>
-                          <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[9px] font-black">👑 Chủ Show${sh.isCustomCtp ? ' (Ngoài)' : ''}</span>
+                          <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[9px] font-black">👑 Chủ Show</span>
                           <span class="font-mono font-bold text-slate-700 text-[10px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? '-' + formatDayMonth(sh.endDate) : ''} (${days}n)</span>
                           <span class="px-2 py-0.5 rounded-full border text-[9px] font-extrabold ${curStatusObj.badgeCls}">${curStatusObj.label}</span>
                         </div>
@@ -3521,13 +3553,9 @@ function renderHeaderHtml() {
                     ${isExpanded ? `
                       <div class="px-3.5 pb-3.5 pt-2.5 border-t border-slate-100 space-y-3.5 bg-white">
                         ${sh.isCustomCtp ? `
-                          <div class="flex items-center justify-between gap-2 bg-amber-50/70 p-2 rounded-xl border border-amber-200">
-                            <span class="text-[10px] font-bold text-amber-900">📝 Đây là Show tự note ngoài lịch:</span>
-                            <div class="flex items-center gap-1">
-                              <button type="button" onclick="ownerActions.setCustomShowMode('${sh.id}', 'owner', event)" class="px-2 py-0.5 rounded-lg text-[9.5px] font-extrabold bg-slate-900 text-white">👑 Tôi làm Chủ</button>
-                              <button type="button" onclick="ownerActions.setCustomShowMode('${sh.id}', 'crew', event)" class="px-2 py-0.5 rounded-lg text-[9.5px] font-bold bg-white text-slate-600 border border-slate-300">🎥 Đi nhận CTP</button>
-                              <button type="button" onclick="ctpActions.openEditCustomShowModal('${sh.id}')" class="px-2 py-0.5 rounded-lg text-[9.5px] font-bold bg-white text-slate-700 border border-slate-300">✏️ Sửa</button>
-                            </div>
+                          <div class="flex items-center justify-end gap-1.5">
+                            <button type="button" onclick="ctpActions.openEditCustomShowModal('${sh.id}')" class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">✏️ Sửa thông tin show</button>
+                            <button type="button" onclick="ctpActions.removeCustomShow('${sh.id}')" class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-200">🗑️ Xoá show</button>
                           </div>
                         ` : ''}
 
@@ -3663,19 +3691,27 @@ function renderHeaderHtml() {
                           ` : ''}
                         </div>
 
-                        <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-slate-200 bg-slate-50/70 -mx-3.5 -mb-3.5 px-3.5 py-2.5">
-                          <div>
-                            <span class="text-[9px] font-extrabold text-slate-400 uppercase block">Tổng Chi Dự Kiến:</span>
-                            <span id="owner-show-exp-${sh.id}" class="text-xs font-black text-rose-600 font-mono">${m.totalExpense.toLocaleString('vi-VN')}đ</span>
+                        <div class="pt-2.5 border-t border-slate-200 bg-slate-50/70 -mx-3.5 -mb-3.5 px-3.5 py-3 space-y-2.5">
+                          <div class="flex items-center justify-between gap-2">
+                            <div>
+                              <span class="text-[9px] font-extrabold text-slate-400 uppercase block">Tổng Chi Dự Kiến:</span>
+                              <span id="owner-show-exp-${sh.id}" class="text-xs font-black text-rose-600 font-mono">${m.totalExpense.toLocaleString('vi-VN')}đ</span>
+                            </div>
+                            <div class="text-right">
+                              <span class="text-[9px] font-extrabold text-slate-500 uppercase block">💎 CÒN LẠI (Lãi Chủ Show):</span>
+                              <span id="owner-show-profit-${sh.id}" class="text-xs sm:text-sm font-black font-mono ${m.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}">
+                                ${m.netProfit >= 0 ? '+' : ''}${m.netProfit.toLocaleString('vi-VN')}đ
+                              </span>
+                            </div>
                           </div>
-                          <button type="button" onclick="ownerActions.toggleExpandShow('${sh.id}')" class="px-3 py-1 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 font-extrabold text-[10px]">
-                            Thu gọn ▲
-                          </button>
-                          <div class="text-right">
-                            <span class="text-[9px] font-extrabold text-slate-500 uppercase block">💎 CÒN LẠI (Lãi Chủ Show):</span>
-                            <span id="owner-show-profit-${sh.id}" class="text-xs sm:text-sm font-black font-mono ${m.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}">
-                              ${m.netProfit >= 0 ? '+' : ''}${m.netProfit.toLocaleString('vi-VN')}đ
-                            </span>
+                          <div class="flex items-center gap-2">
+                            <button type="button" onclick="ownerActions.toggleExpandShow('${sh.id}')" class="px-3.5 py-2.5 rounded-full bg-slate-200/90 hover:bg-slate-300 text-slate-700 font-extrabold text-[11px] shrink-0">
+                              Thu gọn ▲
+                            </button>
+                            <button type="button" onclick="ownerActions.saveShowFinanceNow('${sh.id}', event)" class="flex-1 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-xs uppercase tracking-wider shadow-sm flex items-center justify-center gap-1.5">
+                              <i class="fa-solid fa-floppy-disk"></i>
+                              <span>💾 LƯU THÔNG TIN SHOW</span>
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -3708,8 +3744,8 @@ function renderHeaderHtml() {
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center gap-1.5 flex-wrap">
                         <span class="px-1.5 py-0.5 rounded-md bg-slate-100 font-mono font-bold text-[9.5px] text-slate-600">#${idx + 1}</span>
-                        <span class="px-2 py-0.5 rounded-full ${sh.isCustomCtp ? 'bg-purple-100 text-purple-900' : 'bg-indigo-50 text-indigo-800'} text-[9px] font-black">
-                          ${sh.isCustomCtp ? '📝 Show ngoài' : `🎥 Chủ: ${escapeHtml(ownerObj.name)}`}
+                        <span class="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-800 text-[9px] font-black">
+                          🎥 Chủ: ${escapeHtml(ownerObj.name)}
                         </span>
                         <span class="font-mono font-bold text-slate-700 text-[10px]">${formatDayMonth(sh.startDate)}${sh.endDate && sh.endDate !== sh.startDate ? '-' + formatDayMonth(sh.endDate) : ''} (${days}n)</span>
                         <span class="px-2 py-0.5 rounded-full border text-[9px] font-extrabold ${curCrewSt.badgeCls}">${curCrewSt.label}</span>
@@ -3738,14 +3774,9 @@ function renderHeaderHtml() {
                   ${isExpanded ? `
                     <div class="px-3.5 pb-3.5 pt-2.5 border-t border-slate-100 space-y-3.5 bg-white">
                       ${sh.isCustomCtp ? `
-                        <div class="flex items-center justify-between gap-2 bg-purple-50/70 p-2 rounded-xl border border-purple-200 flex-wrap">
-                          <span class="text-[10px] font-bold text-purple-900">📝 Chế độ tính cho Show ngoài này:</span>
-                          <div class="flex items-center gap-1">
-                            <button type="button" onclick="ownerActions.setCustomShowMode('${sh.id}', 'crew', event)" class="px-2 py-0.5 rounded-lg text-[9.5px] font-extrabold bg-slate-900 text-white">🎥 Nhận CTP</button>
-                            <button type="button" onclick="ownerActions.setCustomShowMode('${sh.id}', 'owner', event)" class="px-2 py-0.5 rounded-lg text-[9.5px] font-bold bg-white text-slate-600 border border-slate-300">👑 Tôi làm Chủ</button>
-                            <button type="button" onclick="ctpActions.openEditCustomShowModal('${sh.id}')" class="px-2 py-0.5 rounded-lg text-[9.5px] font-bold bg-white text-slate-700 border border-slate-300">✏️ Sửa</button>
-                            <button type="button" onclick="ctpActions.removeCustomShow('${sh.id}')" class="px-2 py-0.5 rounded-lg text-[9.5px] font-bold bg-rose-50 text-rose-600 border border-rose-200">🗑️ Xoá</button>
-                          </div>
+                        <div class="flex items-center justify-end gap-1.5">
+                          <button type="button" onclick="ctpActions.openEditCustomShowModal('${sh.id}')" class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">✏️ Sửa thông tin show</button>
+                          <button type="button" onclick="ctpActions.removeCustomShow('${sh.id}')" class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-200">🗑️ Xoá show</button>
                         </div>
                       ` : ''}
 
@@ -3832,19 +3863,27 @@ function renderHeaderHtml() {
                       </div>
 
                       <!-- Chân thẻ (Show Đi Nhận CTP) -->
-                      <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-slate-200 bg-slate-50/70 -mx-3.5 -mb-3.5 px-3.5 py-2.5">
-                        <div>
-                          <span class="text-[9px] font-extrabold text-slate-400 uppercase block">Tổng Bill CTP:</span>
-                          <span id="crew-show-gross-${sh.id}" class="text-xs font-black text-slate-800 font-mono">${cm.grossCtp.toLocaleString('vi-VN')}đ</span>
+                      <div class="pt-2.5 border-t border-slate-200 bg-slate-50/70 -mx-3.5 -mb-3.5 px-3.5 py-3 space-y-2.5">
+                        <div class="flex items-center justify-between gap-2">
+                          <div>
+                            <span class="text-[9px] font-extrabold text-slate-400 uppercase block">Tổng Bill CTP:</span>
+                            <span id="crew-show-gross-${sh.id}" class="text-xs font-black text-slate-800 font-mono">${cm.grossCtp.toLocaleString('vi-VN')}đ</span>
+                          </div>
+                          <div class="text-right">
+                            <span class="text-[9px] font-extrabold text-slate-500 uppercase block">💎 BỎ TÚI THỰC NHẬN:</span>
+                            <span id="crew-show-net-${sh.id}" class="text-xs sm:text-sm font-black font-mono ${cm.netPocket >= 0 ? 'text-emerald-700' : 'text-rose-600'}">
+                              ${cm.netPocket >= 0 ? '+' : ''}${cm.netPocket.toLocaleString('vi-VN')}đ
+                            </span>
+                          </div>
                         </div>
-                        <button type="button" onclick="ownerActions.toggleExpandShow('${sh.id}')" class="px-3 py-1 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 font-extrabold text-[10px]">
-                          Thu gọn ▲
-                        </button>
-                        <div class="text-right">
-                          <span class="text-[9px] font-extrabold text-slate-500 uppercase block">💎 BỎ TÚI THỰC NHẬN:</span>
-                          <span id="crew-show-net-${sh.id}" class="text-xs sm:text-sm font-black font-mono ${cm.netPocket >= 0 ? 'text-emerald-700' : 'text-rose-600'}">
-                            ${cm.netPocket >= 0 ? '+' : ''}${cm.netPocket.toLocaleString('vi-VN')}đ
-                          </span>
+                        <div class="flex items-center gap-2">
+                          <button type="button" onclick="ownerActions.toggleExpandShow('${sh.id}')" class="px-3.5 py-2.5 rounded-full bg-slate-200/90 hover:bg-slate-300 text-slate-700 font-extrabold text-[11px] shrink-0">
+                            Thu gọn ▲
+                          </button>
+                          <button type="button" onclick="ownerActions.saveShowFinanceNow('${sh.id}', event)" class="flex-1 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-xs uppercase tracking-wider shadow-sm flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span>💾 LƯU THÔNG TIN CTP</span>
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -4381,6 +4420,7 @@ function renderHeaderHtml() {
     }
 
     window.state = state;
+    window.saveCtpStateToLocal = saveCtpStateToLocal;
     applyHomeScreenIcon(state.customLogoUrl);
     renderApp();
     initFirebaseCloud();
