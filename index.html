@@ -623,15 +623,23 @@
           snap.docs.forEach(d => {
             if (d.id === state.currentUserId) {
               const rData = d.data();
-              if (rData && rData.items && (Number(rData.updatedAt) || 0) > (Number(state.ctpLastUpdatedAt) || 0)) {
-                state.ctpItems = { ...state.ctpItems, ...rData.items };
+              if (rData && (Number(rData.updatedAt) || 0) > (Number(state.ctpLastUpdatedAt) || 0)) {
+                if (rData.items) state.ctpItems = { ...state.ctpItems, ...rData.items };
+                if (Array.isArray(rData.customShows) && rData.customShows.length > 0) {
+                  const mapC = new Map((state.ctpCustomShows || []).map(x => [x.id, x]));
+                  rData.customShows.forEach(x => { if (x && x.id) mapC.set(x.id, x); });
+                  state.ctpCustomShows = Array.from(mapC.values());
+                }
                 state.ctpLastUpdatedAt = rData.updatedAt;
                 changed = true;
               }
             }
           });
           if (changed) {
-            try { localStorage.setItem('as_ctp_items_2026', JSON.stringify(state.ctpItems)); } catch (e) {}
+            try {
+              localStorage.setItem('as_ctp_items_2026', JSON.stringify(state.ctpItems));
+              localStorage.setItem('as_ctp_custom_shows_2026', JSON.stringify(state.ctpCustomShows));
+            } catch (e) {}
             if (state.activeTab === 'ctp' || state.activeTab === 'owner_stats') renderApp();
           }
         }
@@ -1907,6 +1915,7 @@ function renderHeaderHtml() {
           try {
             await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'user_ctp_data', state.currentUserId), {
               items: state.ctpItems,
+              customShows: state.ctpCustomShows || [],
               updatedAt: state.ctpLastUpdatedAt
             });
           } catch (e) {}
@@ -2111,8 +2120,7 @@ function renderHeaderHtml() {
               id: schedId,
               stt: nextStt,
               partner: (m.partner || '').trim(),
-              hidePartner: true,
-              isOutsideNote: true,
+              hidePartner: false,
               location: m.location.trim(),
               startDate: finalStart,
               endDate: finalEnd,
@@ -2136,7 +2144,7 @@ function renderHeaderHtml() {
             saveCtpStateToLocal();
             renderApp();
             showToast('🔒 Đã ghi lịch & địa điểm (Đối tác đã được ẩn riêng cho bạn)!');
-            if (state.user && db) {
+            if (db) {
               try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', newSchedShow.id), newSchedShow); } catch (e) {}
             }
           } else {
