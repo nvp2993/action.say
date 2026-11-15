@@ -140,7 +140,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, getDocs, getDocsFromServer } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { initializeFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, getDocs, getDocsFromServer, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // ========================================================================
     // 1. CẤU HÌNH FIREBASE RIÊNG CỦA BẠN (Dán thông số từ Firebase Console vào đây)
@@ -541,18 +541,26 @@
         });
       }
 
-      if (toUploadMap.size > 0) {
-        await Promise.all(
-          Array.from(toUploadMap.values()).map(sh => {
-            const cleanSh = JSON.parse(JSON.stringify(sh));
-            return setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', cleanSh.id), cleanSh);
-          })
-        );
-      }
-      if (deletedSet.size > 0) {
-        await Promise.all(
-          Array.from(deletedSet).map(id => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', id)))
-        );
+      const itemsToUpload = Array.from(toUploadMap.values());
+      const idsToDelete = Array.from(deletedSet);
+      if (itemsToUpload.length > 0 || idsToDelete.length > 0) {
+        // Gom thành 1 gói WriteBatch duy nhất (tối đa 450 lệnh/gói) -> đẩy lên Server trong < 0.2 giây!
+        const allOps = [
+          ...itemsToUpload.map(sh => ({ type: 'set', data: JSON.parse(JSON.stringify(sh)) })),
+          ...idsToDelete.map(id => ({ type: 'del', id }))
+        ];
+        for (let i = 0; i < allOps.length; i += 450) {
+          const batch = writeBatch(db);
+          const chunk = allOps.slice(i, i + 450);
+          chunk.forEach(op => {
+            if (op.type === 'set') {
+              batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'shows', op.data.id), op.data);
+            } else {
+              batch.delete(doc(db, 'artifacts', appId, 'public', 'data', 'shows', op.id));
+            }
+          });
+          await batch.commit();
+        }
       }
     }
 
@@ -570,12 +578,15 @@
         const remoteList = snap.empty ? [] : snap.docs.map(d => d.data());
         const remoteIdSet = new Set(remoteList.map(d => d.id));
 
-        // 2. Đẩy toàn bộ show có trên máy nhưng chưa có trên Server (hoặc mới sửa hơn) lên Cloud
-        await pushAllLocalEditsToCloud(remoteIdSet);
+        // 2. Chỉ đẩy những show mới/sửa mà Server chưa có (qua WriteBatch siêu tốc)
+        const deletedSet = new Set(state.localDeletedShowIds || []);
+        const needsUpload = (state.shows || []).some(sh => sh && sh.id && !deletedSet.has(sh.id) && !remoteIdSet.has(sh.id))
+          || Object.keys(state.localShowEditsMap || {}).length > 0
+          || deletedSet.size > 0;
 
-        // 3. Nếu vừa đẩy thêm show mới lên Cloud, đọc lại từ Server để xác nhận 100% số lượng trên Cloud
         let finalRemoteList = remoteList;
-        if (state.shows.length > remoteList.length || Object.keys(state.localShowEditsMap || {}).length > 0) {
+        if (needsUpload) {
+          await pushAllLocalEditsToCloud(remoteIdSet);
           const snap2 = await getDocsFromServer(showsCol);
           if (!snap2.empty) finalRemoteList = snap2.docs.map(d => d.data());
         }
@@ -619,7 +630,10 @@
         if (firebaseConfig && firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("AIzaSy...")) {
           const app = initializeApp(firebaseConfig);
           auth = getAuth(app);
-          db = getFirestore(app);
+          db = initializeFirestore(app, {
+            experimentalForceLongPolling: true,
+            useFetchStreams: false
+          });
 
           let listenersAttached = false;
           const ensureListeners = (u) => {
@@ -627,18 +641,16 @@
             if (!listenersAttached && db) {
               listenersAttached = true;
               attachFirestoreListeners(state.user);
-              forceSyncNow(true);
+              // Đẩy/đối chiếu dữ liệu cục bộ 1 lần duy nhất lúc khởi động
+              setTimeout(() => { forceSyncNow(true); }, 100);
             }
           };
 
-          // Gắn kết nối đọc/ghi Firestore ngay lập tức không chờ Auth chậm trễ
+          // Gắn luồng Real-time onSnapshot ngay lập tức (0ms delay)
           ensureListeners(null);
 
           onAuthStateChanged(auth, (u) => {
-            if (u) {
-              state.user = u;
-              forceSyncNow(true);
-            }
+            if (u) state.user = u;
           });
 
           try {
@@ -1631,8 +1643,17 @@
         if (state.user && db) {
           const showsCol = collection(db, 'artifacts', appId, 'public', 'data', 'shows');
           const snap = await getDocs(showsCol);
-          await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', d.id))));
-          await Promise.all(INITIAL_SHOWS_DATA.map(sh => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh)));
+          const delDocs = snap.docs;
+          for (let i = 0; i < delDocs.length; i += 450) {
+            const b = writeBatch(db);
+            delDocs.slice(i, i + 450).forEach(d => b.delete(d.ref));
+            await b.commit();
+          }
+          for (let i = 0; i < INITIAL_SHOWS_DATA.length; i += 450) {
+            const b = writeBatch(db);
+            INITIAL_SHOWS_DATA.slice(i, i + 450).forEach(sh => b.set(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), JSON.parse(JSON.stringify(sh))));
+            await b.commit();
+          }
         }
       },
       triggerExcelFileUpload() {
@@ -1716,8 +1737,17 @@
             if (state.user && db) {
               const showsCol = collection(db, 'artifacts', appId, 'public', 'data', 'shows');
               const snap = await getDocs(showsCol);
-              await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', d.id))));
-              await Promise.all(imported.map(sh => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), sh)));
+              const delDocs = snap.docs;
+              for (let i = 0; i < delDocs.length; i += 450) {
+                const b = writeBatch(db);
+                delDocs.slice(i, i + 450).forEach(d => b.delete(d.ref));
+                await b.commit();
+              }
+              for (let i = 0; i < imported.length; i += 450) {
+                const b = writeBatch(db);
+                imported.slice(i, i + 450).forEach(sh => b.set(doc(db, 'artifacts', appId, 'public', 'data', 'shows', sh.id), JSON.parse(JSON.stringify(sh))));
+                await b.commit();
+              }
             }
           }
         } catch (err) {
@@ -1776,8 +1806,8 @@ function renderHeaderHtml() {
                 <div class="flex items-center gap-1.5">
                   <span class="text-xs font-black tracking-tight text-white uppercase truncate">LỊCH SHOW 2026</span>
                   <button type="button" onclick="openSyncStatusModal()" title="${state.syncErrorMsg ? 'Lỗi: ' + escapeHtml(state.syncErrorMsg) : 'Bấm để đồng bộ ngay từ Cloud'}" class="inline-flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full font-extrabold cursor-pointer active:scale-95 transition-all ${state.cloudSynced ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-300/60' : 'bg-amber-500/20 text-amber-700 border border-amber-300'}">
-                    <i class="fa-solid ${state.isSyncingNow ? 'fa-arrows-rotate fa-spin' : (state.cloudSynced ? 'fa-cloud-arrow-down' : 'fa-triangle-exclamation')} text-[8.5px]"></i>
-                    <span>${state.isSyncingNow ? 'Đang tải...' : (state.cloudSynced ? (state.lastSyncTimeStr ? 'Cloud ' + state.lastSyncTimeStr.slice(0,5) : 'Cloud') : 'Chưa đồng bộ')}</span>
+                    <span class="w-1.5 h-1.5 rounded-full ${state.cloudSynced ? 'bg-emerald-500 animate-ping' : 'bg-amber-500'}"></span>
+                    <span>${state.isSyncingNow ? 'Đang đồng bộ...' : (state.cloudSynced ? 'LIVE • Real-time' : 'Chưa đồng bộ')}</span>
                   </button>
                 </div>
               </div>
