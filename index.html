@@ -5464,7 +5464,7 @@ function renderHeaderHtml() {
       const bankNames = {
         '970436': 'Vietcombank', '970407': 'Techcombank', '970415': 'VietinBank',
         '970418': 'BIDV', '970422': 'MB Bank', '970416': 'ACB',
-        '970432': 'VPBank', '970403': 'Sacombank', '970423': 'TPBank'
+        '970432': 'VPBank', '970403': 'Sacombank', '970423': 'TPBank', '970405': 'Agribank'
       };
       const bankLabel = bankNames[prof.bankBin || '970436'] || 'Ngân hàng';
 
@@ -5947,6 +5947,7 @@ function renderHeaderHtml() {
                     <option value="970416" ${prof.bankBin === '970416' ? 'selected' : ''}>ACB</option>
                     <option value="970432" ${prof.bankBin === '970432' ? 'selected' : ''}>VPBank</option>
                     <option value="970403" ${prof.bankBin === '970403' ? 'selected' : ''}>Sacombank</option>
+                    <option value="970423" ${prof.bankBin === '970405' ? 'selected' : ''}>Agribank</option>
                     <option value="970423" ${prof.bankBin === '970423' ? 'selected' : ''}>TPBank</option>
                   </select>
                   <input id="prof-bank-acc" type="text" inputmode="numeric" value="${esc(prof.bankAcc || '')}" placeholder="Số tài khoản nhận CTP" class="col-span-2 px-3 py-2 bg-black/50 border border-white/10 rounded-xl text-white font-mono font-bold" />
