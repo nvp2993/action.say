@@ -10233,4 +10233,259 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   }, { passive: true });
 })();
 </script>
+
+      <script id="as-cancel-show-feature-2026">
+(function initCancelShowFeature() {
+  if (!window.state || !window.appActions) {
+    setTimeout(initCancelShowFeature, 80);
+    return;
+  }
+  if (window.__AS_CANCEL_SHOW_READY__) return;
+  window.__AS_CANCEL_SHOW_READY__ = true;
+
+  const st = window.state;
+
+  // =========================================================================
+  // 1. CSS HIỂN THỊ DÒNG SHOW ĐÃ HỦY (GẠCH NGANG + BADGE ĐỎ RÕ RÀNG)
+  // =========================================================================
+  const style = document.createElement('style');
+  style.id = 'as-cancel-show-css';
+  style.textContent = `
+    tr.as-row-cancelled {
+      background-color: #fff1f2 !important;
+      opacity: 0.72 !important;
+    }
+    tr.as-row-cancelled td {
+      color: #94a3b8 !important;
+    }
+    tr.as-row-cancelled .as-loc-text {
+      text-decoration: line-through !important;
+      color: #e11d48 !important;
+    }
+    .as-badge-cancelled {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 3px !important;
+      padding: 1px 6px !important;
+      border-radius: 999px !important;
+      background-color: #e11d48 !important;
+      color: #ffffff !important;
+      font-size: 8.5px !important;
+      font-weight: 900 !important;
+      letter-spacing: 0.02em !important;
+      text-decoration: none !important;
+      margin-left: 4px !important;
+      flex-shrink: 0 !important;
+    }
+  `;
+  document.head.appendChild(style);
+
+  function triggerRender() {
+    if (typeof window.renderApp === 'function') {
+      window.renderApp();
+    } else if (window.appActions && typeof window.appActions.setTab === 'function') {
+      window.appActions.setTab(st.activeTab || 'shows');
+    }
+  }
+
+  async function saveShowsEverywhere(updatedShow) {
+    try {
+      if (updatedShow && updatedShow.id) {
+        updatedShow.updatedAt = Date.now();
+        if (!st.localShowEditsMap) st.localShowEditsMap = {};
+        st.localShowEditsMap[updatedShow.id] = updatedShow;
+        localStorage.setItem('as_local_show_edits_2026', JSON.stringify(st.localShowEditsMap));
+      }
+      localStorage.setItem('as_shows_backup_2026', JSON.stringify(st.shows));
+    } catch (e) {}
+    if (typeof window.syncShowsToSingleDoc === 'function') {
+      try { await window.syncShowsToSingleDoc(); } catch (e) {}
+    }
+  }
+
+  // =========================================================================
+  // 2. HÀM BÁO HỦY SHOW / KHÔI PHỤC SHOW & XÁC NHẬN TRƯỚC KHI XÓA HẲN
+  // =========================================================================
+  window.appActions.toggleCancelShow = async function(showId) {
+    const sh = (st.shows || []).find(s => s.id === showId);
+    if (!sh) return;
+
+    if (!sh.isCancelled) {
+      const reason = window.prompt(
+        `🚫 BÁO HỦY SHOW: "${sh.location}"\nNhập lý do hủy / hoãn (hoặc để trống rồi bấm OK):\n\n💡 Lưu ý: Khi hủy, lịch của anh em trong show này sẽ tự động được nhả RẢNH!`,
+        sh.cancelReason || 'Khách báo hủy / dời lịch'
+      );
+      if (reason === null) return; // Bấm Cancel trên hộp thoại
+
+      sh.isCancelled = true;
+      sh.cancelReason = reason.trim() || 'Đã hủy lịch';
+      sh.postStatus = 'cancelled';
+      await saveShowsEverywhere(sh);
+      triggerRender();
+      if (typeof window.__asNotify === 'function') {
+        window.__asNotify('🚫 ĐÃ BÁO HỦY & NHẢ LỊCH RẢNH', 'success');
+      }
+    } else {
+      if (!window.confirm(`🔄 Khôi phục lại show "${sh.location}" trở về trạng thái hoạt động bình thường?`)) return;
+      sh.isCancelled = false;
+      delete sh.cancelReason;
+      if (sh.postStatus === 'cancelled') sh.postStatus = 'pending';
+      await saveShowsEverywhere(sh);
+      triggerRender();
+      if (typeof window.__asNotify === 'function') {
+        window.__asNotify('🔄 ĐÃ KHÔI PHỤC SHOW', 'success');
+      }
+    }
+  };
+
+  // Bọc lại hàm deleteShow gốc: Hỏi xác nhận trước khi xóa vĩnh viễn để không bấm nhầm
+  const origDeleteShow = window.appActions.deleteShow;
+  window.appActions.deleteShow = async function(showId) {
+    const sh = (st.shows || []).find(s => s.id === showId);
+    if (!sh) return;
+    const ok = window.confirm(
+      `⚠️ XÓA VĨNH VIỄN show "${sh.location}"?\n\n- Nếu chỉ hủy kèo hoặc khách hoãn, Phú nên bấm nút "🚫 Báo Hủy Show" để giữ lại lịch sử.\n- Bấm OK nếu chắc chắn muốn xóa bay hoàn toàn khỏi hệ thống.`
+    );
+    if (!ok) return;
+    return origDeleteShow.apply(this, arguments);
+  };
+
+  // =========================================================================
+  // 3. TỰ ĐỘNG NHẢ LỊCH RẢNH CHO ANH EM KHI SHOW ĐÃ BỊ HỦY
+  // (Áp dụng cho: Bảng Công Tác Matrix, Tab Người Rảnh, Cảnh báo trùng lịch & Tính CTP)
+  // =========================================================================
+  // Lọc bỏ show đã hủy trong lúc tính Matrix, Người Rảnh và Tính CTP bằng Proxy thông minh
+  let isFilteringActiveShowsOnly = false;
+
+  const wrapIgnoreCancelled = (obj, fnName) => {
+    if (!obj || typeof obj[fnName] !== 'function') return;
+    const origFn = obj[fnName];
+    obj[fnName] = function() {
+      const originalShows = st.shows;
+      try {
+        // Khi đang ở tab Matrix, Người Rảnh, Tính CTP -> chỉ lấy các show KHÔNG bị hủy
+        if (st.activeTab === 'matrix' || st.activeTab === 'free_finder' || st.activeTab === 'ctp' || isFilteringActiveShowsOnly) {
+          st.shows = (originalShows || []).filter(s => !s.isCancelled);
+        }
+        return origFn.apply(this, arguments);
+      } finally {
+        st.shows = originalShows;
+      }
+    };
+  };
+
+  // Khi mở form Nổ Show / Sửa Show hoặc chuyển qua Matrix, Người Rảnh, CTP -> tự động bỏ qua show đã hủy
+  if (typeof window.renderApp === 'function' && !window.__CANCEL_RENDER_WRAPPED__) {
+    window.__CANCEL_RENDER_WRAPPED__ = true;
+    const origRender = window.renderApp;
+    window.renderApp = function() {
+      const originalShows = st.shows;
+      const shouldHideCancelled =
+        st.activeTab === 'matrix' ||
+        st.activeTab === 'free_finder' ||
+        st.activeTab === 'ctp' ||
+        Boolean(st.formModal) ||
+        Boolean(st.zaloTomorrowModal);
+
+      try {
+        if (shouldHideCancelled && Array.isArray(originalShows)) {
+          st.shows = originalShows.filter(s => !s.isCancelled);
+        }
+        return origRender.apply(this, arguments);
+      } finally {
+        st.shows = originalShows;
+        requestAnimationFrame(decorateCancelledShowsInDom);
+      }
+    };
+  }
+
+  wrapIgnoreCancelled(window.ctpActions, 'generateBill');
+  wrapIgnoreCancelled(window.appActions, 'autoFillCtpFromRoles');
+
+  // =========================================================================
+  // 4. GẮN NÚT "🚫 BÁO HỦY / 🔄 KHÔI PHỤC" VÀO MODAL CHI TIẾT & ĐÁNH DẤU BẢNG LỊCH
+  // =========================================================================
+  function decorateCancelledShowsInDom() {
+    // A. Đánh dấu gạch ngang & gắn nhãn [🚫 ĐÃ HỦY] trên bảng 1. Lịch Show
+    document.querySelectorAll('tr[onclick*="appActions.openShowDetail"]').forEach((tr) => {
+      const m = (tr.getAttribute('onclick') || '').match(/openShowDetail\(['"]([^'"]+)['"]\)/);
+      if (!m) return;
+      const sh = (st.shows || []).find(s => s.id === m[1]);
+      if (!sh) return;
+
+      const secondTd = tr.children[1];
+      if (!secondTd) return;
+      const locSpan = secondTd.querySelector('span.truncate');
+      if (locSpan) locSpan.classList.add('as-loc-text');
+
+      let badge = secondTd.querySelector('.as-badge-cancelled');
+      if (sh.isCancelled) {
+        tr.classList.add('as-row-cancelled');
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'as-badge-cancelled';
+          badge.textContent = '🚫 ĐÃ HỦY';
+          secondTd.firstElementChild?.appendChild(badge);
+        }
+      } else {
+        tr.classList.remove('as-row-cancelled');
+        if (badge) badge.remove();
+      }
+    });
+
+    // B. Chèn nút "🚫 Báo Hủy Show" / "🔄 Khôi phục" vào ngay cạnh nút Chỉnh sửa & Xóa trong Modal Chi Tiết Show
+    if (st.detailShowId) {
+      const sh = (st.shows || []).find(s => s.id === st.detailShowId);
+      const detailOverlay = document.querySelector('[onclick="appActions.closeShowDetail()"]');
+      if (sh && detailOverlay) {
+        const card = detailOverlay.firstElementChild;
+        if (!card) return;
+
+        // Hiển thị thông báo đỏ nếu show này đang bị hủy
+        let cancelBanner = card.querySelector('#as-detail-cancel-banner');
+        if (sh.isCancelled) {
+          if (!cancelBanner) {
+            cancelBanner = document.createElement('div');
+            cancelBanner.id = 'as-detail-cancel-banner';
+            cancelBanner.className = 'p-2.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center justify-between gap-2';
+            card.insertBefore(cancelBanner, card.children[1]);
+          }
+          cancelBanner.innerHTML = `
+            <div>
+              <div class="font-black uppercase text-[11px] text-rose-600">🚫 SHOW NÀY ĐÃ BÁO HỦY</div>
+              <div class="text-[11px] text-rose-800 mt-0.5">Lý do: ${sh.cancelReason || 'Đã hủy lịch'} • Đã tự động nhả lịch RẢNH cho anh em.</div>
+            </div>
+          `;
+        } else if (cancelBanner) {
+          cancelBanner.remove();
+        }
+
+        // Tìm nút Xóa trong Modal Chi Tiết để chèn nút Báo Hủy nằm kế bên
+        const delBtn = card.querySelector(`button[onclick*="appActions.deleteShow"]`);
+        if (delBtn && !card.querySelector('#as-btn-toggle-cancel')) {
+          const cancelBtn = document.createElement('button');
+          cancelBtn.id = 'as-btn-toggle-cancel';
+          cancelBtn.type = 'button';
+          cancelBtn.onclick = () => window.appActions.toggleCancelShow(sh.id);
+
+          if (sh.isCancelled) {
+            cancelBtn.className = 'px-3.5 py-2.5 bg-emerald-600 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs';
+            cancelBtn.innerHTML = `<i class="fa-solid fa-rotate-left"></i><span>Khôi phục</span>`;
+          } else {
+            cancelBtn.className = 'px-3.5 py-2.5 bg-amber-100 text-amber-900 border border-amber-300 font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5';
+            cancelBtn.innerHTML = `<i class="fa-solid fa-ban text-rose-600"></i><span>Báo Hủy</span>`;
+          }
+          delBtn.parentNode.insertBefore(cancelBtn, delBtn);
+        }
+      }
+    }
+  }
+
+  new MutationObserver(() => {
+    requestAnimationFrame(decorateCancelledShowsInDom);
+  }).observe(document.body, { childList: true, subtree: true });
+
+  decorateCancelledShowsInDom();
+})();
+</script>
 </body></html>
