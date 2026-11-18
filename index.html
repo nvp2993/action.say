@@ -10033,4 +10033,204 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       }
     }, true);
   })();
-  </script></body></html>
+  </script>
+<script id="as-persist-login-and-fb-pull">
+(function initPersistAuthAndFbRefresh() {
+  if (!window.state || !window.appActions) {
+    setTimeout(initPersistAuthAndFbRefresh, 80);
+    return;
+  }
+  if (window.__AS_PERSIST_AND_FB_PULL__) return;
+  window.__AS_PERSIST_AND_FB_PULL__ = true;
+
+  const st = window.state;
+  const STORAGE_KEY = 'as_keep_login_uid_2026';
+
+  // =========================================================================
+  // 1. GIỮ ĐĂNG NHẬP VĨNH VIỄN TRÊN THIẾT BỊ (CHỈ ĐĂNG NHẬP 1 LẦN DUY NHẤT)
+  // =========================================================================
+  // Khôi phục ngay phiên đăng nhập nếu đã lưu trước đó
+  const savedUid = localStorage.getItem(STORAGE_KEY);
+  if (savedUid && !st.currentUserId) {
+    st.currentUserId = savedUid;
+    st.pinModal = null;
+    document.documentElement.classList.add('as-has-saved-session');
+    if (typeof window.renderApp === 'function') window.renderApp();
+  }
+
+  // Bọc hàm nhập PIN: Khi đăng nhập thành công -> Lưu cứng vào localStorage
+  const origHandlePin = window.appActions.handleNativePinInput;
+  window.appActions.handleNativePinInput = function(val) {
+    const pm = st.pinModal;
+    const clean = String(val || '').replace(/\D/g, '').slice(0, 4);
+    if (pm && clean.length === 4) {
+      const expectedPin = (st.pinsMap && st.pinsMap[pm.selectedId]) || '1234';
+      if (clean === expectedPin) {
+        try {
+          localStorage.setItem(STORAGE_KEY, pm.selectedId);
+          document.documentElement.classList.add('as-has-saved-session');
+        } catch (e) {}
+      }
+    }
+    return origHandlePin.apply(this, arguments);
+  };
+
+  // Bọc hàm Đăng xuất: Khi bấm Đăng xuất -> Xóa phiên lưu trữ
+  const origLogout = window.appActions.logoutMember;
+  window.appActions.logoutMember = function() {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem('as_user_backup_2026');
+      document.documentElement.classList.remove('as-has-saved-session');
+    } catch (e) {}
+    return origLogout.apply(this, arguments);
+  };
+
+  // Tự động đồng bộ nếu st.currentUserId thay đổi
+  let lastKnownUid = st.currentUserId;
+  setInterval(() => {
+    if (st.currentUserId && st.currentUserId !== lastKnownUid) {
+      lastKnownUid = st.currentUserId;
+      try {
+        localStorage.setItem(STORAGE_KEY, st.currentUserId);
+        document.documentElement.classList.add('as-has-saved-session');
+      } catch (e) {}
+    }
+  }, 500);
+
+  // =========================================================================
+  // 2. KÉO VÀ GIỮ LÂU KIỂU FACEBOOK MỚI RELOAD (CHỐNG RELOAD NHẦM)
+  // =========================================================================
+  const css = document.createElement('style');
+  css.textContent = `
+    html, body, #app, .custom-scroll, .overflow-auto, .overflow-y-auto {
+      overscroll-behavior-y: none !important;
+    }
+    #as-fb-ptr-indicator {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translate(-50%, -80px) scale(0.85);
+      z-index: 99990;
+      background: #0f172a;
+      color: #ffffff;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 999px;
+      padding: 7px 14px;
+      font-size: 11px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.35);
+      pointer-events: none;
+      opacity: 0;
+      transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease, background-color 0.2s ease;
+    }
+    #as-fb-ptr-indicator.ready {
+      background: #059669;
+      color: #ffffff;
+    }
+  `;
+  document.head.appendChild(css);
+
+  const ptrBox = document.createElement('div');
+  ptrBox.id = 'as-fb-ptr-indicator';
+  ptrBox.innerHTML = `<i id="as-fb-ptr-icon" class="fa-solid fa-arrow-down"></i><span id="as-fb-ptr-text">Kéo xuống & giữ để làm mới...</span>`;
+  document.body.appendChild(ptrBox);
+
+  const PULL_DISTANCE_THRESHOLD = 120; // Phải kéo sâu hơn 120px (cỡ Facebook)
+  const HOLD_DURATION_MS = 450;        // Phải giữ tay ở mức sâu đó ít nhất 0.45 giây
+
+  let startY = 0;
+  let currentPull = 0;
+  let isPulling = false;
+  let isReadyToReload = false;
+  let holdTimer = null;
+
+  function getActiveScrollTop(target) {
+    let el = target;
+    while (el && el !== document.body && el !== document.documentElement) {
+      if (el.scrollHeight > el.clientHeight && el.scrollTop > 0) {
+        return el.scrollTop;
+      }
+      el = el.parentElement;
+    }
+    return window.scrollY || document.documentElement.scrollTop || 0;
+  }
+
+  document.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    // Không kích hoạt khi đang mở popup/modal hoặc chưa ở đỉnh danh sách
+    if (st.formModal || st.detailShowId || st.ctpBillModal || st.crewPassModal) return;
+    const portal = document.getElementById('as-super-portal');
+    if (portal && portal.innerHTML.trim() !== '') return;
+
+    if (getActiveScrollTop(e.target) <= 0) {
+      startY = e.touches[0].clientY;
+      isPulling = true;
+      isReadyToReload = false;
+      currentPull = 0;
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!isPulling) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0 || getActiveScrollTop(e.target) > 0) {
+      isPulling = false;
+      clearTimeout(holdTimer);
+      ptrBox.style.opacity = '0';
+      ptrBox.style.transform = 'translate(-50%, -80px) scale(0.85)';
+      return;
+    }
+
+    currentPull = dy;
+    if (dy > 35) {
+      const moveY = Math.min(48, (dy - 35) * 0.45);
+      ptrBox.style.opacity = String(Math.min(1, (dy - 35) / 60));
+      ptrBox.style.transform = `translate(-50%, ${moveY}px) scale(1)`;
+
+      if (dy >= PULL_DISTANCE_THRESHOLD) {
+        if (!holdTimer && !isReadyToReload) {
+          document.getElementById('as-fb-ptr-text').textContent = 'Giữ thêm chút nữa...';
+          holdTimer = setTimeout(() => {
+            isReadyToReload = true;
+            ptrBox.classList.add('ready');
+            document.getElementById('as-fb-ptr-icon').className = 'fa-solid fa-rotate fa-spin';
+            document.getElementById('as-fb-ptr-text').textContent = 'Nhả tay để cập nhật lịch!';
+            if (navigator.vibrate) navigator.vibrate(15);
+          }, HOLD_DURATION_MS);
+        }
+      } else {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+        isReadyToReload = false;
+        ptrBox.classList.remove('ready');
+        document.getElementById('as-fb-ptr-icon').className = 'fa-solid fa-arrow-down';
+        document.getElementById('as-fb-ptr-text').textContent = 'Kéo sâu xuống để làm mới...';
+      }
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => {
+    if (!isPulling) return;
+    isPulling = false;
+    clearTimeout(holdTimer);
+    holdTimer = null;
+
+    if (isReadyToReload) {
+      document.getElementById('as-fb-ptr-text').textContent = 'Đang đồng bộ Cloud...';
+      setTimeout(() => {
+        window.location.reload();
+      }, 250);
+    } else {
+      ptrBox.classList.remove('ready');
+      ptrBox.style.opacity = '0';
+      ptrBox.style.transform = 'translate(-50%, -80px) scale(0.85)';
+    }
+    isReadyToReload = false;
+  }, { passive: true });
+})();
+</script>
+</body></html>
