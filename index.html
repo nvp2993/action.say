@@ -10189,13 +10189,13 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 </style>
 
       <script id="as-multi-year-manager-2026-2030">
-(function initMultiYearManager() {
+(function initMultiYearManagerSystemTabOnly() {
   if (!window.state || !window.appActions) {
-    setTimeout(initMultiYearManager, 80);
+    setTimeout(initMultiYearManagerSystemTabOnly, 80);
     return;
   }
-  if (window.__AS_MULTI_YEAR_READY__) return;
-  window.__AS_MULTI_YEAR_READY__ = true;
+  if (window.__AS_MULTI_YEAR_SYS_ONLY__) return;
+  window.__AS_MULTI_YEAR_SYS_ONLY__ = true;
 
   const st = window.state;
   const ALL_SUPPORTED_YEARS = [2026, 2027, 2028, 2029, 2030];
@@ -10219,7 +10219,26 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     }
   }
 
-  // 2. Đồng bộ 2 chiều với Firebase Cloud (nằm chung trong document shows_master)
+  // 2. Đồng bộ các nút Năm trên thanh Header ngoài App
+  function syncHeaderYearButtonsDom() {
+    const activeYears = st.visibleYears || [2026, 2027];
+    document.querySelectorAll('.as-year-pinned').forEach((wrap) => {
+      const currentBtns = Array.from(wrap.querySelectorAll('button')).map(b => Number(b.textContent.trim()));
+      const isSameList = currentBtns.length === activeYears.length && currentBtns.every((v, i) => v === activeYears[i]);
+      if (!isSameList) {
+        wrap.innerHTML = activeYears.map(y => `
+          <button type="button" onclick="appActions.setYear(${y})" class="as-year-btn ${Number(st.selectedYear) === y ? 'active' : 'inactive'}">${y}</button>
+        `).join('');
+      } else {
+        wrap.querySelectorAll('button').forEach((btn) => {
+          const y = Number(btn.textContent.trim());
+          btn.className = `as-year-btn ${Number(st.selectedYear) === y ? 'active' : 'inactive'}`;
+        });
+      }
+    });
+  }
+
+  // 3. Đồng bộ 2 chiều với Firebase Cloud (shows_master)
   (async function syncVisibleYearsWithFirebase() {
     try {
       const { getApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
@@ -10229,7 +10248,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       const appId = typeof __app_id !== 'undefined' ? __app_id : 'action-say-media-2026';
       const masterRef = doc(db, 'artifacts', appId, 'public', 'data', 'app_single_doc', 'shows_master');
 
-      // Lắng nghe khi Admin bật/tắt năm trên Cloud -> tự cập nhật cho toàn bộ anh em
       onSnapshot(masterRef, (snap) => {
         if (!snap.exists()) return;
         const d = snap.data();
@@ -10240,7 +10258,8 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
             try { localStorage.setItem(LOCAL_KEY, JSON.stringify(remoteYears)); } catch (e) {}
             ensureValidSelectedYear();
             if (typeof window.renderApp === 'function') window.renderApp();
-            refreshAdminYearButtonsUI();
+            syncHeaderYearButtonsDom();
+            mountOrUpdateAdminYearCard();
           }
         }
       });
@@ -10256,7 +10275,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     } catch (e) {}
   })();
 
-  // 3. Hàm Bật / Tắt từng năm trong trang Admin
+  // 4. Hàm Bật / Tắt từng năm
   window.appActions.toggleVisibleYear = async function(yearNum) {
     const y = Number(yearNum);
     if (!ALL_SUPPORTED_YEARS.includes(y)) return;
@@ -10280,51 +10299,78 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 
     ensureValidSelectedYear();
     if (typeof window.renderApp === 'function') window.renderApp();
-    refreshAdminYearButtonsUI();
+    syncHeaderYearButtonsDom();
+    mountOrUpdateAdminYearCard();
 
     if (typeof window.__saveVisibleYearsToCloud === 'function') {
       await window.__saveVisibleYearsToCloud(current);
     }
     if (typeof window.__asNotify === 'function') {
-      window.__asNotify(`📅 Đã cập nhật năm: ${current.join(', ')}`, 'success');
+      window.__asNotify(`📅 Năm hiển thị: ${current.join(', ')}`, 'success');
     }
   };
 
-  // 4. Chèn bảng bật/tắt Năm (2026 - 2030) vào tab "⚙️ Hệ Thống" trong trang Admin
-  // (Chỉ kiểm tra khi bấm chuột trong trang Admin, hoàn toàn KHÔNG dùng MutationObserver nên 0% lag)
-  function refreshAdminYearButtonsUI() {
+  // Kiểm tra chính xác xem Admin có đang mở đúng tab "⚙️ Hệ Thống" hay không
+  function isAdminSystemTabActive(shell) {
+    if (!shell) return false;
+    // Nếu đang có chữ "HIỆU SUẤT EKIP" hoặc "SHOW MỚI NHẬP" -> đang ở tab Tổng Quan -> KHÔNG HIỆN
+    const text = (shell.textContent || '').toUpperCase();
+    if (text.includes('HIỆU SUẤT EKIP') || text.includes('SHOW MỚI NHẬP')) return false;
+
+    // Kiểm tra nút tab "Hệ Thống" có đang active (nền trắng / chữ đậm) hoặc nội dung có chứa phần cài đặt Hệ Thống
+    const sysBtn = Array.from(shell.querySelectorAll('button')).find(b => (b.textContent || '').includes('Hệ Thống'));
+    if (sysBtn) {
+      const bg = window.getComputedStyle(sysBtn).backgroundColor;
+      if (bg === 'rgb(255, 255, 255)' || sysBtn.className.includes('bg-white') || sysBtn.className.includes('shadow')) {
+        return true;
+      }
+    }
+    return st.backendTab === 'system' || text.includes('TẢI FILE') || text.includes('ĐỔI LOGO') || text.includes('EXCEL');
+  }
+
+  // 5. Chỉ gắn bảng Bật/Tắt Năm (2026 - 2030) bên trong tab "⚙️ Hệ Thống"
+  function mountOrUpdateAdminYearCard() {
+    syncHeaderYearButtonsDom();
+
     const shell = document.getElementById('as-light-admin-shell');
-    if (!shell) return;
+    if (!shell || shell.offsetParent === null) return;
 
     let box = document.getElementById('as-admin-years-toggle-card');
+
+    // Nếu KHÔNG phải tab Hệ Thống -> xóa/ẩn ngay lập tức
+    if (!isAdminSystemTabActive(shell)) {
+      if (box) box.remove();
+      return;
+    }
+
     if (!box) {
-      // Tìm thẻ chứa trong tab Hệ thống (nơi có chữ "ĐỔI LOGO" hoặc "XUẤT FILE")
-      const cards = Array.from(shell.querySelectorAll('div'));
-      const sysContainer = cards.find(el =>
-        el.children.length >= 2 &&
-        ((el.textContent || '').includes('LOGO') || (el.textContent || '').includes('EXCEL') || (el.textContent || '').includes('MẬT KHẨU ADMIN'))
-      );
-      if (!sysContainer) return;
+      const tabBtn = Array.from(shell.querySelectorAll('button')).find(b => (b.textContent || '').includes('Hệ Thống'));
+      const tabBar = tabBtn ? tabBtn.parentElement : null;
+      if (!tabBar || !tabBar.parentElement) return;
 
       box = document.createElement('div');
       box.id = 'as-admin-years-toggle-card';
-      box.style.cssText = 'background:#ffffff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;margin-bottom:14px;box-shadow:0 4px 12px rgba(15,23,42,0.03);';
-      sysContainer.insertBefore(box, sysContainer.firstElementChild);
+      box.style.cssText = 'background:#ffffff;border:1px solid #e2e8f0;border-radius:22px;padding:14px 16px;margin-top:12px;margin-bottom:12px;box-shadow:0 4px 14px rgba(15,23,42,0.04);';
+      tabBar.parentElement.insertBefore(box, tabBar.nextElementSibling);
     }
 
     const activeYears = st.visibleYears || [2026, 2027];
+    const sig = activeYears.join(',');
+    if (box.dataset.renderedSig === sig) return;
+    box.dataset.renderedSig = sig;
+
     box.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
         <div>
           <div style="font-size:12px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:0.02em;">
-            📅 QUẢN LÝ NĂM HIỂN THỊ TRÊN APP (2026 – 2030)
+            📅 BẬT / ẨN NĂM HIỂN THỊ TRÊN APP (2026 – 2030)
           </div>
           <div style="font-size:11px;color:#64748b;margin-top:2px;">
-            Bấm để Bật / Ẩn từng năm. Nên bật 1–2 năm để thanh chọn năm trên điện thoại gọn đẹp nhất.
+            Bấm vào năm để Bật hoặc Ẩn. Nên bật 1–2 năm để thanh lịch ngoài App gọn nhất.
           </div>
         </div>
         <span style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">
-          Đang hiện: ${activeYears.join(', ')}
+          Đang mở: ${activeYears.join(', ')}
         </span>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;">
@@ -10334,15 +10380,15 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
             <button
               type="button"
               onclick="window.appActions.toggleVisibleYear(${yr})"
-              style="padding:8px 16px;border-radius:999px;font-size:12px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s ease;${
+              style="padding:7px 14px;border-radius:999px;font-size:12px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s ease;${
                 isOn
-                  ? 'background:#0f172a;color:#fbbf24;border:1.5px solid #0f172a;box-shadow:0 4px 10px rgba(15,23,42,0.18);'
+                  ? 'background:#0f172a;color:#fbbf24;border:1.5px solid #0f172a;box-shadow:0 4px 10px rgba(15,23,42,0.16);'
                   : 'background:#f8fafc;color:#94a3b8;border:1.5px dashed #cbd5e1;'
               }"
             >
               <span>${isOn ? '🟢' : '⚪'}</span>
-              <span>Năm ${yr}</span>
-              <span style="font-size:10px;font-weight:700;opacity:0.85;">(${isOn ? 'Đang hiện' : 'Đang ẩn'})</span>
+              <span>${yr}</span>
+              <span style="font-size:10px;font-weight:700;opacity:0.85;">${isOn ? 'Hiện' : 'Ẩn'}</span>
             </button>
           `;
         }).join('')}
@@ -10350,12 +10396,8 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     `;
   }
 
-  // Chỉ kích hoạt vẽ khung chọn năm khi người dùng bấm vào tab "⚙️ Hệ Thống" trong Admin
-  document.addEventListener('click', () => {
-    if (document.body.classList.contains('as-admin-mode-active') || window.location.hash === '#admin') {
-      setTimeout(refreshAdminYearButtonsUI, 60);
-    }
-  });
+  setInterval(mountOrUpdateAdminYearCard, 350);
+  document.addEventListener('click', () => setTimeout(mountOrUpdateAdminYearCard, 40));
 })();
 </script>
 </body></html>
