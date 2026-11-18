@@ -10188,14 +10188,14 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   }
 </style>
 
-<script id="as-stable-integrated-admin-suite-2026">
-(function initStableIntegratedAdminSuite() {
+<script id="as-bulletproof-admin-fix-2026">
+(function initBulletproofAdminFix() {
   if (!window.state || !window.appActions) {
-    setTimeout(initStableIntegratedAdminSuite, 80);
+    setTimeout(initBulletproofAdminFix, 80);
     return;
   }
-  if (window.__AS_STABLE_INTEGRATED_READY__) return;
-  window.__AS_INTEGRATED_SUITE_READY__ = true;
+  if (window.__AS_BULLETPROOF_FIX_READY__) return;
+  window.__AS_BULLETPROOF_FIX_READY__ = true;
 
   const st = window.state;
   const ALL_YEARS = [2026, 2027, 2028, 2029, 2030];
@@ -10225,7 +10225,8 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   ];
 
   let adminLockViewYear = Number(st.selectedYear) || 2026;
-  let activeAdminTabCustom = 'overview'; // 'overview', 'pins', 'pro_settings', 'system'
+  let isModalOpen = false;
+  let statusBannerMsg = '';
 
   // =========================================================================
   // 0. SỬA TRIỆT ĐỂ LỖI Ô "HÔM NAY" NHẢY LÊN 360 DO ĐỔI MÀU HÀNG LOẠT
@@ -10324,8 +10325,15 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   }
 
   function showInlineConfirm(msg) {
+    statusBannerMsg = msg;
+    renderCaiDatModal();
     if (typeof window.__asNotify === 'function') window.__asNotify(msg, 'success');
-    renderIntegratedAdminUI();
+    setTimeout(() => {
+      if (statusBannerMsg === msg) {
+        statusBannerMsg = '';
+        if (isModalOpen) renderCaiDatModal();
+      }
+    }, 3500);
   }
 
   function isYearMonthLocked(yearNum, monthNum) {
@@ -10334,26 +10342,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     if (lm[keyYM] !== undefined) return Boolean(lm[keyYM]);
     if (Number(yearNum) === 2026 && lm[monthNum] !== undefined) return Boolean(lm[monthNum]);
     return false;
-  }
-
-  function getDaysCount(sh) {
-    if (!sh || !sh.startDate || !sh.endDate) return 1;
-    const s = new Date(sh.startDate + 'T00:00:00');
-    const e = new Date(sh.endDate + 'T00:00:00');
-    const d = Math.round((e - s) / 86400000) + 1;
-    return d > 0 ? d : 1;
-  }
-
-  function getDynamicCtpRate(taskKey, sh) {
-    const cfg = st.ctpRatesConfig || DEFAULT_CTP_RATES;
-    const days = getDaysCount(sh);
-    if (taskKey === 'quay') return days === 1 ? Number(cfg.quay1Day) : Number(cfg.quayMultiDay) * days;
-    if (taskKey === 'chup') return days === 1 ? Number(cfg.chup1Day) : Number(cfg.chupMultiDay) * days;
-    if (taskKey === 'dung') return Number(cfg.dung);
-    if (taskKey === 'flycam') return Number(cfg.flycam);
-    if (taskKey === 'lamhinh') return Number(cfg.lamhinh);
-    if (taskKey === 'gimbal') return Number(cfg.gimbal);
-    return 0;
   }
 
   function resolveDynamicLocationColor(locationStr = '', partnerStr = '') {
@@ -10396,167 +10384,130 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     return updatedCount;
   }
 
-  function getOverduePostProductionShows() {
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    const list = [];
-    (st.shows || []).forEach(sh => {
-      if (!sh || sh.isCancelled || !sh.endDate) return;
-      if (sh.postStatus === 'done') return;
-      const endDt = new Date((sh.endDate || sh.startDate) + 'T00:00:00');
-      if (isNaN(endDt)) return;
-      const diffDays = Math.floor((now - endDt) / 86400000);
-      if (diffDays >= 7) {
-        const ownerObj = (st.members || []).find(m => m.id === sh.ownerId);
-        list.push({
-          id: sh.id,
-          location: sh.location || 'Show',
-          startDate: sh.startDate,
-          diffDays,
-          ownerName: ownerObj ? ownerObj.name : (sh.ownerLabel || 'Chưa rõ')
-        });
+  // =========================================================================
+  // 2. ĐỔI TÊN TAB THÀNH "🔑 NHÂN SỰ & PIN" + TÍCH HỢP ĐỔI MÀU & THỨ TỰ NHÂN SỰ
+  // =========================================================================
+  function upgradeAdminTabsAndInjectMemberStyling() {
+    const shell = document.getElementById('as-light-admin-shell');
+    if (!shell) return;
+
+    // Đổi tên tab thứ 2 thành "🔑 NHÂN SỰ & PIN"
+    const tabsWrap = shell.querySelector('.as-adm-tabs');
+    if (tabsWrap) {
+      const btns = tabsWrap.querySelectorAll('button');
+      if (btns.length >= 2) {
+        if (btns[1].textContent.includes('Cấp PIN') || btns[1].textContent.includes('MÃ PIN')) {
+          btns[1].textContent = '🔑 NHÂN SỰ & PIN';
+        }
       }
-    });
-    return list.sort((a, b) => b.diffDays - a.diffDays);
+    }
+
+    const container = shell.querySelector('.as-adm-container') || shell;
+    const textContent = container.textContent || '';
+    if (!textContent.includes('MÃ PIN') && !textContent.includes('HỌ TÊN')) return;
+
+    let hostBox = document.getElementById('as-admin-member-style-host');
+    if (!hostBox) {
+      hostBox = document.createElement('div');
+      hostBox.id = 'as-admin-member-style-host';
+      container.insertBefore(hostBox, container.firstChild);
+    }
+
+    const membersSorted = [...(st.members || [])].sort((a, b) => (a.order || 99) - (b.order || 99));
+
+    hostBox.innerHTML = `
+      <div style="background:#fff;border:1px solid #cbd5e1;border-radius:20px;padding:16px;margin-bottom:18px;box-shadow:0 4px 14px rgba(15,23,42,0.04);">
+        <div style="font-size:13px;font-weight:900;color:#0f172a;text-transform:uppercase;margin-bottom:4px;">🎨 TÙY CHỈNH MÀU SẮC THẺ & THỨ TỰ CỘT NHÂN SỰ (13 NGƯỜI)</div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:12px;">Đổi màu nền thẻ (Pill) hoặc thứ tự đứng cột trên Bảng Công Tác:</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:8px;">
+          ${membersSorted.map((m, idx) => `
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
+              <input type="color" value="${m.bg || '#333333'}" onchange="window.adminProActions.updateMemberColor('${m.id}', this.value)" style="width:32px;height:32px;border-radius:8px;border:1.5px solid #fff;cursor:pointer;flex-shrink:0;" title="Đổi màu thẻ" />
+              <div style="flex:1;min-width:0;font-size:12px;font-weight:900;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                ${escapeHtml(m.name)} <span style="font-size:10px;color:#64748b;">(${escapeHtml(m.shortLabel)})</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+                <span style="font-size:10px;font-weight:700;color:#64748b;">Thứ tự:</span>
+                <input type="number" min="1" max="50" value="${m.order !== undefined ? m.order : (idx + 1)}" onchange="window.adminProActions.updateMemberOrder('${m.id}', this.value)" style="width:44px;padding:4px;text-align:center;border:1px solid #cbd5e1;border-radius:8px;font-size:11px;font-weight:800;" />
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
   }
 
   // =========================================================================
-  // 2. ĐỒNG BỘ CLOUD & BẢO VỆ CHẾ ĐỘ READ-ONLY (MAINTENANCE MODE)
+  // 3. NÚT "⚙️ CÀI ĐẶT" NỔI ĐỒNG BỘ Ở GÓC DƯỚI BÊN PHẢI TRANG ADMIN
   // =========================================================================
-  (async function syncAdminConfigsCloud() {
-    try {
-      const { getApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
-      const { getFirestore, doc, setDoc, onSnapshot } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-      const db = getFirestore(getApp());
-      const appId = typeof __app_id !== 'undefined' ? __app_id : 'action-say-media-2026';
-      const masterRef = doc(db, 'artifacts', appId, 'public', 'data', 'app_single_doc', 'shows_master');
-
-      onSnapshot(masterRef, (snap) => {
-        if (!snap.exists()) return;
-        const d = snap.data();
-        let changed = false;
-
-        if (Array.isArray(d?.visibleYears) && d.visibleYears.length > 0) {
-          const rYears = d.visibleYears.map(Number).filter(y => ALL_YEARS.includes(y)).sort((a, b) => a - b);
-          if (JSON.stringify(rYears) !== JSON.stringify(st.visibleYears)) {
-            st.visibleYears = rYears;
-            if (!st.visibleYears.includes(Number(st.selectedYear))) {
-              st.selectedYear = st.visibleYears[0] || 2026;
-            }
-            changed = true;
-          }
-        }
-        if (d?.ctpRatesConfig && typeof d.ctpRatesConfig === 'object') {
-          st.ctpRatesConfig = { ...DEFAULT_CTP_RATES, ...d.ctpRatesConfig };
-          changed = true;
-        }
-        if (Array.isArray(d?.customColorRules)) {
-          st.customColorRules = d.customColorRules;
-          changed = true;
-        }
-        if (d?.studioBroadcast && typeof d.studioBroadcast === 'object') {
-          st.studioBroadcast = d.studioBroadcast;
-          changed = true;
-        }
-        if (Array.isArray(d?.deletedShowsTrash)) {
-          st.deletedShowsTrash = d.deletedShowsTrash;
-        }
-        if (Array.isArray(d?.activityLogs)) {
-          st.activityLogs = d.activityLogs;
-        }
-        if (d?.readonlyMaintenanceMode !== undefined) {
-          st.readonlyMaintenanceMode = Boolean(d.readonlyMaintenanceMode);
-          changed = true;
-        }
-
-        if (changed) {
-          saveConfigsLocal();
-          syncMainAppHeader();
-          renderIntegratedAdminUI();
-        }
-      });
-
-      window.__pushAdminConfigToCloud = async function() {
-        try {
-          await setDoc(masterRef, {
-            visibleYears: st.visibleYears,
-            ctpRatesConfig: st.ctpRatesConfig,
-            customColorRules: st.customColorRules,
-            studioBroadcast: st.studioBroadcast,
-            deletedShowsTrash: (st.deletedShowsTrash || []).slice(0, 30),
-            activityLogs: (st.activityLogs || []).slice(0, 30),
-            readonlyMaintenanceMode: st.readonlyMaintenanceMode,
-            lockedMonths: st.lockedMonths || {},
-            updatedAt: Date.now()
-          }, { merge: true });
-        } catch (e) {}
-      };
-    } catch (e) {}
-  })();
-
-  function checkMaintenanceGuard() {
-    if (st.readonlyMaintenanceMode && !st.isAdminMode) {
-      alert('🛡️ Hệ thống đang tạm khóa Nổ Show / Sửa lịch để bảo trì. Vui lòng liên hệ Admin!');
-      return true;
-    }
-    return false;
-  }
-
-  const origSaveShow = window.appActions.saveShowForm;
-  window.appActions.saveShowForm = async function() {
-    if (checkMaintenanceGuard()) return;
-    if (st.formModal && isLockedForUser(st.formModal.startDate)) return;
-    if (st.formModal) {
-      st.formModal.color = resolveDynamicLocationColor(st.formModal.location, st.formModal.partner);
-    }
-    return origSaveShow.apply(this, arguments);
+  const floatCaiDatBtn = document.createElement('button');
+  floatCaiDatBtn.id = 'as-floating-caidat-btn';
+  floatCaiDatBtn.type = 'button';
+  floatCaiDatBtn.style.cssText = [
+    'position:fixed',
+    'bottom:max(22px, calc(env(safe-area-inset-bottom, 12px) + 12px))',
+    'right:20px',
+    'z-index:2147483645',
+    'background:#0f172a',
+    'color:#ffffff',
+    'border:1.5px solid rgba(255,255,255,0.16)',
+    'border-radius:999px',
+    'padding:11px 20px',
+    'font-size:12.5px',
+    'font-weight:900',
+    'letter-spacing:0.03em',
+    'display:none',
+    'align-items:center',
+    'gap:8px',
+    'box-shadow:0 12px 28px -4px rgba(15,23,42,0.45)',
+    'cursor:pointer',
+    'font-family:Inter,-apple-system,sans-serif',
+    'transition:transform 0.15s ease'
+  ].join(';');
+  floatCaiDatBtn.innerHTML = `<i class="fa-solid fa-sliders" style="color:#fbbf24;font-size:13px;"></i><span>CÀI ĐẶT</span>`;
+  floatCaiDatBtn.onclick = () => {
+    isModalOpen = !isModalOpen;
+    renderCaiDatModal();
   };
+  document.body.appendChild(floatCaiDatBtn);
 
-  const prevDelShow = window.appActions.deleteShow;
-  window.appActions.deleteShow = async function(showId) {
-    if (checkMaintenanceGuard()) return;
-    const sh = (st.shows || []).find(s => s && s.id === showId);
-    if (!sh) return;
-    if (isLockedForUser(sh.startDate)) return;
-    const clone = JSON.parse(JSON.stringify(sh));
-    clone.deletedAt = Date.now();
-    const res = await prevDelShow.apply(this, arguments);
-    if (!(st.shows || []).some(s => s && s.id === showId)) {
-      if (!Array.isArray(st.deletedShowsTrash)) st.deletedShowsTrash = [];
-      st.deletedShowsTrash = [clone, ...st.deletedShowsTrash.filter(x => x && x.id !== showId)].slice(0, 30);
-      saveConfigsLocal();
-      logStudioActivity(`Xóa show: ${sh.location}`);
-      if (typeof window.__pushAdminConfigToCloud === 'function') window.__pushAdminConfigToCloud();
-    }
-    return res;
+  const modalBackdrop = document.createElement('div');
+  modalBackdrop.id = 'as-caidat-modal-backdrop';
+  modalBackdrop.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:rgba(15,23,42,0.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;font-family:Inter,-apple-system,sans-serif;';
+  modalBackdrop.onclick = () => {
+    isModalOpen = false;
+    renderCaiDatModal();
   };
+  document.body.appendChild(modalBackdrop);
 
-  function isLockedForUser(dateStr) {
-    if (!dateStr || st.isAdminMode) return false;
-    const parts = String(dateStr).split('-');
-    const y = parseInt(parts[0], 10);
-    const m = parseInt(parts[1], 10);
-    if (isYearMonthLocked(y, m)) {
-      alert(`🔒 Tháng ${m}/${y} đã được Admin khóa sổ sau khi chốt CTP!`);
-      return true;
+  function syncMainAppUI() {
+    const inAdmin = Boolean(st.isBackendPortal || window.location.hash === '#admin' || document.body.classList.contains('as-admin-mode-active'));
+    floatCaiDatBtn.style.display = inAdmin ? 'inline-flex' : 'none';
+    if (!inAdmin && isModalOpen) {
+      isModalOpen = false;
+      modalBackdrop.style.display = 'none';
     }
-    return false;
+    if (inAdmin) {
+      setTimeout(upgradeAdminTabsAndInjectMemberStyling, 40);
+      return;
+    }
   }
 
   // =========================================================================
-  // 3. XÂY DỰNG HỆ THỐNG 4 TAB NATIVE TRONG ADMIN TRANG TRẠI CHUẨN MỰC
+  // 4. CÁC HÀM XỬ LÝ TRONG CỬA SỔ CÀI ĐẶT
   // =========================================================================
   window.adminProActions = {
-    switchTab(tabKey) {
-      activeAdminTabCustom = tabKey;
-      renderIntegratedAdminUI();
+    closeModal() {
+      isModalOpen = false;
+      renderCaiDatModal();
     },
+
     async toggleYear(yr) {
       const y = Number(yr);
       const cur = Array.isArray(st.visibleYears) ? [...st.visibleYears] : [2026, 2027];
       const idx = cur.indexOf(y);
       if (idx >= 0) {
-        if (cur.length <= 1) return alert('⚠️ Phải giữ lại ít nhất 1 năm hiển thị!');
+        if (cur.length <= 1) return alert('⚠️ Phải giữ lại ít nhất 1 năm!');
         cur.splice(idx, 1);
       } else {
         cur.push(y);
@@ -10567,14 +10518,16 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         st.selectedYear = st.visibleYears[0] || 2026;
       }
       saveConfigsLocal();
-      logStudioActivity(`Bật/ẩn năm hiển thị: ${cur.join(', ')}`);
+      logStudioActivity(`Bật/ẩn năm: ${cur.join(', ')}`);
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
       showInlineConfirm(`✅ Đã lưu Năm hiển thị: ${cur.join(', ')}`);
     },
+
     setLockViewYear(yr) {
       adminLockViewYear = Number(yr);
-      renderIntegratedAdminUI();
+      renderCaiDatModal();
     },
+
     async toggleLockMonthAdmin(m) {
       const monthNum = Number(m);
       const y = Number(adminLockViewYear) || 2026;
@@ -10588,97 +10541,107 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
       showInlineConfirm(nextVal ? `🔒 Đã khóa sổ Tháng ${monthNum}/${y}` : `🔓 Đã mở khóa Tháng ${monthNum}/${y}`);
     },
+
     async publishBroadcastNow() {
-      const txt = (document.getElementById('as-adm-bc-input')?.value || '').trim();
+      const txt = (document.getElementById('as-pro-bc-input')?.value || '').trim();
       if (!txt) {
         alert('Vui lòng nhập nội dung thông báo!');
-        document.getElementById('as-adm-bc-input')?.focus();
+        document.getElementById('as-pro-bc-input')?.focus();
         return;
       }
       st.studioBroadcast = { enabled: true, text: txt, updatedAt: Date.now() };
       saveConfigsLocal();
-      logStudioActivity('Phát thông báo ghim đầu App');
+      logStudioActivity('Phát thông báo đầu App');
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
       showInlineConfirm('📢 ĐÃ LƯU & GHIM THÔNG BÁO LÊN ĐẦU APP!');
     },
+
     async disableBroadcastNow() {
       st.studioBroadcast = { enabled: false, text: st.studioBroadcast?.text || '', updatedAt: Date.now() };
       saveConfigsLocal();
-      logStudioActivity('Tắt thanh thông báo ghim đầu App');
+      logStudioActivity('Tắt thông báo đầu App');
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
       showInlineConfirm('🔕 Đã tắt thanh thông báo đầu App');
     },
+
     async saveCtpRates() {
       const pNum = (id, def) => {
         const raw = String(document.getElementById(id)?.value || '').replace(/\D/g, '');
         return raw ? parseInt(raw, 10) : def;
       };
       st.ctpRatesConfig = {
-        quay1Day: pNum('as-adm-r-quay1', 1500000),
-        quayMultiDay: pNum('as-adm-r-quayN', 1200000),
-        chup1Day: pNum('as-adm-r-chup1', 1500000),
-        chupMultiDay: pNum('as-adm-r-chupN', 1200000),
-        dung: pNum('as-adm-r-dung', 1000000),
-        flycam: pNum('as-adm-r-flycam', 1000000),
-        lamhinh: pNum('as-adm-r-lamhinh', 300000),
-        gimbal: pNum('as-adm-r-gimbal', 200000)
+        quay1Day: pNum('as-pro-r-quay1', 1500000),
+        quayMultiDay: pNum('as-pro-r-quayN', 1200000),
+        chup1Day: pNum('as-pro-r-chup1', 1500000),
+        chupMultiDay: pNum('as-pro-r-chupN', 1200000),
+        dung: pNum('as-pro-r-dung', 1000000),
+        flycam: pNum('as-pro-r-flycam', 1000000),
+        lamhinh: pNum('as-pro-r-lamhinh', 300000),
+        gimbal: pNum('as-pro-r-gimbal', 200000)
       };
       saveConfigsLocal();
-      logStudioActivity('Cập nhật bảng Đơn giá CTP');
+      logStudioActivity('Cập nhật Đơn giá CTP');
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
-      showInlineConfirm('💰 ĐÃ LƯU BẢNG ĐƠN GIÁ CTP MẶC ĐỊNH!');
+      showInlineConfirm('💰 ĐÃ LƯU ĐƠN GIÁ CTP MỚI!');
     },
+
     async addColorRule() {
-      const kw = (document.getElementById('as-adm-col-kw')?.value || '').trim();
-      const col = document.getElementById('as-adm-col-hex')?.value || '#a7f3d0';
+      const kw = (document.getElementById('as-pro-col-kw')?.value || '').trim();
+      const col = document.getElementById('as-pro-col-hex')?.value || '#a7f3d0';
       if (!kw) return alert('Vui lòng nhập từ khóa địa điểm!');
       if (!Array.isArray(st.customColorRules)) st.customColorRules = [...DEFAULT_COLOR_RULES];
       st.customColorRules.unshift({ id: 'cr_' + Date.now(), keyword: kw, color: col });
       saveConfigsLocal();
       const cnt = await applyColorsToAllExistingShows();
-      logStudioActivity(`Thêm quy tắc màu: "${kw}"`);
+      logStudioActivity(`Thêm màu địa điểm: "${kw}"`);
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
-      showInlineConfirm(`🎨 Đã thêm màu "${kw}" & cập nhật cho ${cnt} show!`);
+      showInlineConfirm(`🎨 Đã thêm màu "${kw}" & cập nhật ${cnt} show!`);
     },
+
     updateRuleDraftColor(ruleId, newHex) {
       const r = (st.customColorRules || []).find(x => x.id === ruleId);
       if (r) r.color = newHex;
     },
+
     updateRuleDraftKeyword(ruleId, newKw) {
       const r = (st.customColorRules || []).find(x => x.id === ruleId);
       if (r) r.keyword = newKw;
     },
+
     async saveAndApplyAllColorRules() {
       saveConfigsLocal();
       const cnt = await applyColorsToAllExistingShows();
-      logStudioActivity(`Lưu bảng màu địa điểm (${cnt} show cập nhật màu)`);
+      logStudioActivity(`Lưu bảng màu (${cnt} show cập nhật)`);
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
-      showInlineConfirm(`✅ ĐÃ LƯU BẢNG MÀU & CẬP NHẬT MÀU MỚI CHO ${cnt} SHOW!`);
+      showInlineConfirm(`✅ ĐÃ LƯU & CẬP NHẬT MÀU CHO ${cnt} SHOW!`);
     },
+
     async removeColorRule(ruleId) {
       st.customColorRules = (st.customColorRules || []).filter(r => r.id !== ruleId);
       saveConfigsLocal();
       const cnt = await applyColorsToAllExistingShows();
-      logStudioActivity('Xóa một quy tắc màu địa điểm');
+      logStudioActivity('Xóa quy tắc màu');
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
       showInlineConfirm(`🗑️ Đã xóa quy tắc màu (${cnt} show cập nhật)`);
     },
+
     async resetDefaultColors() {
-      if (!confirm('Khôi phục lại 10 nhóm màu địa điểm mặc định?')) return;
+      if (!confirm('Khôi phục lại 10 nhóm màu mặc định?')) return;
       st.customColorRules = JSON.parse(JSON.stringify(DEFAULT_COLOR_RULES));
       saveConfigsLocal();
       const cnt = await applyColorsToAllExistingShows();
-      logStudioActivity('Khôi phục bảng màu mặc định');
+      logStudioActivity('Khôi phục màu mặc định');
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
       showInlineConfirm(`🔄 Đã khôi phục bảng màu gốc (${cnt} show cập nhật)!`);
     },
+
     async updateMemberColor(memId, hexVal) {
       const m = (st.members || []).find(x => x && x.id === memId);
       if (!m) return;
       m.bg = hexVal;
       try { localStorage.setItem('as_members_backup_2026', JSON.stringify(st.members)); } catch (e) {}
       if (typeof window.renderApp === 'function') window.renderApp();
-      logStudioActivity(`Đổi màu thẻ nhân sự: ${m.name}`);
+      logStudioActivity(`Đổi màu thẻ: ${m.name}`);
       if (db && state.user) {
         try {
           const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
@@ -10687,13 +10650,14 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       }
       showInlineConfirm(`🎨 Đã đổi màu thẻ của ${m.name}!`);
     },
+
     async updateMemberOrder(memId, orderVal) {
       const m = (st.members || []).find(x => x && x.id === memId);
       if (!m) return;
       m.order = Number(orderVal) || 99;
       try { localStorage.setItem('as_members_backup_2026', JSON.stringify(st.members)); } catch (e) {}
       if (typeof window.renderApp === 'function') window.renderApp();
-      logStudioActivity(`Đổi thứ tự cột nhân sự: ${m.name} (vị trí ${m.order})`);
+      logStudioActivity(`Đổi thứ tự cột: ${m.name} (vị trí ${m.order})`);
       if (db && state.user) {
         try {
           const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
@@ -10702,14 +10666,16 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       }
       showInlineConfirm(`🔢 Đã cập nhật thứ tự của ${m.name}!`);
     },
+
     async toggleMaintenanceMode() {
       st.readonlyMaintenanceMode = !st.readonlyMaintenanceMode;
       saveConfigsLocal();
-      renderIntegratedAdminUI();
-      logStudioActivity(st.readonlyMaintenanceMode ? '🛡️ Bật chế độ Bảo trì (Khóa Nổ Show)' : '🔓 Tắt chế độ Bảo trì');
+      renderCaiDatModal();
+      logStudioActivity(st.readonlyMaintenanceMode ? '🛡️ Bật chế độ Bảo trì' : '🔓 Tắt chế độ Bảo trì');
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
       showInlineConfirm(st.readonlyMaintenanceMode ? '🛡️ ĐÃ BẬT KHÓA HỆ THỐNG!' : '🔓 Đã mở khóa hệ thống bình thường!');
     },
+
     async restoreDeletedShow(showId) {
       const target = (st.deletedShowsTrash || []).find(s => s && s.id === showId);
       if (!target) return;
@@ -10722,11 +10688,12 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       st.deletedShowsTrash = (st.deletedShowsTrash || []).filter(s => s && s.id !== showId);
       localStorage.setItem('as_shows_backup_2026', JSON.stringify(st.shows));
       saveConfigsLocal();
-      logStudioActivity(`Khôi phục show từ thùng rác: ${target.location}`);
+      logStudioActivity(`Khôi phục show: ${target.location}`);
       if (typeof window.syncShowsToSingleDoc === 'function') await window.syncShowsToSingleDoc();
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
       showInlineConfirm(`♻️ Đã khôi phục show "${target.location}"!`);
     },
+
     exportFullJsonBackup() {
       const payload = {
         exportedAt: new Date().toISOString(),
@@ -10744,244 +10711,222 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = `ActionSay_Backup_${new Date().toISOString().slice(0, 10)}.json`; a.click();
       URL.revokeObjectURL(url);
-      showInlineConfirm('📦 Đã tải xuống file Backup .JSON!');
+      showInlineConfirm('📦 Đã tải file Backup .JSON!');
     }
   };
 
-  function renderIntegratedAdminUI() {
-    const inAdmin = Boolean(st.isBackendPortal || window.location.hash === '#admin' || document.body.classList.contains('as-admin-mode-active'));
-    const shell = document.getElementById('as-light-admin-shell');
-    if (!inAdmin || !shell) return;
-
-    const container = shell.querySelector('.as-adm-container') || shell;
-    const tabsWrap = shell.querySelector('.as-adm-tabs');
-    if (!tabsWrap) return;
-
-    // 1. Dựng 4 Tab chuẩn mực trên thanh menu của Admin: [📊 Tổng Quan] | [🔑 NHÂN SỰ & PIN] | [🛠️ CÀI ĐẶT PRO] | [⚙️ Hệ Thống]
-    let customTabBar = tabsWrap.querySelector('#as-custom-4tabs-bar');
-    if (!customTabBar) {
-      customTabBar = document.createElement('div');
-      customTabBar.id = 'as-custom-4tabs-bar';
-      customTabBar.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;';
-      tabsWrap.innerHTML = '';
-      tabsWrap.appendChild(customTabBar);
+  function renderCaiDatModal() {
+    if (!isModalOpen) {
+      modalBackdrop.style.display = 'none';
+      return;
     }
+    modalBackdrop.style.display = 'flex';
 
-    const isOverview = activeAdminTabCustom === 'overview';
-    const isPins = activeAdminTabCustom === 'pins';
-    const isPro = activeAdminTabCustom === 'pro_settings';
-    const isSystem = activeAdminTabCustom === 'system';
+    const activeYears = st.visibleYears || [2026, 2027];
+    const rates = st.ctpRatesConfig || DEFAULT_CTP_RATES;
+    const rules = st.customColorRules || DEFAULT_COLOR_RULES;
+    const trash = st.deletedShowsTrash || [];
+    const bc = st.studioBroadcast || { enabled: false, text: '' };
+    const logsList = st.activityLogs || [];
+    const isMaint = Boolean(st.readonlyMaintenanceMode);
 
-    customTabBar.innerHTML = `
-      <button type="button" onclick="window.adminProActions.switchTab('overview')" style="padding:8px 16px;border-radius:12px;font-size:12px;font-weight:900;border:none;cursor:pointer;${isOverview ? 'background:#0f172a;color:#fbbf24;' : 'background:#e2e8f0;color:#334155;'}">📊 Tổng Quan</button>
-      <button type="button" onclick="window.adminProActions.switchTab('pins')" style="padding:8px 16px;border-radius:12px;font-size:12px;font-weight:900;border:none;cursor:pointer;${isPins ? 'background:#0f172a;color:#fbbf24;' : 'background:#e2e8f0;color:#334155;'}">🔑 NHÂN SỰ & PIN</button>
-      <button type="button" onclick="window.adminProActions.switchTab('pro_settings')" style="padding:8px 16px;border-radius:12px;font-size:12px;font-weight:900;border:none;cursor:pointer;${isPro ? 'background:#0f172a;color:#fbbf24;' : 'background:#e2e8f0;color:#334155;'}">🛠️ CÀI ĐẶT PRO</button>
-      <button type="button" onclick="window.adminProActions.switchTab('system')" style="padding:8px 16px;border-radius:12px;font-size:12px;font-weight:900;border:none;cursor:pointer;${isSystem ? 'background:#0f172a;color:#fbbf24;' : 'background:#e2e8f0;color:#334155;'}">⚙️ Hệ Thống</button>
-    `;
-
-    // 2. Ẩn/hiện nội dung tương ứng theo tab đang chọn để tránh xung đột
-    let contentPane = container.querySelector('#as-custom-admin-pane');
-    if (!contentPane) {
-      contentPane = document.createElement('div');
-      contentPane.id = 'as-custom-admin-pane';
-      container.appendChild(contentPane);
-    }
-
-    const nativeSections = Array.from(container.children).filter(el => el.id !== 'as-custom-4tabs-bar' && el.id !== 'as-custom-admin-pane');
-
-    if (isOverview) {
-      nativeSections.forEach(el => el.style.display = 'block');
-      contentPane.innerHTML = '';
-    } else if (isPins) {
-      nativeSections.forEach(el => el.style.display = 'none');
-      const membersSorted = [...(st.members || [])].sort((a, b) => (a.order || 99) - (b.order || 99));
-      contentPane.innerHTML = `
-        <div style="space-y:14px;">
-          <div style="background:#fff;border:1px solid #cbd5e1;border-radius:20px;padding:16px;margin-bottom:14px;box-shadow:0 4px 14px rgba(15,23,42,0.04);">
-            <div style="font-size:13px;font-weight:900;color:#0f172a;text-transform:uppercase;margin-bottom:4px;">🎨 TÙY CHỈNH MÀU SẮC THẺ & THỨ TỰ CỘT NHÂN SỰ (13 NGƯỜI)</div>
-            <div style="font-size:11px;color:#64748b;margin-bottom:12px;">Đổi màu nền thẻ (Pill) hoặc thứ tự đứng cột trên Bảng Công Tác:</div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:8px;">
-              ${membersSorted.map((m, idx) => `
-                <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
-                  <input type="color" value="${m.bg || '#333333'}" onchange="window.adminProActions.updateMemberColor('${m.id}', this.value)" style="width:32px;height:32px;border-radius:8px;border:1.5px solid #fff;cursor:pointer;flex-shrink:0;" />
-                  <div style="flex:1;min-width:0;font-size:12px;font-weight:900;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                    ${escapeHtml(m.name)} <span style="font-size:10px;color:#64748b;">(${escapeHtml(m.shortLabel)})</span>
-                  </div>
-                  <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
-                    <span style="font-size:10px;font-weight:700;color:#64748b;">Thứ tự:</span>
-                    <input type="number" min="1" max="50" value="${m.order !== undefined ? m.order : (idx + 1)}" onchange="window.adminProActions.updateMemberOrder('${m.id}', this.value)" style="width:44px;padding:4px;text-align:center;border:1px solid #cbd5e1;border-radius:8px;font-size:11px;font-weight:800;" />
-                  </div>
-                </div>
-              `).join('')}
+    modalBackdrop.innerHTML = `
+      <div onclick="event.stopPropagation()" style="background:#f4f5f7;width:100%;max-width:1080px;max-height:88dvh;border-radius:26px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 25px 50px -12px rgba(0,0,0,0.45);border:1px solid #cbd5e1;">
+        <div style="background:#ffffff;color:#0f172a;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #e2e8f0;flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="width:34px;height:34px;border-radius:10px;background:#0f172a;color:#fbbf24;display:inline-flex;align-items:center;justify-content:center;font-size:15px;">
+              <i class="fa-solid fa-sliders"></i>
+            </span>
+            <div>
+              <div style="font-size:14px;font-weight:900;color:#0f172a;text-transform:uppercase;">TRUNG TÂM CÀI ĐẶT HỆ THỐNG PRO</div>
+              <div style="font-size:11px;color:#64748b;">Quản lý Năm, Khóa sổ, CTP, Màu địa điểm, Nhật ký & Khóa bảo trì</div>
             </div>
           </div>
+          <button type="button" onclick="window.adminProActions.closeModal()" style="background:#0f172a;color:#fff;border:none;padding:7px 15px;border-radius:999px;font-size:12px;font-weight:800;cursor:pointer;">Đóng ✕</button>
         </div>
-      `;
-    } else if (isPro) {
-      nativeSections.forEach(el => el.style.display = 'none');
-      const activeYears = st.visibleYears || [2026, 2027];
-      const rates = st.ctpRatesConfig || DEFAULT_CTP_RATES;
-      const rules = st.customColorRules || DEFAULT_COLOR_RULES;
-      const trash = st.deletedShowsTrash || [];
-      const bc = st.studioBroadcast || { enabled: false, text: '' };
-      const logsList = st.activityLogs || [];
-      const isMaint = Boolean(st.readonlyMaintenanceMode);
 
-      contentPane.innerHTML = `
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px;padding-bottom:24px;">
-          <!-- 1. BẬT / ẨN NĂM -->
-          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
-              <div>
-                <div style="font-size:12.5px;font-weight:900;color:#0f172a;">📅 1. BẬT / ẨN NĂM (2026 – 2030)</div>
-                <div style="font-size:11px;color:#64748b;margin-top:2px;">Bấm vào năm để Bật/Ẩn tức thì</div>
-              </div>
-              <span style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">
-                Đang hiện: ${activeYears.join(', ')}
-              </span>
+        <div style="padding:14px;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+          ${statusBannerMsg ? `
+            <div style="background:#059669;color:#ffffff;padding:11px 15px;border-radius:14px;font-size:12.5px;font-weight:900;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+              <span>${statusBannerMsg}</span>
+              <span style="font-size:11px;opacity:0.9;">Đã lưu Cloud ☁️</span>
             </div>
-            <div style="display:flex;flex-wrap:wrap;gap:7px;">
-              ${ALL_YEARS.map(yr => {
-                const isOn = activeYears.includes(yr);
-                return `
-                  <button type="button" onclick="window.adminProActions.toggleYear(${yr})" style="padding:7px 13px;border-radius:999px;font-size:12px;font-weight:900;cursor:pointer;${isOn ? 'background:#0f172a;color:#fbbf24;border:1.5px solid #0f172a;' : 'background:#f8fafc;color:#64748b;border:1.5px dashed #cbd5e1;'}">
-                    <span>${isOn ? '🟢' : '⚪'}</span><span>${yr}</span>
-                  </button>
-                `;
-              }).join('')}
-            </div>
-          </div>
+          ` : ''}
 
-          <!-- 2. KHÓA SỔ THÁNG -->
-          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
-              <div>
-                <div style="font-size:12.5px;font-weight:900;color:#0f172a;">🔒 2. KHÓA SỔ THÁNG (NĂM ${adminLockViewYear})</div>
-                <div style="font-size:11px;color:#64748b;margin-top:2px;">Chọn năm rồi khóa tháng đã thanh toán CTP</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px;">
+            <!-- 1. BẬT / ẨN NĂM -->
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+                <div>
+                  <div style="font-size:12.5px;font-weight:900;color:#0f172a;">📅 1. BẬT / ẨN NĂM (2026 – 2030)</div>
+                  <div style="font-size:11px;color:#64748b;margin-top:2px;">Bấm vào năm để Bật/Ẩn tức thì</div>
+                </div>
+                <span style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">Đang hiện: ${activeYears.join(', ')}</span>
               </div>
-              <div style="display:inline-flex;gap:2px;background:#f1f5f9;padding:2px;border-radius:999px;border:1px solid #e2e8f0;">
-                ${ALL_YEARS.map(yr => `
-                  <button type="button" onclick="window.adminProActions.setLockViewYear(${yr})" style="padding:3px 8px;border-radius:999px;font-size:10.5px;font-weight:900;border:none;cursor:pointer;${adminLockViewYear === yr ? 'background:#0f172a;color:#fbbf24;' : 'background:transparent;color:#64748b;'}">${yr}</button>
+              <div style="display:flex;flex-wrap:wrap;gap:7px;">
+                ${ALL_YEARS.map(yr => {
+                  const isOn = activeYears.includes(yr);
+                  return `<button type="button" onclick="window.adminProActions.toggleYear(${yr})" style="padding:7px 13px;border-radius:999px;font-size:12px;font-weight:900;cursor:pointer;${isOn ? 'background:#0f172a;color:#fbbf24;border:1.5px solid #0f172a;' : 'background:#f8fafc;color:#64748b;border:1.5px dashed #cbd5e1;'}"><span>${isOn ? '🟢' : '⚪'}</span><span>${yr}</span></button>`;
+                }).join('')}
+              </div>
+            </div>
+
+            <!-- 2. KHÓA SỔ THÁNG -->
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+                <div>
+                  <div style="font-size:12.5px;font-weight:900;color:#0f172a;">🔒 2. KHÓA SỔ THÁNG (NĂM ${adminLockViewYear})</div>
+                  <div style="font-size:11px;color:#64748b;margin-top:2px;">Chọn năm rồi khóa tháng đã thanh toán CTP</div>
+                </div>
+                <div style="display:inline-flex;gap:2px;background:#f1f5f9;padding:2px;border-radius:999px;border:1px solid #e2e8f0;">
+                  ${ALL_YEARS.map(yr => `<button type="button" onclick="window.adminProActions.setLockViewYear(${yr})" style="padding:3px 8px;border-radius:999px;font-size:10.5px;font-weight:900;border:none;cursor:pointer;${adminLockViewYear === yr ? 'background:#0f172a;color:#fbbf24;' : 'background:transparent;color:#64748b;'}">${yr}</button>`).join('')}
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:5px;">
+                ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m => {
+                  const isLck = isYearMonthLocked(adminLockViewYear, m);
+                  return `<button type="button" onclick="window.adminProActions.toggleLockMonthAdmin(${m})" style="padding:6px 2px;border-radius:9px;font-size:10.5px;font-weight:800;cursor:pointer;${isLck ? 'background:#fff1f2;color:#e11d48;border:1.5px solid #fda4af;' : 'background:#f8fafc;color:#334155;border:1px solid #e2e8f0;'}">${isLck ? '🔒' : '🔓'} T${m}</button>`;
+                }).join('')}
+              </div>
+            </div>
+
+            <!-- 3. THÔNG BÁO GHIM ĐẦU APP -->
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                <div>
+                  <div style="font-size:12.5px;font-weight:900;color:#0f172a;">📢 3. THÔNG BÁO GHIM ĐẦU APP</div>
+                  <div style="font-size:11px;color:#64748b;margin-top:2px;">Hiện ngay dưới thanh chọn Tháng ngoài App chính</div>
+                </div>
+                <span style="padding:3px 9px;border-radius:999px;font-size:10px;font-weight:900;${bc.enabled ? 'background:#ecfdf5;color:#059669;border:1px solid #a7f3d0;' : 'background:#f1f5f9;color:#64748b;'}">${bc.enabled ? '🟢 ĐANG PHÁT' : '⚪ ĐANG TẮT'}</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <input type="text" id="as-pro-bc-input" value="${(bc.text || '').replace(/"/g, '&quot;')}" placeholder="VD: Anh em chốt bill CTP Tháng 11 trước 02/12 nhé!" style="width:100%;padding:8px 11px;border:1px solid #cbd5e1;border-radius:10px;font-size:11.5px;font-weight:700;box-sizing:border-box;" />
+                <div style="display:flex;gap:8px;">
+                  <button type="button" onclick="window.adminProActions.publishBroadcastNow()" style="flex:1;background:#e11d48;color:#fff;border:none;padding:8px 12px;border-radius:10px;font-size:11.5px;font-weight:900;cursor:pointer;">📢 Lưu & Phát Ngay</button>
+                  ${bc.enabled ? `<button type="button" onclick="window.adminProActions.disableBroadcastNow()" style="background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;padding:8px 12px;border-radius:10px;font-size:11.5px;font-weight:800;cursor:pointer;">🔕 Tắt</button>` : ''}
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. ĐƠN GIÁ CTP MẶC ĐỊNH -->
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                <div>
+                  <div style="font-size:12.5px;font-weight:900;color:#0f172a;">💰 4. ĐƠN GIÁ CTP MẶC ĐỊNH</div>
+                  <div style="font-size:11px;color:#64748b;margin-top:2px;">Sửa số tiền rồi bấm "💾 Lưu Giá"</div>
+                </div>
+                <button type="button" onclick="window.adminProActions.saveCtpRates()" style="background:#059669;color:#fff;border:none;padding:7px 13px;border-radius:10px;font-size:11px;font-weight:900;cursor:pointer;">💾 Lưu Giá</button>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px;font-size:11px;">
+                <div><b>🎥 Quay 1 ngày:</b><input type="text" id="as-pro-r-quay1" value="${Number(rates.quay1Day).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
+                <div><b>🎥 Quay ≥2 ngày:</b><input type="text" id="as-pro-r-quayN" value="${Number(rates.quayMultiDay).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
+                <div><b>📸 Chụp 1 ngày:</b><input type="text" id="as-pro-r-chup1" value="${Number(rates.chup1Day).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
+                <div><b>📸 Chụp ≥2 ngày:</b><input type="text" id="as-pro-r-chupN" value="${Number(rates.chupMultiDay).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
+                <div><b>✂️ Dựng:</b><input type="text" id="as-pro-r-dung" value="${Number(rates.dung).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
+                <div><b>🚁 Flycam:</b><input type="text" id="as-pro-r-flycam" value="${Number(rates.flycam).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
+                <div><b>🖼️ Làm hình:</b><input type="text" id="as-pro-r-lamhinh" value="${Number(rates.lamhinh).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
+                <div><b>⚖️ Gimbal:</b><input type="text" id="as-pro-r-gimbal" value="${Number(rates.gimbal).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
+              </div>
+            </div>
+
+            <!-- 5. NHẬT KÝ HOẠT ĐỘNG -->
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;display:flex;flex-direction:column;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <div>
+                  <div style="font-size:12.5px;font-weight:900;color:#0f172a;">📜 5. NHẬT KÝ HOẠT ĐỘNG</div>
+                  <div style="font-size:11px;color:#64748b;margin-top:2px;">Lịch sử các thao tác gần nhất của studio</div>
+                </div>
+                <span style="background:#f1f5f9;color:#475569;padding:3px 8px;border-radius:999px;font-size:10px;font-weight:800;">${logsList.length} hoạt động</span>
+              </div>
+              <div style="flex:1;max-height:130px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;">
+                ${logsList.length === 0 ? `<div style="font-size:11px;color:#94a3b8;padding:8px 0;">Chưa có hoạt động nào được ghi nhận.</div>` : logsList.map(lg => `
+                  <div style="font-size:10.5px;color:#334155;padding:4px 8px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;">
+                    <b style="color:#0f172a;margin-right:4px;">[${lg.time}]</b> ${escapeHtml(lg.text)}
+                  </div>
                 `).join('')}
               </div>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:5px;">
-              ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m => {
-                const isLck = isYearMonthLocked(adminLockViewYear, m);
-                return `
-                  <button type="button" onclick="window.adminProActions.toggleLockMonthAdmin(${m})" style="padding:6px 2px;border-radius:9px;font-size:10.5px;font-weight:800;cursor:pointer;${isLck ? 'background:#fff1f2;color:#e11d48;border:1.5px solid #fda4af;' : 'background:#f8fafc;color:#334155;border:1px solid #e2e8f0;'}">${isLck ? '🔒' : '🔓'} T${m}</button>
-                `;
-              }).join('')}
-            </div>
-          </div>
 
-          <!-- 3. THÔNG BÁO GHIM ĐẦU APP -->
-          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-              <div>
-                <div style="font-size:12.5px;font-weight:900;color:#0f172a;">📢 3. THÔNG BÁO GHIM ĐẦU APP</div>
-                <div style="font-size:11px;color:#64748b;margin-top:2px;">Hiện ngay dưới thanh chọn Tháng ngoài App chính</div>
+            <!-- 6. KHÓA BẢO TRÌ HỆ THỐNG -->
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;display:flex;flex-direction:column;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <div>
+                  <div style="font-size:12.5px;font-weight:900;color:#0f172a;">🛡️ 6. KHÓA BẢO TRÌ HỆ THỐNG</div>
+                  <div style="font-size:11px;color:#64748b;margin-top:2px;">Khóa quyền Nổ Show/Sửa lịch tạm thời</div>
+                </div>
+                <button type="button" onclick="window.adminProActions.toggleMaintenanceMode()" style="background:${isMaint ? '#059669' : '#e11d48'};color:#fff;border:none;padding:6px 12px;border-radius:9px;font-size:11px;font-weight:900;cursor:pointer;">
+                  ${isMaint ? '🔓 ĐANG KHÓA (MỞ)' : '🛡️ BẬT KHÓA'}
+                </button>
               </div>
-              <span style="padding:3px 9px;border-radius:999px;font-size:10px;font-weight:900;${bc.enabled ? 'background:#ecfdf5;color:#059669;border:1px solid #a7f3d0;' : 'background:#f1f5f9;color:#64748b;'}">${bc.enabled ? '🟢 ĐANG PHÁT' : '⚪ ĐANG TẮT'}</span>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:8px;">
-              <input type="text" id="as-adm-bc-input" value="${(bc.text || '').replace(/"/g, '&quot;')}" placeholder="VD: Anh em chốt bill CTP Tháng 11 trước 02/12 nhé!" style="width:100%;padding:8px 11px;border:1px solid #cbd5e1;border-radius:10px;font-size:11.5px;font-weight:700;box-sizing:border-box;" />
-              <div style="display:flex;gap:8px;">
-                <button type="button" onclick="window.adminProActions.publishBroadcastNow()" style="flex:1;background:#e11d48;color:#fff;border:none;padding:8px 12px;border-radius:10px;font-size:11.5px;font-weight:900;cursor:pointer;">📢 Lưu & Phát Ngay</button>
-                ${bc.enabled ? `<button type="button" onclick="window.adminProActions.disableBroadcastNow()" style="background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;padding:8px 12px;border-radius:10px;font-size:11.5px;font-weight:800;cursor:pointer;">🔕 Tắt</button>` : ''}
+              <div style="font-size:11px;color:#64748b;line-height:1.4;margin-top:4px;background:#f8fafc;padding:8px 10px;border-radius:10px;border:1px solid #e2e8f0;">
+                Trạng thái: <b style="color:${isMaint ? '#e11d48' : '#059669'};">${isMaint ? '🛡️ ĐANG BẬT KHÓA (Thành viên không thể thêm/sửa show)' : '🟢 Đang mở bình thường'}</b>
               </div>
             </div>
           </div>
 
-          <!-- 4. ĐƠN GIÁ CTP MẶC ĐỊNH -->
-          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <!-- 7. QUẢN LÝ MÀU TÔ ĐỊA ĐIỂM -->
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;margin-top:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
               <div>
-                <div style="font-size:12.5px;font-weight:900;color:#0f172a;">💰 4. ĐƠN GIÁ CTP MẶC ĐỊNH</div>
-                <div style="font-size:11px;color:#64748b;margin-top:2px;">Sửa số tiền rồi bấm "💾 Lưu Giá"</div>
+                <div style="font-size:13px;font-weight:900;color:#0f172a;">🎨 7. QUẢN LÝ MÀU TÔ ĐỊA ĐIỂM TRÊN BẢNG CÔNG TÁC</div>
+                <div style="font-size:11px;color:#64748b;margin-top:2px;">Xóa màu, sửa từ khóa hoặc thêm điểm mới rồi bấm <b>"💾 Lưu & Áp Dụng Màu"</b></div>
               </div>
-              <button type="button" onclick="window.adminProActions.saveCtpRates()" style="background:#059669;color:#fff;border:none;padding:7px 13px;border-radius:10px;font-size:11px;font-weight:900;cursor:pointer;">💾 Lưu Giá</button>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button type="button" onclick="window.adminProActions.resetDefaultColors()" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;padding:7px 11px;border-radius:10px;font-size:11px;font-weight:800;cursor:pointer;">🔄 Mặc định</button>
+                <button type="button" onclick="window.adminProActions.saveAndApplyAllColorRules()" style="background:#059669;color:#fff;border:none;padding:7px 15px;border-radius:10px;font-size:11.5px;font-weight:900;cursor:pointer;">💾 Lưu & Áp Dụng Màu</button>
+              </div>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px;font-size:11px;">
-              <div><b>🎥 Quay 1 ngày:</b><input type="text" id="as-adm-r-quay1" value="${Number(rates.quay1Day).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
-              <div><b>🎥 Quay ≥2 ngày:</b><input type="text" id="as-adm-r-quayN" value="${Number(rates.quayMultiDay).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
-              <div><b>📸 Chụp 1 ngày:</b><input type="text" id="as-adm-r-chup1" value="${Number(rates.chup1Day).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
-              <div><b>📸 Chụp ≥2 ngày:</b><input type="text" id="as-adm-r-chupN" value="${Number(rates.chupMultiDay).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
-              <div><b>✂️ Dựng:</b><input type="text" id="as-adm-r-dung" value="${Number(rates.dung).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
-              <div><b>🚁 Flycam:</b><input type="text" id="as-adm-r-flycam" value="${Number(rates.flycam).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
-              <div><b>🖼️ Làm hình:</b><input type="text" id="as-adm-r-lamhinh" value="${Number(rates.lamhinh).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
-              <div><b>⚖️ Gimbal:</b><input type="text" id="as-adm-r-gimbal" value="${Number(rates.gimbal).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
-            </div>
-          </div>
 
-          <!-- 5. NHẬT KÝ HOẠT ĐỘNG -->
-          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;display:flex;flex-direction:column;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-              <div>
-                <div style="font-size:12.5px;font-weight:900;color:#0f172a;">📜 5. NHẬT KÝ HOẠT ĐỘNG</div>
-                <div style="font-size:11px;color:#64748b;margin-top:2px;">Lịch sử các thao tác gần nhất của studio</div>
-              </div>
-              <span style="background:#f1f5f9;color:#475569;padding:3px 8px;border-radius:999px;font-size:10px;font-weight:800;">${logsList.length} hoạt động</span>
+            <div style="display:flex;gap:8px;margin-bottom:12px;background:#f8fafc;padding:10px;border-radius:12px;border:1px solid #e2e8f0;align-items:center;flex-wrap:wrap;">
+              <input type="text" id="as-pro-col-kw" placeholder="Thêm địa điểm mới (VD: Sapa, Măng Đen...)" style="flex:1;min-width:180px;padding:7px 11px;border:1px solid #cbd5e1;border-radius:9px;font-size:11.5px;font-weight:700;" />
+              <input type="color" id="as-pro-col-hex" value="#a7f3d0" style="width:40px;height:36px;border-radius:9px;border:1px solid #cbd5e1;cursor:pointer;" />
+              <button type="button" onclick="window.adminProActions.addColorRule()" style="background:#0f172a;color:#fbbf24;border:none;padding:7px 14px;border-radius:9px;font-size:11.5px;font-weight:900;cursor:pointer;">+ Thêm Điểm Mới</button>
             </div>
-            <div style="flex:1;max-height:130px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;">
-              ${logsList.length === 0 ? `<div style="font-size:11px;color:#94a3b8;padding:8px 0;">Chưa có hoạt động nào được ghi nhận.</div>` : logsList.map(lg => `
-                <div style="font-size:10.5px;color:#334155;padding:4px 8px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;">
-                  <b style="color:#0f172a;margin-right:4px;">[${lg.time}]</b> ${escapeHtml(lg.text)}
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:8px;">
+              ${rules.map(r => `
+                <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:12px;background:${r.color};border:1px solid rgba(15,23,42,0.12);">
+                  <input type="color" value="${r.color}" onchange="window.adminProActions.updateRuleDraftColor('${r.id}', this.value); this.parentElement.style.background=this.value;" style="width:30px;height:30px;border-radius:8px;border:1.5px solid #fff;cursor:pointer;flex-shrink:0;" title="Bấm để đổi màu" />
+                  <input type="text" value="${(r.keyword || '').replace(/"/g, '&quot;')}" oninput="window.adminProActions.updateRuleDraftKeyword('${r.id}', this.value)" style="flex:1;min-width:0;background:rgba(255,255,255,0.8);border:1px solid rgba(0,0,0,0.1);border-radius:8px;padding:5px 8px;font-size:11.5px;font-weight:800;color:#0f172a;" />
+                  <button type="button" onclick="window.adminProActions.removeColorRule('${r.id}')" style="width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,0.85);color:#e11d48;border:none;font-weight:900;cursor:pointer;flex-shrink:0;" title="Xóa nhóm màu này">✕</button>
                 </div>
               `).join('')}
             </div>
           </div>
 
-          <!-- 6. KHÓA BẢO TRÌ HỆ THỐNG -->
-          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;display:flex;flex-direction:column;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <!-- 8. THÙNG RÁC & SAO LƯU -->
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;margin-top:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
               <div>
-                <div style="font-size:12.5px;font-weight:900;color:#0f172a;">🛡️ 6. KHÓA BẢO TRÌ HỆ THỐNG</div>
-                <div style="font-size:11px;color:#64748b;margin-top:2px;">Khóa quyền Nổ Show/Sửa lịch tạm thời</div>
+                <div style="font-size:13px;font-weight:900;color:#0f172a;">♻️ 8. THÙNG RÁC KHÔI PHỤC SHOW ĐÃ XÓA (${trash.length}) & SAO LƯU DATABASE (.JSON)</div>
+                <div style="font-size:11px;color:#64748b;margin-top:2px;">Mọi show bị xóa vĩnh viễn sẽ tự động nằm ở đây để khôi phục 1 chạm</div>
               </div>
-              <button type="button" onclick="window.adminProActions.toggleMaintenanceMode()" style="background:${isMaint ? '#059669' : '#e11d48'};color:#fff;border:none;padding:6px 12px;border-radius:9px;font-size:11px;font-weight:900;cursor:pointer;">
-                ${isMaint ? '🔓 ĐANG KHÓA (MỞ)' : '🛡️ BẬT KHÓA'}
-              </button>
+              <div style="display:flex;gap:8px;">
+                <button type="button" onclick="window.adminProActions.exportFullJsonBackup()" style="background:#0f172a;color:#fff;border:none;padding:8px 14px;border-radius:10px;font-size:11.5px;font-weight:800;cursor:pointer;">📦 Tải File Backup .JSON</button>
+                <button type="button" onclick="window.adminProActions.triggerJsonRestore()" style="background:#f1f5f9;color:#0f172a;border:1px solid #cbd5e1;padding:8px 14px;border-radius:10px;font-size:11.5px;font-weight:800;cursor:pointer;">📂 Nạp File .JSON</button>
+              </div>
             </div>
-            <div style="font-size:11px;color:#64748b;line-height:1.4;margin-top:4px;background:#f8fafc;padding:8px 10px;border-radius:10px;border:1px solid #e2e8f0;">
-              Trạng thái: <b style="color:${isMaint ? '#e11d48' : '#059669'};">${isMaint ? '🛡️ ĐANG BẬT KHÓA (Thành viên không thể thêm/sửa show)' : '🟢 Đang mở bình thường'}</b>
+            <div style="max-height:140px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;">
+              ${trash.length === 0 ? `<div style="font-size:11.5px;color:#94a3b8;padding:4px 0;">Thùng rác trống.</div>` : trash.map(sh => `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;font-size:11.5px;">
+                  <span style="font-weight:800;color:#0f172a;">📍 ${(sh.location || '').replace(/</g, '&lt;')} (${sh.startDate || ''})</span>
+                  <button type="button" onclick="window.adminProActions.restoreDeletedShow('${sh.id}')" style="background:#059669;color:#fff;border:none;padding:5px 11px;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;">↩ Khôi phục</button>
+                </div>
+              `).join('')}
             </div>
           </div>
         </div>
-      `;
-    } else if (isSystem) {
-      nativeSections.forEach(el => el.style.display = 'block');
-      contentPane.innerHTML = '';
-    }
+      </div>
+    `;
   }
 
-  // Lắng nghe cú click vào các tab gốc của Admin để render mượt mà
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    const t = (btn.textContent || '').trim();
-    if (t.includes('Tổng Quan')) {
-      activeAdminTabCustom = 'overview';
-      renderIntegratedAdminUI();
-    } else if (t.includes('NHÂN SỰ & PIN') || t.includes('Cấp PIN')) {
-      activeAdminTabCustom = 'pins';
-      renderIntegratedAdminUI();
-    } else if (t.includes('CÀI ĐẶT PRO')) {
-      activeAdminTabCustom = 'pro_settings';
-      renderIntegratedAdminUI();
-    } else if (t.includes('Hệ Thống')) {
-      activeAdminTabCustom = 'system';
-      renderIntegratedAdminUI();
-    }
-  }, true);
-
   setInterval(() => {
-    syncMainAppHeader();
+    syncMainAppUI();
     const inAdmin = Boolean(st.isBackendPortal || window.location.hash === '#admin' || document.body.classList.contains('as-admin-mode-active'));
-    if (inAdmin) renderIntegratedAdminUI();
-  }, 400);
+    if (inAdmin) upgradeAdminTabsAndInjectMemberStyling();
+  }, 350);
 
-  syncMainAppHeader();
+  syncMainAppUI();
 })();
 </script>
 </body></html>
