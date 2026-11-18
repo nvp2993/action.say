@@ -10190,293 +10190,153 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 
 <style id="as-sticky-stats-and-admin-month-css">
   /* =========================================================================
-     1. TAB CÔNG NỢ: CỐ ĐỊNH 4 Ô TIỀN PHÍA TRÊN (2x2 TRÊN ĐT, 4 CỘT TRÊN PC)
+     1. TAB CÔNG NỢ: KHÓA 4 Ô TIỀN ĐỨNG YÊN, CHỈ CUỘN DANH SÁCH SHOW BÊN DƯỚI
      ========================================================================= */
-  .as-owner-pinned-top {
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 28 !important;
-    background: #f4f5f7 !important;
-    padding-top: 6px !important;
-    padding-bottom: 8px !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-    box-shadow: 0 6px 16px -6px rgba(15, 23, 42, 0.06) !important;
+  /* Biến khung danh sách các thẻ show Công Nợ bên dưới 4 ô tiền thành vùng cuộn riêng */
+  #app .grid.grid-cols-2.sm\:grid-cols-4 + div.space-y-2\.5,
+  #app .grid.grid-cols-2.sm\:grid-cols-4 + div.space-y-2,
+  #app .grid.grid-cols-2.sm\:grid-cols-4 ~ div.space-y-2\.5 {
+    max-height: calc(100dvh - 295px) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-right: 2px !important;
+    padding-bottom: 24px !important;
   }
+
+  /* Gom gọn 4 ô tiền trên điện thoại để không chiếm chỗ */
   @media (max-width: 640px) {
-    .as-owner-pinned-top {
-      display: grid !important;
-      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    #app .grid.grid-cols-2.sm\:grid-cols-4 {
       gap: 6px !important;
-      padding: 6px 8px !important;
+      margin-bottom: 6px !important;
     }
-    .as-owner-pinned-top > div {
+    #app .grid.grid-cols-2.sm\:grid-cols-4 > div {
       padding: 8px 10px !important;
       border-radius: 14px !important;
+    }
+    #app .grid.grid-cols-2.sm\:grid-cols-4 + div.space-y-2\.5,
+    #app .grid.grid-cols-2.sm\:grid-cols-4 + div.space-y-2,
+    #app .grid.grid-cols-2.sm\:grid-cols-4 ~ div.space-y-2\.5 {
+      max-height: calc(100dvh - 320px) !important;
     }
   }
 
   /* =========================================================================
-     2. TRANG ADMIN: CỐ ĐỊNH HEADER + 3 Ô THỐNG KÊ (KHÔNG ĐÈ LOGO)
+     2. TRANG ADMIN: CỐ ĐỊNH KHUNG TRÊN BẰNG PURE CSS (0% NHẤP NHÁY, 0% TỰ CHẠY)
      ========================================================================= */
-  #as-light-admin-shell header,
-  .as-admin-topbar-fixed {
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 45 !important;
-    background: rgba(255, 255, 255, 0.98) !important;
-    backdrop-filter: blur(10px) !important;
-    -webkit-backdrop-filter: blur(10px) !important;
-    border-bottom: 1px solid #e2e8f0 !important;
+  /* Khóa khung ngoài của Admin không cuộn cả trang, chỉ cuộn phần nội dung bên dưới 3 ô KPI */
+  #as-light-admin-shell {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
 
-  .as-admin-kpis-fixed {
-    position: sticky !important;
-    top: 56px !important;
-    z-index: 40 !important;
-    background: #f4f5f7 !important;
-    padding-top: 8px !important;
-    padding-bottom: 8px !important;
-    margin-bottom: 4px !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-    box-shadow: 0 8px 18px -8px rgba(15, 23, 42, 0.07) !important;
+  /* Khung chứa nội dung bên trong Admin */
+  #as-light-admin-shell > div:last-child,
+  #as-light-admin-shell main {
+    flex: 1 1 0% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 
-  .as-admin-m-picker {
-    display: inline-flex;
+  /* Thanh chọn Tháng nổi độc lập bên ngoài DOM của Admin (không gây re-render) */
+  #as-floating-admin-month-bar {
+    position: fixed;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 99999;
+    background: #0f172a;
+    color: #ffffff;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 999px;
+    padding: 6px 12px;
+    display: none;
     align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    max-width: 165px;
-    background: #f1f5f9;
-    border: 1px solid #cbd5e1;
-    border-radius: 999px;
-    padding: 2px 4px;
-    box-sizing: border-box;
+    gap: 8px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+    font-size: 12px;
+    font-weight: 800;
   }
-  .as-admin-m-picker button {
-    width: 18px;
-    height: 18px;
+  body.as-admin-mode-active #as-floating-admin-month-bar {
+    display: inline-flex;
+  }
+  #as-floating-admin-month-bar select {
+    background: #1e293b;
+    color: #34d399;
+    border: 1px solid rgba(255,255,255,0.15);
     border-radius: 999px;
-    background: #ffffff;
-    color: #0f172a;
-    font-size: 9px;
+    padding: 3px 10px;
+    font-size: 11.5px;
     font-weight: 900;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
-  }
-  .as-admin-m-picker select {
-    background: transparent;
-    border: none;
     outline: none;
-    font-size: 10px;
-    font-weight: 900;
-    color: #0f172a;
-    text-align: center;
     cursor: pointer;
-    padding: 0 1px;
-    min-width: 0;
-    flex: 1;
-    appearance: none;
-    -webkit-appearance: none;
-  }
-  @media (max-width: 640px) {
-    .as-admin-m-picker {
-      padding: 1px 2px;
-    }
-    .as-admin-m-picker button {
-      width: 16px;
-      height: 16px;
-      font-size: 8px;
-    }
-    .as-admin-m-picker select {
-      font-size: 9px;
-      letter-spacing: -0.03em;
-    }
   }
 </style>
 
 <script id="as-sticky-stats-and-admin-month-script">
-(function initCleanStickyAndAdminMonthV2() {
+(function initZeroFlickerStickyAndMonth() {
   if (!window.state) {
-    setTimeout(initCleanStickyAndAdminMonthV2, 80);
+    setTimeout(initZeroFlickerStickyAndMonth, 100);
     return;
   }
-  if (window.__AS_CLEAN_STICKY_V2__) return;
-  window.__AS_CLEAN_STICKY_V2__ = true;
+  if (window.__AS_ZERO_FLICKER_READY__) return;
+  window.__AS_ZERO_FLICKER_READY__ = true;
 
   const st = window.state;
-  if (!st.adminViewMonth) st.adminViewMonth = new Date().getMonth() + 1;
-  if (!st.adminViewYear) st.adminViewYear = st.selectedYear || 2026;
+  const now = new Date();
+  let curM = now.getMonth() + 1;
+  let curY = st.selectedYear || 2026;
 
-  let isInternalUpdating = false;
-
-  function countShowsByMonthYear(m, y) {
+  // Đếm số show của Tháng/Năm bất kỳ (đã trừ show hủy)
+  function getMonthCount(m, y) {
     const list = Array.isArray(st.shows) ? st.shows : [];
     const mStart = new Date(y, m - 1, 1);
     const mEnd = new Date(y, m, 0, 23, 59, 59);
-    let total = 0;
+    let c = 0;
     list.forEach((sh) => {
       if (!sh || sh.isCancelled || !sh.startDate) return;
       const s = new Date(sh.startDate + 'T00:00:00');
       const e = new Date(((sh.endDate && sh.endDate >= sh.startDate) ? sh.endDate : sh.startDate) + 'T00:00:00');
-      if (!isNaN(s) && !isNaN(e) && e >= mStart && s <= mEnd) {
-        total++;
-      }
+      if (!isNaN(s) && !isNaN(e) && e >= mStart && s <= mEnd) c++;
     });
-    return total;
+    return c;
   }
 
-  window.__stepAdminMonthYear = function(step) {
-    let m = Number(st.adminViewMonth) + step;
-    let y = Number(st.adminViewYear);
-    if (m < 1) {
-      m = 12;
-      y = y > 2026 ? y - 1 : 2026;
-    } else if (m > 12) {
-      m = 1;
-      y = y < 2027 ? y + 1 : 2027;
-    }
-    st.adminViewMonth = m;
-    st.adminViewYear = y;
-    refreshAdminMonthNumbersOnly();
-  };
+  // Tạo thanh tra cứu nhanh số show các tháng nổi độc lập ở đáy trang Admin
+  // (Tuyệt đối không chạm vào DOM của #as-light-admin-shell nên 0% nhấp nháy, 0% tự chạy)
+  const floatBar = document.createElement('div');
+  floatBar.id = 'as-floating-admin-month-bar';
 
-  window.__selectAdminMonthYear = function(valStr) {
-    const [mStr, yStr] = String(valStr || '').split('-');
-    if (mStr && yStr) {
-      st.adminViewMonth = Number(mStr);
-      st.adminViewYear = Number(yStr);
-      refreshAdminMonthNumbersOnly();
+  const opts = [];
+  [2026, 2027].forEach((yr) => {
+    for (let m = 1; m <= 12; m++) {
+      const sel = (m === curM && yr === curY) ? 'selected' : '';
+      opts.push(`<option value="${m}-${yr}" ${sel}>Tháng ${m}/${yr}</option>`);
     }
-  };
+  });
 
-  function refreshAdminMonthNumbersOnly() {
-    isInternalUpdating = true;
-    try {
-      const numEl = document.getElementById('as-admin-m-count-num');
-      const selEl = document.getElementById('as-admin-my-select');
-      const cnt = String(countShowsByMonthYear(st.adminViewMonth, st.adminViewYear));
-      if (numEl && numEl.textContent !== cnt) {
-        numEl.textContent = cnt;
-      }
-      const key = `${st.adminViewMonth}-${st.adminViewYear}`;
-      if (selEl && selEl.value !== key) {
-        selEl.value = key;
-      }
-    } finally {
-      setTimeout(() => { isInternalUpdating = false; }, 50);
-    }
+  floatBar.innerHTML = `
+    <span style="color:#94a3b8;font-size:11px;">📅 Tra cứu:</span>
+    <select id="as-float-admin-m-sel">${opts.join('')}</select>
+    <span>= <b id="as-float-admin-m-val" style="color:#fbbf24;font-size:14px;">0</b> show</span>
+  `;
+  document.body.appendChild(floatBar);
+
+  function updateFloatCount() {
+    const sel = document.getElementById('as-float-admin-m-sel');
+    const val = document.getElementById('as-float-admin-m-val');
+    if (!sel || !val) return;
+    const [m, y] = sel.value.split('-').map(Number);
+    val.textContent = String(getMonthCount(m, y));
   }
 
-  function enhanceStickyLayouts() {
-    if (isInternalUpdating) return;
-    isInternalUpdating = true;
-
-    try {
-      const allEls = document.querySelectorAll('#app div, #app span');
-      let netIncomeLabel = null;
-      for (const el of allEls) {
-        if (el.children.length <= 1 && (el.textContent || '').includes('TỔNG THU NHẬP (RÒNG)')) {
-          netIncomeLabel = el;
-          break;
-        }
-      }
-
-      if (netIncomeLabel) {
-        const singleCard = netIncomeLabel.closest('.bg-white, .rounded-2xl, .rounded-3xl');
-        const cardsGrid = singleCard ? singleCard.parentElement : null;
-        if (cardsGrid && !cardsGrid.classList.contains('as-owner-pinned-top')) {
-          cardsGrid.classList.add('as-owner-pinned-top');
-          let scrollParent = cardsGrid.parentElement;
-          while (scrollParent && scrollParent.id !== 'app') {
-            const stStyle = window.getComputedStyle(scrollParent);
-            if (stStyle.overflowY === 'auto' || stStyle.overflowY === 'scroll' || scrollParent.classList.contains('overflow-y-auto')) {
-              scrollParent.style.position = 'relative';
-              break;
-            }
-            scrollParent = scrollParent.parentElement;
-          }
-        }
-      }
-
-      const adminSearchNodes = document.querySelectorAll('div, span');
-      let totalShowTitleEl = null;
-      for (const el of adminSearchNodes) {
-        if (el.children.length === 0 && (el.textContent || '').trim().toUpperCase() === 'TỔNG SHOW') {
-          totalShowTitleEl = el;
-          break;
-        }
-      }
-
-      if (totalShowTitleEl) {
-        const card1 = totalShowTitleEl.closest('.bg-white, .rounded-2xl, .rounded-3xl, div[style*="border-radius"]');
-        const kpiRow = card1 ? card1.parentElement : null;
-
-        if (kpiRow) {
-          if (!kpiRow.classList.contains('as-admin-kpis-fixed')) {
-            kpiRow.classList.add('as-admin-kpis-fixed');
-          }
-
-          const container = kpiRow.parentElement;
-          if (container && container.firstElementChild && container.firstElementChild !== kpiRow) {
-            const topBar = container.firstElementChild;
-            if ((topBar.textContent || '').includes('STUDIO CONTROL')) {
-              topBar.classList.add('as-admin-topbar-fixed');
-              const barH = topBar.offsetHeight || 56;
-              kpiRow.style.setProperty('top', barH + 'px', 'important');
-            }
-          }
-
-          const monthCard = kpiRow.children[1];
-          if (monthCard && !monthCard.dataset.cleanMonthInit) {
-            monthCard.dataset.cleanMonthInit = '1';
-            const headerSlot = monthCard.firstElementChild;
-            const numSlot = monthCard.children[1] || monthCard.querySelector('.text-emerald-600, .text-2xl, .text-3xl, b, strong');
-
-            if (numSlot) numSlot.id = 'as-admin-m-count-num';
-
-            if (headerSlot) {
-              const optionsHtml = [];
-              [2026, 2027].forEach((yr) => {
-                for (let m = 1; m <= 12; m++) {
-                  const isSel = (m === st.adminViewMonth && yr === st.adminViewYear) ? 'selected' : '';
-                  optionsHtml.push(`<option value="${m}-${yr}" ${isSel}>THÁNG ${m}/${yr}</option>`);
-                }
-              });
-
-              headerSlot.innerHTML = `
-                <div class="as-admin-m-picker" onclick="event.stopPropagation()">
-                  <button type="button" onclick="window.__stepAdminMonthYear(-1)" title="Tháng trước">◀</button>
-                  <select id="as-admin-my-select" onchange="window.__selectAdminMonthYear(this.value)">
-                    ${optionsHtml.join('')}
-                  </select>
-                  <button type="button" onclick="window.__stepAdminMonthYear(1)" title="Tháng sau">▶</button>
-                </div>
-              `;
-            }
-            refreshAdminMonthNumbersOnly();
-          }
-        }
-      }
-    } finally {
-      setTimeout(() => { isInternalUpdating = false; }, 50);
-    }
-  }
-
-  let debounceTimer = null;
-  new MutationObserver((mutations) => {
-    if (isInternalUpdating) return;
-    const isSelfChange = mutations.every(m => m.target && (m.target.id === 'as-admin-m-count-num' || m.target.closest?.('.as-admin-m-picker')));
-    if (isSelfChange) return;
-
-    if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(enhanceStickyLayouts, 80);
-  }).observe(document.body, { childList: true, subtree: true });
-
-  enhanceStickyLayouts();
+  document.getElementById('as-float-admin-m-sel')?.addEventListener('change', updateFloatCount);
+  setInterval(updateFloatCount, 1200);
+  updateFloatCount();
 })();
 </script>
 </body></html>
