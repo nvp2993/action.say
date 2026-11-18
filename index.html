@@ -2246,7 +2246,7 @@ openCapturedImagePreview(canvas, 'Checkin_ActionSay_Polaroid.png', 'Ảnh Check-
       return `
         <div class="as-date-bar-wrap">
           <div class="as-year-pinned">
-            ${[2026, 2027].map(y => `
+            ${(state.visibleYears || [2026, 2027]).map(y => `
               <button type="button" onclick="appActions.setYear(${y})" class="as-year-btn ${state.selectedYear === y ? 'active' : 'inactive'}">${y}</button>
             `).join('')}
           </div>
