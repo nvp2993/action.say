@@ -10189,18 +10189,16 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 </style>
 
 <script id="as-safe-admin-pro-suite-2026">
-(function initSafeAdminProSuite() {
+(function initZeroFlickerAdminProSuite() {
   if (!window.state || !window.appActions) {
-    setTimeout(initSafeAdminProSuite, 80);
+    setTimeout(initZeroFlickerAdminProSuite, 80);
     return;
   }
-  if (window.__AS_SAFE_ADMIN_PRO_READY__) return;
-  window.__AS_SAFE_ADMIN_PRO_READY__ = true;
+  if (window.__AS_ZERO_FLICKER_PRO_SUITE__) return;
+  window.__AS_ZERO_FLICKER_PRO_SUITE__ = true;
 
   const st = window.state;
   const ALL_YEARS = [2026, 2027, 2028, 2029, 2030];
-
-  // TUYỆT ĐỐI KHÔNG XÓA THẺ <STYLE> CỦA TAILWIND ĐỂ BẢO VỆ GIAO DIỆN 100%
 
   const DEFAULT_CTP_RATES = {
     quay1Day: 1500000,
@@ -10212,6 +10210,9 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     lamhinh: 300000,
     gimbal: 200000
   };
+
+  // Năm đang được chọn để xem/khóa sổ trong khung số 2 của Admin
+  let adminLockViewYear = Number(st.selectedYear) || 2026;
 
   try {
     const savedYears = JSON.parse(localStorage.getItem('as_visible_years_config_2026') || 'null');
@@ -10241,10 +10242,46 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       localStorage.setItem('as_custom_color_rules_2026', JSON.stringify(st.customColorRules));
       localStorage.setItem('as_studio_broadcast_2026', JSON.stringify(st.studioBroadcast));
       localStorage.setItem('as_deleted_shows_trash_2026', JSON.stringify(st.deletedShowsTrash));
+      localStorage.setItem('as_locked_months_2026', JSON.stringify(st.lockedMonths || {}));
     } catch (e) {}
   }
 
-  // Đồng bộ Firebase Cloud
+  // Hỗ trợ kiểm tra khóa sổ theo đúng Năm-Tháng (VD: "2026-11") và tương thích cả dữ liệu cũ
+  function isYearMonthLocked(yearNum, monthNum) {
+    const lm = st.lockedMonths || {};
+    const keyYM = `${yearNum}-${monthNum}`;
+    if (lm[keyYM] !== undefined) return Boolean(lm[keyYM]);
+    // Nếu dữ liệu cũ chỉ lưu số tháng (chỉ áp dụng cho năm 2026)
+    if (Number(yearNum) === 2026 && lm[monthNum] !== undefined) return Boolean(lm[monthNum]);
+    return false;
+  }
+
+  // =========================================================================
+  // 1. CHẶN VÒNG LẶP MUTATION OBSERVER LÀM NHÁY TRANG ADMIN
+  // =========================================================================
+  // Bằng cách bọc Node.prototype.insertBefore & appendChild hoặc dùng vùng chứa cố định
+  // không phát sinh sự kiện childList trực tiếp lên document.body,
+  // đồng thời tạo style cố định cho khung Hệ Thống.
+  const proStyle = document.createElement('style');
+  proStyle.id = 'as-admin-pro-suite-no-flicker-css';
+  proStyle.textContent = `
+    #as-admin-pro-suite-portal {
+      display: none;
+      width: 100%;
+      max-width: 1120px;
+      margin: 10px auto 16px auto;
+      padding: 0 14px;
+      box-sizing: border-box;
+    }
+    body.as-admin-system-tab-open #as-admin-pro-suite-portal {
+      display: block !important;
+    }
+  `;
+  document.head.appendChild(proStyle);
+
+  // =========================================================================
+  // 2. ĐỒNG BỘ FIREBASE CLOUD 2 CHIỀU
+  // =========================================================================
   (async function syncAdminConfigsCloud() {
     try {
       const { getApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
@@ -10287,7 +10324,9 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         if (changed) {
           saveConfigsLocal();
           syncMainAppHeader();
-          mountAdminSuiteCard(true);
+          if (document.body.classList.contains('as-admin-system-tab-open')) {
+            renderProSuiteContent();
+          }
         }
       });
 
@@ -10307,7 +10346,9 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     } catch (e) {}
   })();
 
-  // Áp dụng Đơn giá CTP động
+  // =========================================================================
+  // 3. ÁP DỤNG ĐƠN GIÁ CTP, MÀU ĐỊA ĐIỂM, KHÓA SỔ THÁNG THEO NĂM & THÙNG RÁC
+  // =========================================================================
   function getDaysCount(sh) {
     if (!sh || !sh.startDate || !sh.endDate) return 1;
     const s = new Date(sh.startDate + 'T00:00:00');
@@ -10343,7 +10384,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     };
   }
 
-  // Nhận diện màu địa điểm mới khi Nổ Show
   const origUpdateFormField = window.appActions.updateFormField;
   if (typeof origUpdateFormField === 'function') {
     window.appActions.updateFormField = function(field, val) {
@@ -10360,12 +10400,14 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     };
   }
 
-  // Khóa sổ tháng & Thùng rác khi xóa show
+  // Kiểm tra khóa sổ theo đúng cả Năm lẫn Tháng của ngày diễn ra show
   function isLockedForUser(dateStr) {
     if (!dateStr || st.isAdminMode) return false;
-    const m = parseInt(String(dateStr).split('-')[1], 10);
-    if (st.lockedMonths && st.lockedMonths[m]) {
-      alert(`🔒 Tháng ${m} đã được Admin khóa sổ!`);
+    const parts = String(dateStr).split('-');
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (isYearMonthLocked(y, m)) {
+      alert(`🔒 Tháng ${m}/${y} đã được Admin khóa sổ sau khi chốt CTP!`);
       return true;
     }
     return false;
@@ -10394,7 +10436,9 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     return res;
   };
 
-  // Các hàm thao tác trong Admin
+  // =========================================================================
+  // 4. CÁC HÀM THAO TÁC TRONG TAB HỆ THỐNG CỦA ADMIN
+  // =========================================================================
   window.adminProActions = {
     async toggleYear(yr) {
       const y = Number(yr);
@@ -10415,21 +10459,33 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         st.selectedYear = st.visibleYears[0] || 2026;
       }
       saveConfigsLocal();
-      mountAdminSuiteCard(true);
+      renderProSuiteContent();
       syncMainAppHeader();
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
       if (typeof window.__asNotify === 'function') window.__asNotify(`📅 Năm hiển thị: ${cur.join(', ')}`, 'success');
     },
 
+    setLockViewYear(yr) {
+      adminLockViewYear = Number(yr);
+      renderProSuiteContent();
+    },
+
     async toggleLockMonthAdmin(m) {
       const monthNum = Number(m);
+      const y = Number(adminLockViewYear) || 2026;
       if (!st.lockedMonths) st.lockedMonths = {};
-      st.lockedMonths[monthNum] = !st.lockedMonths[monthNum];
-      try { localStorage.setItem('as_locked_months_2026', JSON.stringify(st.lockedMonths)); } catch (e) {}
-      mountAdminSuiteCard(true);
+      const keyYM = `${y}-${monthNum}`;
+      const nextState = !isYearMonthLocked(y, monthNum);
+      st.lockedMonths[keyYM] = nextState;
+      // Xóa key cũ không có năm (nếu có) để tránh xung đột
+      if (y === 2026 && st.lockedMonths[monthNum] !== undefined) {
+        delete st.lockedMonths[monthNum];
+      }
+      saveConfigsLocal();
+      renderProSuiteContent();
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
       if (typeof window.__asNotify === 'function') {
-        window.__asNotify(st.lockedMonths[monthNum] ? `🔒 Đã khóa sổ T${monthNum}` : `🔓 Đã mở khóa T${monthNum}`, 'success');
+        window.__asNotify(nextState ? `🔒 Đã khóa sổ T${monthNum}/${y}` : `🔓 Đã mở khóa T${monthNum}/${y}`, 'success');
       }
     },
 
@@ -10438,11 +10494,11 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       const enabled = Boolean(document.getElementById('as-adm-broadcast-toggle')?.checked);
       st.studioBroadcast = { enabled: enabled && txt.length > 0, text: txt, updatedAt: Date.now() };
       saveConfigsLocal();
-      mountAdminSuiteCard(true);
+      renderProSuiteContent();
       syncMainAppHeader();
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
       if (typeof window.__asNotify === 'function') {
-        window.__asNotify(st.studioBroadcast.enabled ? '📢 Đã phát thông báo lên đầu App!' : '🔕 Đã tắt thông báo', 'success');
+        window.__asNotify(st.studioBroadcast.enabled ? '📢 Đã ghim thông báo lên Header đầu App!' : '🔕 Đã tắt thông báo đầu App', 'success');
       }
     },
 
@@ -10462,7 +10518,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         gimbal: parseNum('as-rate-gimbal', 200000)
       };
       saveConfigsLocal();
-      mountAdminSuiteCard(true);
+      renderProSuiteContent();
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
       if (typeof window.__asNotify === 'function') window.__asNotify('💰 Đã lưu bảng đơn giá CTP!', 'success');
     },
@@ -10477,14 +10533,14 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       if (!Array.isArray(st.customColorRules)) st.customColorRules = [];
       st.customColorRules.push({ id: 'cr_' + Date.now(), keyword: kw, color: col });
       saveConfigsLocal();
-      mountAdminSuiteCard(true);
+      renderProSuiteContent();
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
     },
 
     async removeColorRule(ruleId) {
       st.customColorRules = (st.customColorRules || []).filter(r => r.id !== ruleId);
       saveConfigsLocal();
-      mountAdminSuiteCard(true);
+      renderProSuiteContent();
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
     },
 
@@ -10505,7 +10561,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         localStorage.setItem('as_local_deleted_shows_2026', JSON.stringify(st.localDeletedShowIds));
       } catch (e) {}
       saveConfigsLocal();
-      mountAdminSuiteCard(true);
+      renderProSuiteContent();
       if (typeof window.syncShowsToSingleDoc === 'function') await window.syncShowsToSingleDoc();
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
       if (typeof window.__asNotify === 'function') window.__asNotify(`♻️ Đã khôi phục show "${target.location}"!`, 'success');
@@ -10561,7 +10617,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
             if (typeof window.syncShowsToSingleDoc === 'function') await window.syncShowsToSingleDoc();
             if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
             if (typeof window.renderApp === 'function') window.renderApp();
-            mountAdminSuiteCard(true);
+            renderProSuiteContent();
           } catch (err) {
             alert('Lỗi đọc file: ' + err.message);
           }
@@ -10573,10 +10629,16 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     }
   };
 
+  // =========================================================================
+  // 5. HIỂN THỊ THANH NĂM & DÒNG THÔNG BÁO ĐẦU APP NGOÀI MÀN HÌNH CHÍNH
+  // =========================================================================
   function syncMainAppHeader() {
     if (st.isBackendPortal || window.location.hash === '#admin') return;
     const activeYears = st.visibleYears || [2026, 2027];
     document.querySelectorAll('.as-year-pinned').forEach((wrap) => {
+      const sig = activeYears.join(',') + ':' + st.selectedYear;
+      if (wrap.dataset.ySig === sig) return;
+      wrap.dataset.ySig = sig;
       wrap.innerHTML = activeYears.map(y => `
         <button type="button" onclick="appActions.setYear(${y})" class="as-year-btn ${Number(st.selectedYear) === y ? 'active' : 'inactive'}">${y}</button>
       `).join('');
@@ -10589,75 +10651,88 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         if (!banner) {
           banner = document.createElement('div');
           banner.id = 'as-studio-broadcast-banner';
-          banner.style.cssText = 'background:linear-gradient(90deg,#fff1f2,#ffe4e6);border:1px solid #fecdd3;color:#be123c;border-radius:14px;padding:6px 12px;font-size:11px;font-weight:800;display:flex;align-items:center;gap:8px;';
+          banner.style.cssText = 'background:linear-gradient(90deg,#fff1f2,#ffe4e6);border:1.5px solid #fda4af;color:#be123c;border-radius:14px;padding:7px 12px;margin-top:4px;font-size:11.5px;font-weight:800;display:flex;align-items:center;gap:8px;box-shadow:0 4px 12px rgba(225,29,72,0.1);';
           header.appendChild(banner);
         }
-        banner.innerHTML = `<span style="background:#e11d48;color:#fff;font-size:9px;font-weight:900;padding:2px 7px;border-radius:999px;flex-shrink:0;">📢 THÔNG BÁO</span><span style="flex:1;">${st.studioBroadcast.text.replace(/</g, '&lt;')}</span>`;
+        const newHtml = `<span style="background:#e11d48;color:#fff;font-size:9.5px;font-weight:900;padding:2.5px 8px;border-radius:999px;flex-shrink:0;">📢 THÔNG BÁO</span><span style="flex:1;line-height:1.35;">${st.studioBroadcast.text.replace(/</g, '&lt;')}</span>`;
+        if (banner.innerHTML !== newHtml) banner.innerHTML = newHtml;
       } else if (banner) {
         banner.remove();
       }
     }
   }
 
-  // Theo dõi chính xác tab đang mở trong Admin (Mặc định hiển thị ở tab Hệ Thống, hoặc có nút mở nhanh ở mọi tab)
-  let activeAdminTabName = 'dashboard';
-
-  function mountAdminSuiteCard(forceRebuild = false) {
+  // =========================================================================
+  // 6. VẼ KHUNG 6 CÔNG CỤ TRONG TAB HỆ THỐNG BẰNG SHADOW DOM (0% NHẤP NHÁY!)
+  // =========================================================================
+  // Tại sao Shadow DOM chấm dứt 100% nhấp nháy?
+  // Vì trình theo dõi MutationObserver ở code gốc của trang Admin KHÔNG THỂ nhìn thấy
+  // các thẻ bên trong ShadowRoot -> Trang Admin không bị kích hoạt vẽ lại lặp đi lặp lại!
+  function getOrMountShadowHost() {
     const shell = document.getElementById('as-light-admin-shell');
-    if (!shell) return;
+    if (!shell) return null;
 
-    // Nhận diện xem giao diện Admin đang ở tab Hệ Thống hay không bằng cách kiểm tra tiêu đề bên trong
-    const shellHtml = shell.innerHTML || '';
-    const isSystemContentVisible =
-      activeAdminTabName === 'system' ||
-      shellHtml.includes('TẢI FILE') ||
-      shellHtml.includes('ĐỔI LOGO') ||
-      shellHtml.includes('NAP FILE EXCEL') ||
-      shellHtml.includes('NẠP FILE EXCEL') ||
-      shellHtml.includes('downloadSingleHtmlFile');
+    let outerHost = shell.querySelector('#as-pro-shadow-host');
+    if (!outerHost) {
+      const allBtns = Array.from(shell.querySelectorAll('button'));
+      const sysTabBtn = allBtns.find(b => (b.textContent || '').includes('Hệ Thống'));
+      const tabBar = sysTabBtn ? sysTabBtn.parentElement : null;
+      const parentContainer = (tabBar && tabBar.parentElement) ? tabBar.parentElement : (shell.querySelector('.as-adm-container') || shell);
 
-    let host = document.getElementById('as-admin-pro-suite-host');
-    if (!isSystemContentVisible) {
-      if (host) host.remove();
-      return;
-    }
-
-    if (host && !forceRebuild) return;
-
-    // Tìm chỗ chèn ngay bên dưới thanh 3 nút Tab (Tổng Quan | Cấp PIN | Hệ Thống)
-    const allBtns = Array.from(shell.querySelectorAll('button'));
-    const sysTabBtn = allBtns.find(b => (b.textContent || '').includes('Hệ Thống'));
-    const tabBar = sysTabBtn ? sysTabBtn.parentElement : null;
-    const parentContainer = (tabBar && tabBar.parentElement) ? tabBar.parentElement : (shell.querySelector('.as-adm-container') || shell);
-
-    if (!host) {
-      host = document.createElement('div');
-      host.id = 'as-admin-pro-suite-host';
+      outerHost = document.createElement('div');
+      outerHost.id = 'as-pro-shadow-host';
       if (tabBar && tabBar.parentElement === parentContainer) {
-        parentContainer.insertBefore(host, tabBar.nextElementSibling);
+        parentContainer.insertBefore(outerHost, tabBar.nextElementSibling);
       } else {
-        parentContainer.appendChild(host);
+        parentContainer.appendChild(outerHost);
       }
+      outerHost.attachShadow({ mode: 'open' });
     }
+    return outerHost.shadowRoot;
+  }
+
+  function renderProSuiteContent() {
+    if (!document.body.classList.contains('as-admin-system-tab-open')) return;
+    const shadow = getOrMountShadowHost();
+    if (!shadow) return;
 
     const activeYears = st.visibleYears || [2026, 2027];
     const rates = st.ctpRatesConfig || DEFAULT_CTP_RATES;
-    const locked = st.lockedMonths || {};
     const rules = st.customColorRules || [];
     const trash = st.deletedShowsTrash || [];
     const bc = st.studioBroadcast || { enabled: false, text: '' };
 
-    host.innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin:14px 0;">
+    shadow.innerHTML = `
+      <style>
+        * { box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        .suite-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(305px, 1fr));
+          gap: 12px;
+          margin: 14px 0;
+        }
+        .card {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 20px;
+          padding: 15px;
+          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
+        }
+        .title { font-size: 12px; font-weight: 900; color: #0f172a; text-transform: uppercase; }
+        .sub { font-size: 10.5px; color: #64748b; margin-top: 2px; }
+        button { cursor: pointer; font-family: inherit; transition: transform 0.1s ease; }
+        button:active { transform: scale(0.96); }
+      </style>
 
+      <div class="suite-grid">
         <!-- 1. QUẢN LÝ NĂM HIỂN THỊ (2026 - 2030) -->
-        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:15px;box-shadow:0 4px 12px rgba(15,23,42,0.03);">
+        <div class="card">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
             <div>
-              <div style="font-size:12px;font-weight:900;color:#0f172a;">📅 1. BẬT / ẨN NĂM (2026 – 2030)</div>
-              <div style="font-size:10.5px;color:#64748b;">Chỉ nên bật 1–2 năm để thanh chọn năm gọn đẹp</div>
+              <div class="title">📅 1. BẬT / ẨN NĂM (2026 – 2030)</div>
+              <div class="sub">Nên bật 1–2 năm để thanh chọn năm trên điện thoại gọn đẹp</div>
             </div>
-            <span style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:2px 9px;border-radius:999px;font-size:10.5px;font-weight:800;">
+            <span style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:800;">
               Đang mở: ${activeYears.join(', ')}
             </span>
           </div>
@@ -10666,7 +10741,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
               const isOn = activeYears.includes(yr);
               return `
                 <button type="button" onclick="window.adminProActions.toggleYear(${yr})"
-                  style="padding:7px 13px;border-radius:999px;font-size:11.5px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:5px;${
+                  style="padding:7px 13px;border-radius:999px;font-size:11.5px;font-weight:900;display:inline-flex;align-items:center;gap:5px;${
                     isOn
                       ? 'background:#0f172a;color:#fbbf24;border:1.5px solid #0f172a;'
                       : 'background:#f8fafc;color:#64748b;border:1.5px dashed #cbd5e1;'
@@ -10679,18 +10754,28 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
           </div>
         </div>
 
-        <!-- 2. KHÓA SỔ THÁNG (T1 - T12) -->
-        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:15px;box-shadow:0 4px 12px rgba(15,23,42,0.03);">
-          <div style="margin-bottom:10px;">
-            <div style="font-size:12px;font-weight:900;color:#0f172a;">🔒 2. KHÓA SỔ THÁNG ĐÃ CHỐT CTP</div>
-            <div style="font-size:10.5px;color:#64748b;">Tháng bị khóa chỉ Admin mới sửa/xóa được lịch</div>
+        <!-- 2. KHÓA SỔ THÁNG THEO TỪNG NĂM (T1 - T12) -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+            <div>
+              <div class="title">🔒 2. KHÓA SỔ THÁNG (NĂM ${adminLockViewYear})</div>
+              <div class="sub">Chọn năm rồi bấm tháng cần khóa sau khi đã chốt CTP</div>
+            </div>
+            <div style="display:inline-flex;gap:3px;background:#f1f5f9;padding:2px;border-radius:999px;border:1px solid #e2e8f0;">
+              ${ALL_YEARS.map(yr => `
+                <button type="button" onclick="window.adminProActions.setLockViewYear(${yr})"
+                  style="padding:3px 8px;border-radius:999px;font-size:10px;font-weight:900;border:none;${
+                    adminLockViewYear === yr ? 'background:#0f172a;color:#fbbf24;' : 'background:transparent;color:#64748b;'
+                  }">${yr}</button>
+              `).join('')}
+            </div>
           </div>
           <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;">
             ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m => {
-              const isLck = Boolean(locked[m]);
+              const isLck = isYearMonthLocked(adminLockViewYear, m);
               return `
                 <button type="button" onclick="window.adminProActions.toggleLockMonthAdmin(${m})"
-                  style="padding:6px 2px;border-radius:10px;font-size:10.5px;font-weight:800;cursor:pointer;text-align:center;${
+                  style="padding:6px 2px;border-radius:10px;font-size:10.5px;font-weight:800;text-align:center;${
                     isLck
                       ? 'background:#fff1f2;color:#e11d48;border:1.5px solid #fda4af;'
                       : 'background:#f8fafc;color:#334155;border:1px solid #e2e8f0;'
@@ -10703,63 +10788,66 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         </div>
 
         <!-- 3. THÔNG BÁO GHIM ĐẦU APP -->
-        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:15px;box-shadow:0 4px 12px rgba(15,23,42,0.03);">
+        <div class="card">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
             <div>
-              <div style="font-size:12px;font-weight:900;color:#0f172a;">📢 3. THÔNG BÁO GHIM ĐẦU APP</div>
-              <div style="font-size:10.5px;color:#64748b;">Hiện thông báo nhắc chốt CTP trên máy cả ekip</div>
+              <div class="title">📢 3. THÔNG BÁO GHIM ĐẦU APP</div>
+              <div class="sub">Hiện ngay trên thanh Header đầu App của cả 13 máy</div>
             </div>
-            <label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;cursor:pointer;">
-              <input type="checkbox" id="as-adm-broadcast-toggle" ${bc.enabled ? 'checked' : ''} onchange="window.adminProActions.saveBroadcast()" />
-              <span>${bc.enabled ? 'BẬT' : 'TẮT'}</span>
+            <label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;cursor:pointer;color:${bc.enabled ? '#059669' : '#64748b'};">
+              <input type="checkbox" id="sm-broadcast-toggle" ${bc.enabled ? 'checked' : ''} />
+              <span>${bc.enabled ? 'ĐANG BẬT' : 'ĐANG TẮT'}</span>
             </label>
           </div>
           <div style="display:flex;gap:6px;">
-            <input type="text" id="as-adm-broadcast-input" value="${(bc.text || '').replace(/"/g, '&quot;')}" placeholder="Nhập thông báo chung..." style="flex:1;padding:7px 10px;border:1px solid #cbd5e1;border-radius:10px;font-size:11.5px;font-weight:700;" />
-            <button type="button" onclick="window.adminProActions.saveBroadcast()" style="background:#0f172a;color:#fff;padding:7px 12px;border-radius:10px;font-size:11px;font-weight:800;">Phát</button>
+            <input type="text" id="sm-broadcast-input" value="${(bc.text || '').replace(/"/g, '&quot;')}" placeholder="VD: Anh em chốt bill CTP T11 trước ngày 02/12 nhé!" style="flex:1;padding:7px 10px;border:1px solid #cbd5e1;border-radius:10px;font-size:11.5px;font-weight:700;" />
+            <button type="button" id="sm-broadcast-save-btn" style="background:#0f172a;color:#fff;border:none;padding:7px 13px;border-radius:10px;font-size:11px;font-weight:800;">Lưu & Phát</button>
           </div>
         </div>
 
         <!-- 4. ĐƠN GIÁ CTP MẶC ĐỊNH -->
-        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:15px;box-shadow:0 4px 12px rgba(15,23,42,0.03);">
+        <div class="card">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-            <div style="font-size:12px;font-weight:900;color:#0f172a;">💰 4. ĐƠN GIÁ CTP MẶC ĐỊNH</div>
-            <button type="button" onclick="window.adminProActions.saveCtpRates()" style="background:#059669;color:#fff;padding:5px 11px;border-radius:9px;font-size:11px;font-weight:800;">💾 Lưu Giá</button>
+            <div>
+              <div class="title">💰 4. ĐƠN GIÁ CTP MẶC ĐỊNH</div>
+              <div class="sub">Tự động điền khi anh em tích nhiệm vụ ở tab Tính CTP</div>
+            </div>
+            <button type="button" id="sm-rates-save-btn" style="background:#059669;color:#fff;border:none;padding:6px 12px;border-radius:9px;font-size:11px;font-weight:800;">💾 Lưu Giá</button>
           </div>
           <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;font-size:10.5px;">
-            <div><b>🎥 Quay 1 ngày:</b><input type="text" id="as-rate-quay1" value="${Number(rates.quay1Day).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
-            <div><b>🎥 Quay ≥2 ngày:</b><input type="text" id="as-rate-quayN" value="${Number(rates.quayMultiDay).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
-            <div><b>📸 Chụp 1 ngày:</b><input type="text" id="as-rate-chup1" value="${Number(rates.chup1Day).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
-            <div><b>📸 Chụp ≥2 ngày:</b><input type="text" id="as-rate-chupN" value="${Number(rates.chupMultiDay).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
-            <div><b>✂️ Dựng:</b><input type="text" id="as-rate-dung" value="${Number(rates.dung).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
-            <div><b>🚁 Flycam:</b><input type="text" id="as-rate-flycam" value="${Number(rates.flycam).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
-            <div><b>🖼️ Làm hình:</b><input type="text" id="as-rate-lamhinh" value="${Number(rates.lamhinh).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
-            <div><b>⚖️ Gimbal:</b><input type="text" id="as-rate-gimbal" value="${Number(rates.gimbal).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
+            <div><b>🎥 Quay 1 ngày:</b><input type="text" id="sm-rate-quay1" value="${Number(rates.quay1Day).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
+            <div><b>🎥 Quay ≥2 ngày:</b><input type="text" id="sm-rate-quayN" value="${Number(rates.quayMultiDay).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
+            <div><b>📸 Chụp 1 ngày:</b><input type="text" id="sm-rate-chup1" value="${Number(rates.chup1Day).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
+            <div><b>📸 Chụp ≥2 ngày:</b><input type="text" id="sm-rate-chupN" value="${Number(rates.chupMultiDay).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
+            <div><b>✂️ Dựng:</b><input type="text" id="sm-rate-dung" value="${Number(rates.dung).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
+            <div><b>🚁 Flycam:</b><input type="text" id="sm-rate-flycam" value="${Number(rates.flycam).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
+            <div><b>🖼️ Làm hình:</b><input type="text" id="sm-rate-lamhinh" value="${Number(rates.lamhinh).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
+            <div><b>⚖️ Gimbal:</b><input type="text" id="sm-rate-gimbal" value="${Number(rates.gimbal).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;" /></div>
           </div>
         </div>
 
         <!-- 5. MÀU ĐỊA ĐIỂM TỰ ĐỘNG -->
-        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:15px;box-shadow:0 4px 12px rgba(15,23,42,0.03);">
-          <div style="font-size:12px;font-weight:900;color:#0f172a;margin-bottom:8px;">🎨 5. MÀU TÔ THEO ĐỊA ĐIỂM</div>
+        <div class="card">
+          <div class="title" style="margin-bottom:8px;">🎨 5. MÀU TÔ TỰ ĐỘNG THEO ĐỊA ĐIỂM</div>
           <div style="display:flex;gap:6px;margin-bottom:8px;">
-            <input type="text" id="as-adm-color-kw" placeholder="Từ khóa (VD: Sapa...)" style="flex:1;padding:6px 10px;border:1px solid #cbd5e1;border-radius:10px;font-size:11px;font-weight:700;" />
-            <input type="color" id="as-adm-color-hex" value="#a7f3d0" style="width:38px;height:34px;border-radius:8px;border:1px solid #cbd5e1;" />
-            <button type="button" onclick="window.adminProActions.addColorRule()" style="background:#0f172a;color:#fff;padding:6px 11px;border-radius:10px;font-size:11px;font-weight:800;">+ Thêm</button>
+            <input type="text" id="sm-color-kw" placeholder="Từ khóa (VD: Sapa, Măng Đen...)" style="flex:1;padding:6px 10px;border:1px solid #cbd5e1;border-radius:10px;font-size:11px;font-weight:700;" />
+            <input type="color" id="sm-color-hex" value="#a7f3d0" style="width:38px;height:34px;border-radius:8px;border:1px solid #cbd5e1;" />
+            <button type="button" id="sm-color-add-btn" style="background:#0f172a;color:#fff;border:none;padding:6px 11px;border-radius:10px;font-size:11px;font-weight:800;">+ Thêm</button>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:5px;">
-            ${rules.map(r => `
+            ${rules.length === 0 ? `<span style="font-size:11px;color:#94a3b8;">Đang dùng bảng màu mặc định (Hồ Tràm, Đà Lạt, Phú Quốc, HCM...).</span>` : rules.map(r => `
               <span style="background:${r.color};color:#0f172a;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(0,0,0,0.1);">
                 ${r.keyword.replace(/</g, '&lt;')}
-                <button type="button" onclick="window.adminProActions.removeColorRule('${r.id}')" style="color:#e11d48;font-weight:900;">✕</button>
+                <button type="button" onclick="window.adminProActions.removeColorRule('${r.id}')" style="color:#e11d48;background:none;border:none;font-weight:900;">✕</button>
               </span>
             `).join('')}
           </div>
         </div>
 
         <!-- 6. THÙNG RÁC & SAO LƯU JSON -->
-        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:15px;box-shadow:0 4px 12px rgba(15,23,42,0.03);">
+        <div class="card">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-            <div style="font-size:12px;font-weight:900;color:#0f172a;">♻️ 6. THÙNG RÁC (${trash.length}) & BACKUP</div>
+            <div class="title">♻️ 6. THÙNG RÁC (${trash.length}) & BACKUP</div>
             <div style="display:flex;gap:5px;">
               <button type="button" onclick="window.adminProActions.exportFullJsonBackup()" style="background:#f1f5f9;color:#0f172a;border:1px solid #cbd5e1;padding:4px 9px;border-radius:8px;font-size:10.5px;font-weight:800;">📦 Tải JSON</button>
               <button type="button" onclick="window.adminProActions.triggerJsonRestore()" style="background:#f1f5f9;color:#0f172a;border:1px solid #cbd5e1;padding:4px 9px;border-radius:8px;font-size:10.5px;font-weight:800;">📂 Nạp JSON</button>
@@ -10768,39 +10856,79 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
           <div style="max-height:95px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;">
             ${trash.length === 0 ? `<div style="font-size:11px;color:#94a3b8;">Chưa có show nào bị xóa.</div>` : trash.map(sh => `
               <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:11px;">
-                <span style="font-weight:800;truncate;">${(sh.location || '').replace(/</g, '&lt;')} (${sh.startDate || ''})</span>
-                <button type="button" onclick="window.adminProActions.restoreDeletedShow('${sh.id}')" style="background:#059669;color:#fff;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800;">↩ Khôi phục</button>
+                <span style="font-weight:800;">${(sh.location || '').replace(/</g, '&lt;')} (${sh.startDate || ''})</span>
+                <button type="button" onclick="window.adminProActions.restoreDeletedShow('${sh.id}')" style="background:#059669;color:#fff;border:none;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:800;">↩ Khôi phục</button>
               </div>
             `).join('')}
           </div>
         </div>
-
       </div>
     `;
+
+    // Gắn sự kiện cho các ô input nằm trong Shadow DOM
+    const saveBcHandler = async () => {
+      const txt = (shadow.getElementById('sm-broadcast-input')?.value || '').trim();
+      const enabled = Boolean(shadow.getElementById('sm-broadcast-toggle')?.checked);
+      st.studioBroadcast = { enabled: enabled && txt.length > 0, text: txt, updatedAt: Date.now() };
+      saveConfigsLocal();
+      renderProSuiteContent();
+      syncMainAppHeader();
+      if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+      if (typeof window.__asNotify === 'function') {
+        window.__asNotify(st.studioBroadcast.enabled ? '📢 Đã ghim thông báo lên Header đầu App!' : '🔕 Đã tắt thông báo', 'success');
+      }
+    };
+    shadow.getElementById('sm-broadcast-save-btn')?.addEventListener('click', saveBcHandler);
+    shadow.getElementById('sm-broadcast-toggle')?.addEventListener('change', saveBcHandler);
+
+    shadow.getElementById('sm-rates-save-btn')?.addEventListener('click', async () => {
+      const pNum = (id, def) => {
+        const raw = String(shadow.getElementById(id)?.value || '').replace(/\D/g, '');
+        return raw ? parseInt(raw, 10) : def;
+      };
+      st.ctpRatesConfig = {
+        quay1Day: pNum('sm-rate-quay1', 1500000),
+        quayMultiDay: pNum('sm-rate-quayN', 1200000),
+        chup1Day: pNum('sm-rate-chup1', 1500000),
+        chupMultiDay: pNum('sm-rate-chupN', 1200000),
+        dung: pNum('sm-rate-dung', 1000000),
+        flycam: pNum('sm-rate-flycam', 1000000),
+        lamhinh: pNum('sm-rate-lamhinh', 300000),
+        gimbal: pNum('sm-rate-gimbal', 200000)
+      };
+      saveConfigsLocal();
+      renderProSuiteContent();
+      if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+      if (typeof window.__asNotify === 'function') window.__asNotify('💰 Đã lưu bảng đơn giá CTP!', 'success');
+    });
+
+    shadow.getElementById('sm-color-add-btn')?.addEventListener('click', async () => {
+      const kw = (shadow.getElementById('sm-color-kw')?.value || '').trim();
+      const col = shadow.getElementById('sm-color-hex')?.value || '#a7f3d0';
+      if (!kw) return alert('Vui lòng nhập từ khóa địa điểm!');
+      if (!Array.isArray(st.customColorRules)) st.customColorRules = [];
+      st.customColorRules.push({ id: 'cr_' + Date.now(), keyword: kw, color: col });
+      saveConfigsLocal();
+      renderProSuiteContent();
+      if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+    });
   }
 
-  // Bắt sự kiện bấm vào các nút Tab trong trang Admin
+  // Lắng nghe cú click chuyển tab trong trang Admin (Không dùng setInterval chèn DOM gây nháy nữa)
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
     const t = (btn.textContent || '').trim();
     if (t.includes('Hệ Thống')) {
-      activeAdminTabName = 'system';
-      setTimeout(() => mountAdminSuiteCard(true), 15);
-      setTimeout(() => mountAdminSuiteCard(true), 80);
-    } else if (t.includes('Tổng Quan') || t.includes('Cấp PIN')) {
-      activeAdminTabName = 'other';
-      document.getElementById('as-admin-pro-suite-host')?.remove();
+      document.body.classList.add('as-admin-system-tab-open');
+      setTimeout(renderProSuiteContent, 30);
+    } else if (t.includes('Tổng Quan') || t.includes('Cấp PIN') || t.includes('Về App')) {
+      document.body.classList.remove('as-admin-system-tab-open');
+      document.getElementById('as-pro-shadow-host')?.remove();
     }
   }, true);
 
-  setInterval(() => {
-    syncMainAppHeader();
-    if (activeAdminTabName === 'system' && !document.getElementById('as-admin-pro-suite-host')) {
-      mountAdminSuiteCard(false);
-    }
-  }, 350);
-
+  setInterval(syncMainAppHeader, 500);
   syncMainAppHeader();
 })();
 </script>
