@@ -9221,4 +9221,328 @@ function renderHeaderHtml() {
     });
     window.__AS_ALL_IN_ONE_OBS__.observe(document.body, { childList: true, subtree: true });
     applyAllDomPatches();
-  })();</script><div id="as-ptr-toast-2026" style="position: fixed; top: -52px; left: 50%; transform: translateX(-50%); z-index: 99999; background: rgb(17, 24, 39); color: rgb(16, 185, 129); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: rgba(0, 0, 0, 0.25) 0px 8px 20px; border-radius: 999px; padding: 6px 16px; font-size: 11px; font-weight: 800; display: flex; align-items: center; gap: 8px; transition: top 0.2s; pointer-events: none;"><i class="fa-solid fa-rotate-right"></i><span>Kéo xuống để làm mới...</span></div><div id="as-ptr-toast-2026" style="position: fixed; top: -52px; left: 50%; transform: translateX(-50%); z-index: 99999; background: rgb(17, 24, 39); color: rgb(16, 185, 129); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: rgba(0, 0, 0, 0.25) 0px 8px 20px; border-radius: 999px; padding: 6px 16px; font-size: 11px; font-weight: 800; display: flex; align-items: center; gap: 8px; transition: top 0.2s; pointer-events: none;"><i class="fa-solid fa-rotate-right"></i><span>Kéo xuống để làm mới...</span></div><iframe ng-non-bindable="" frameborder="0" hspace="0" marginheight="0" marginwidth="0" scrolling="no" tabindex="-1" vspace="0" width="100%" aria-hidden="true" id="I0_1794968383875" name="I0_1794968383875" src="https://lich-show-action-say.firebaseapp.com/__/auth/iframe?apiKey=AIzaSyBPp0AbNtvvuIWTrTwIYkvXyoD0Vr2IeuE&amp;appName=%5BDEFAULT%5D&amp;v=11.6.1&amp;eid=p&amp;usegapi=1&amp;jsh=m%3B%2F_%2Fscs%2Fabc-static%2F_%2Fjs%2Fk%3Dgapi.lb.vi.yYqMjrSmpQY.O%2Fd%3D1%2Frs%3DAHpOoo_bU1Xa98Q4JheHUo1Ur4D0uhYXag%2Fm%3D__features__#id=I0_1794968383875&amp;_gfid=I0_1794968383875&amp;parent=file%3A%2F%2F&amp;pfname=&amp;rpctoken=31020561" style="position: absolute; top: -100px; width: 1px; height: 1px;"></iframe></body></html>
+  })();</script><div id="as-ptr-toast-2026" style="position: fixed; top: -52px; left: 50%; transform: translateX(-50%); z-index: 99999; background: rgb(17, 24, 39); color: rgb(16, 185, 129); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: rgba(0, 0, 0, 0.25) 0px 8px 20px; border-radius: 999px; padding: 6px 16px; font-size: 11px; font-weight: 800; display: flex; align-items: center; gap: 8px; transition: top 0.2s; pointer-events: none;"><i class="fa-solid fa-rotate-right"></i><span>Kéo xuống để làm mới...</span></div><div id="as-ptr-toast-2026" style="position: fixed; top: -52px; left: 50%; transform: translateX(-50%); z-index: 99999; background: rgb(17, 24, 39); color: rgb(16, 185, 129); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: rgba(0, 0, 0, 0.25) 0px 8px 20px; border-radius: 999px; padding: 6px 16px; font-size: 11px; font-weight: 800; display: flex; align-items: center; gap: 8px; transition: top 0.2s; pointer-events: none;"><i class="fa-solid fa-rotate-right"></i><span>Kéo xuống để làm mới...</span></div><iframe ng-non-bindable="" frameborder="0" hspace="0" marginheight="0" marginwidth="0" scrolling="no" tabindex="-1" vspace="0" width="100%" aria-hidden="true" id="I0_1794968383875" name="I0_1794968383875" src="https://lich-show-action-say.firebaseapp.com/__/auth/iframe?apiKey=AIzaSyBPp0AbNtvvuIWTrTwIYkvXyoD0Vr2IeuE&amp;appName=%5BDEFAULT%5D&amp;v=11.6.1&amp;eid=p&amp;usegapi=1&amp;jsh=m%3B%2F_%2Fscs%2Fabc-static%2F_%2Fjs%2Fk%3Dgapi.lb.vi.yYqMjrSmpQY.O%2Fd%3D1%2Frs%3DAHpOoo_bU1Xa98Q4JheHUo1Ur4D0uhYXag%2Fm%3D__features__#id=I0_1794968383875&amp;_gfid=I0_1794968383875&amp;parent=file%3A%2F%2F&amp;pfname=&amp;rpctoken=31020561" style="position: absolute; top: -100px; width: 1px; height: 1px;"></iframe>
+
+      <script id="as-final-3-upgrades-2026">
+(function applyThreeUpgradesPatch() {
+  if (!window.state || !window.appActions || !window.ctpActions) {
+    setTimeout(applyThreeUpgradesPatch, 120);
+    return;
+  }
+  if (window.__AS_THREE_UPGRADES_APPLIED__) return;
+  window.__AS_THREE_UPGRADES_APPLIED__ = true;
+
+  const st = window.state;
+
+  // =========================================================================
+  // CSS BỔ TRỢ: Ô NGÀY DD/MM/YYYY & THANH NĂM CỐ ĐỊNH + THÁNG KÉO MƯỢT
+  // =========================================================================
+  const styleEl = document.createElement('style');
+  styleEl.id = 'as-three-upgrades-css';
+  styleEl.textContent = `
+    /* 1. Lớp hiển thị DD/MM/YYYY đè lên input[type="date"] */
+    .as-date-ddmmyyyy-wrap {
+      position: relative !important;
+      display: flex !important;
+      align-items: center !important;
+      width: 100% !important;
+    }
+    .as-date-ddmmyyyy-wrap > input[type="date"] {
+      position: relative !important;
+      z-index: 2 !important;
+      color: transparent !important;
+      -webkit-text-fill-color: transparent !important;
+      background: transparent !important;
+      cursor: pointer !important;
+      width: 100% !important;
+    }
+    .as-date-ddmmyyyy-wrap > input[type="date"]::-webkit-datetime-edit,
+    .as-date-ddmmyyyy-wrap > input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+    .as-date-ddmmyyyy-wrap > input[type="date"]::-webkit-datetime-edit-text,
+    .as-date-ddmmyyyy-wrap > input[type="date"]::-webkit-datetime-edit-month-field,
+    .as-date-ddmmyyyy-wrap > input[type="date"]::-webkit-datetime-edit-day-field,
+    .as-date-ddmmyyyy-wrap > input[type="date"]::-webkit-datetime-edit-year-field {
+      color: transparent !important;
+      -webkit-text-fill-color: transparent !important;
+    }
+    .as-date-ddmmyyyy-wrap > input[type="date"]::-webkit-calendar-picker-indicator {
+      position: absolute !important;
+      inset: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      opacity: 0 !important;
+      cursor: pointer !important;
+    }
+    .as-date-ddmmyyyy-display {
+      position: absolute !important;
+      inset: 0 !important;
+      z-index: 1 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      padding: 0 11px !important;
+      pointer-events: none !important;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+      font-weight: 800 !important;
+      font-size: 12px !important;
+      color: #0f172a !important;
+      background-color: #f8fafc !important;
+      border-radius: inherit !important;
+    }
+    .as-ag-date-field .as-date-ddmmyyyy-display {
+      background-color: transparent !important;
+      padding: 0 2px !important;
+      font-size: 12.5px !important;
+    }
+
+    /* 3. Khung Năm cố định + Tháng kéo ngang không bao giờ bị che */
+    .as-date-bar-wrap {
+      display: flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      width: 100% !important;
+      padding: 4px 6px !important;
+      background: #f1f5f9 !important;
+      border: 1px solid #e2e8f0 !important;
+      border-radius: 9999px !important;
+      box-sizing: border-box !important;
+      overflow: hidden !important;
+    }
+    .as-year-pinned {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 2px !important;
+      background: #e2e8f0 !important;
+      padding: 2px !important;
+      border-radius: 9999px !important;
+      flex-shrink: 0 !important;
+      z-index: 3 !important;
+    }
+    .as-month-scroller {
+      display: flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+      flex: 1 1 0% !important;
+      min-width: 0 !important;
+      overflow-x: auto !important;
+      overflow-y: hidden !important;
+      -webkit-overflow-scrolling: touch !important;
+      scroll-behavior: smooth !important;
+      padding: 1px 6px 1px 2px !important;
+      scrollbar-width: none !important;
+    }
+    .as-month-scroller::-webkit-scrollbar {
+      display: none !important;
+    }
+    .as-month-btn {
+      flex-shrink: 0 !important;
+      white-space: nowrap !important;
+    }
+  `;
+  document.head.appendChild(styleEl);
+
+  // =========================================================================
+  // 1. HIỂN THỊ CHUẨN DD/MM/YYYY TRÊN TẤT CẢ CÁC Ô CHỌN NGÀY
+  // =========================================================================
+  function formatIsoToDdMmYyyy(isoStr) {
+    if (!isoStr || typeof isoStr !== 'string') return 'Chọn ngày';
+    const parts = isoStr.trim().split('-');
+    if (parts.length !== 3) return isoStr;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+
+  function enhanceAllDateInputs() {
+    document.querySelectorAll('input[type="date"]').forEach((inp) => {
+      let wrap = inp.closest('.as-date-ddmmyyyy-wrap');
+      if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.className = 'as-date-ddmmyyyy-wrap';
+        const computedRadius = window.getComputedStyle(inp).borderRadius;
+        wrap.style.borderRadius = computedRadius && computedRadius !== '0px' ? computedRadius : '12px';
+
+        inp.parentNode.insertBefore(wrap, inp);
+        wrap.appendChild(inp);
+
+        const badge = document.createElement('div');
+        badge.className = 'as-date-ddmmyyyy-display';
+        badge.innerHTML = `<span class="as-date-text"></span><i class="fa-regular fa-calendar text-slate-400 text-[11px] ml-1.5"></i>`;
+        wrap.appendChild(badge);
+
+        inp.addEventListener('input', () => {
+          const t = badge.querySelector('.as-date-text');
+          if (t) t.textContent = formatIsoToDdMmYyyy(inp.value);
+        });
+        inp.addEventListener('change', () => {
+          const t = badge.querySelector('.as-date-text');
+          if (t) t.textContent = formatIsoToDdMmYyyy(inp.value);
+        });
+      }
+      const txtEl = wrap.querySelector('.as-date-text');
+      if (txtEl) {
+        const formatted = formatIsoToDdMmYyyy(inp.value);
+        if (txtEl.textContent !== formatted) txtEl.textContent = formatted;
+      }
+    });
+  }
+
+  // =========================================================================
+  // 2. VIETQR BILL CTP: BỎ SỐ TIỀN TỰ ĐIỀN + CHUYỂN SANG BASE64 RÕ NÉT 100%
+  // =========================================================================
+  // Ghi đè hàm tạo link VietQR: tuyệt đối không gắn ?amount= vào mã QR
+  window.buildVietQrUrl = function(bankBin, bankAcc, amount = 0, addInfo = '') {
+    const cleanAcc = String(bankAcc || '').replace(/\s+/g, '').trim();
+    const cleanBin = String(bankBin || '970436').trim();
+    if (!cleanAcc) return '';
+    return `https://img.vietqr.io/image/${cleanBin}-${cleanAcc}-qr_only.png`;
+  };
+
+  async function convertImgToBase64(imgEl) {
+    if (!imgEl || !imgEl.src || imgEl.src.startsWith('data:') || imgEl.dataset.convertingBase64 === '1') return;
+    imgEl.dataset.convertingBase64 = '1';
+    const rawUrl = imgEl.src.split('?')[0]; // Đảm bảo bỏ hoàn toàn tham số amount trên URL cũ
+    try {
+      const resp = await fetch(rawUrl, { mode: 'cors', cache: 'force-cache' });
+      const blob = await resp.blob();
+      const base64Data = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+      if (base64Data && base64Data.startsWith('data:image')) {
+        imgEl.src = base64Data;
+      }
+    } catch (err) {
+      // Fallback sang canvas nếu fetch vướng CORS
+      try {
+        const tempImg = new Image();
+        tempImg.crossOrigin = 'anonymous';
+        tempImg.onload = function() {
+          const c = document.createElement('canvas');
+          c.width = tempImg.naturalWidth || 240;
+          c.height = tempImg.naturalHeight || 240;
+          c.getContext('2d').drawImage(tempImg, 0, 0);
+          try { imgEl.src = c.toDataURL('image/png'); } catch (e) {}
+        };
+        tempImg.src = rawUrl;
+      } catch (e2) {}
+    } finally {
+      imgEl.dataset.convertingBase64 = '0';
+    }
+  }
+
+  function sanitizeAndBase64BillQr() {
+    const billOverlay = document.querySelector('[onclick="ctpActions.closeBillModal()"]');
+    if (!billOverlay) return;
+
+    // Xóa dòng chữ "Số tiền tự điền: ...đ" trong khung QR của Bill CTP
+    billOverlay.querySelectorAll('div, span, p').forEach((el) => {
+      if (el.children.length === 0 && (el.textContent || '').trim().startsWith('Số tiền tự điền:')) {
+        el.remove();
+      }
+    });
+
+    // Đổi tất cả ảnh QR trong Bill CTP sang link sạch (không amount) và ép về Base64 ngay lập tức
+    billOverlay.querySelectorAll('img[alt="VietQR"], img.vietqr-img-el').forEach((qrImg) => {
+      if (qrImg.src && qrImg.src.includes('?')) {
+        qrImg.src = qrImg.src.split('?')[0];
+      }
+      convertImgToBase64(qrImg);
+    });
+  }
+
+  // Đảm bảo trước khi bấm nút Chụp Ảnh Bill, mọi ảnh QR đã là Base64 100%
+  const origCaptureBill = window.ctpActions.captureBillImage;
+  window.ctpActions.captureBillImage = async function() {
+    sanitizeAndBase64BillQr();
+    const billOverlay = document.querySelector('[onclick="ctpActions.closeBillModal()"]');
+    if (billOverlay) {
+      const qrImgs = Array.from(billOverlay.querySelectorAll('img[alt="VietQR"], img.vietqr-img-el'));
+      await Promise.all(qrImgs.map(img => convertImgToBase64(img)));
+    }
+    return origCaptureBill.apply(this, arguments);
+  };
+
+  // =========================================================================
+  // 3. LOGIC NĂM (2026 -> THÁNG HIỆN TẠI, 2027 -> T1) & AUTO-SCROLL THÁNG
+  // =========================================================================
+  function scrollActiveMonthIntoView() {
+    document.querySelectorAll('.as-month-scroller').forEach((scroller) => {
+      const activeBtn = scroller.querySelector('.as-month-btn.active');
+      if (!activeBtn) return;
+      const targetLeft = activeBtn.offsetLeft - (scroller.clientWidth / 2) + (activeBtn.offsetWidth / 2);
+      scroller.scrollTo({
+        left: Math.max(0, targetLeft),
+        behavior: 'smooth'
+      });
+    });
+  }
+
+  window.appActions.setYear = function(y) {
+    const targetYear = Number(y);
+    const now = new Date();
+    const realCurrentMonth = now.getMonth() + 1; // Tháng thực tế hiện tại
+
+    st.selectedYear = targetYear;
+    st.filterAllMonthsInList = false;
+    st.ownerAllMonths = false;
+
+    if (targetYear === 2026) {
+      // Chọn năm hiện tại 2026 -> tự trỏ vào tháng thực tế hiện tại
+      st.selectedMonth = realCurrentMonth;
+      st.ctpMonth = realCurrentMonth;
+      st.ownerMonth = realCurrentMonth;
+    } else if (targetYear >= 2027) {
+      // Chọn năm 2027 chưa diễn ra -> mặc định về T1
+      st.selectedMonth = 1;
+      st.ctpMonth = 1;
+      st.ownerMonth = 1;
+    }
+
+    if (typeof window.renderApp === 'function') {
+      window.renderApp();
+    }
+    setTimeout(scrollActiveMonthIntoView, 50);
+  };
+
+  // Bọc thêm auto-scroll khi bấm chọn từng tháng
+  ['setMonth', 'toggleAllMonths', 'setTab'].forEach((fnName) => {
+    if (typeof window.appActions[fnName] === 'function') {
+      const origFn = window.appActions[fnName];
+      window.appActions[fnName] = function() {
+        const res = origFn.apply(this, arguments);
+        setTimeout(scrollActiveMonthIntoView, 40);
+        return res;
+      };
+    }
+  });
+  if (typeof window.ctpActions.setMonth === 'function') {
+    const origCtpMonth = window.ctpActions.setMonth;
+    window.ctpActions.setMonth = function() {
+      const res = origCtpMonth.apply(this, arguments);
+      setTimeout(scrollActiveMonthIntoView, 40);
+      return res;
+    };
+  }
+  if (window.ownerActions && typeof window.ownerActions.setMonth === 'function') {
+    const origOwnerMonth = window.ownerActions.setMonth;
+    window.ownerActions.setMonth = function() {
+      const res = origOwnerMonth.apply(this, arguments);
+      setTimeout(scrollActiveMonthIntoView, 40);
+      return res;
+    };
+  }
+
+  // Theo dõi DOM để tự động kích hoạt cả 3 nâng cấp ngay khi chuyển tab hoặc mở popup
+  const upgradeObserver = new MutationObserver(() => {
+    enhanceAllDateInputs();
+    sanitizeAndBase64BillQr();
+  });
+  upgradeObserver.observe(document.body, { childList: true, subtree: true });
+
+  // Khởi chạy lần đầu ngay khi mở trang
+  enhanceAllDateInputs();
+  sanitizeAndBase64BillQr();
+  setTimeout(scrollActiveMonthIntoView, 150);
+})();
+</script>
+</body></html>
