@@ -10188,77 +10188,103 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   }
 </style>
 
-// bật tắt năm trong tab trong trang Admin
-<script id="as-multi-year-manager-2026-2030">
-(function initStableAdminSystemYearManager() {
+<script id="as-admin-pro-suite-and-optimizer-2026">
+(function initAdminProSuiteAndOptimizer() {
   if (!window.state || !window.appActions) {
-    setTimeout(initStableAdminSystemYearManager, 80);
+    setTimeout(initAdminProSuiteAndOptimizer, 80);
     return;
   }
-  if (window.__AS_STABLE_ADMIN_YEAR_V3__) return;
-  window.__AS_STABLE_ADMIN_YEAR_V3__ = true;
+  if (window.__AS_ADMIN_PRO_SUITE_READY__) return;
+  window.__AS_ADMIN_PRO_SUITE_READY__ = true;
 
   const st = window.state;
   const ALL_YEARS = [2026, 2027, 2028, 2029, 2030];
-  const STORAGE_KEY = 'as_visible_years_config_2026';
-
-  // 1. Khởi tạo danh sách năm hiển thị (Mặc định: [2026, 2027])
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    if (Array.isArray(saved) && saved.length > 0) {
-      st.visibleYears = saved.map(Number).filter(y => ALL_YEARS.includes(y)).sort((a, b) => a - b);
-    }
-  } catch (e) {}
-  if (!Array.isArray(st.visibleYears) || st.visibleYears.length === 0) {
-    st.visibleYears = [2026, 2027];
-  }
-
-  function isInsideAdminMode() {
-    return Boolean(st.isBackendPortal || window.location.hash === '#admin' || document.body.classList.contains('as-admin-mode-active'));
-  }
 
   // =========================================================================
-  // 2. GIỮ NGUYÊN CƠ CHẾ CHỐNG LAG CHO TRANG ADMIN
+  // 1. DỌN DẸP CODE RÁC TRÙNG LẶP (TAILWIND STYLE, BLOB MANIFEST, GAPI)
   // =========================================================================
-  const origQSA = document.querySelectorAll.bind(document);
-  document.querySelectorAll = function(selector) {
-    if (isInsideAdminMode() && typeof selector === 'string' && selector.includes('openShowDetail')) {
-      return [];
-    }
-    return origQSA(selector);
-  };
-
-  function updateMainHeaderYearButtons() {
-    if (isInsideAdminMode()) return;
-    const activeYears = st.visibleYears || [2026, 2027];
-    origQSA('.as-year-pinned').forEach((wrap) => {
-      const sig = activeYears.join(',') + ':' + st.selectedYear;
-      if (wrap.dataset.yearSig === sig) return;
-      wrap.dataset.yearSig = sig;
-      wrap.innerHTML = activeYears.map(y => `
-        <button type="button" onclick="appActions.setYear(${y})" class="as-year-btn ${Number(st.selectedYear) === y ? 'active' : 'inactive'}">${y}</button>
-      `).join('');
-    });
-  }
-
-  if (typeof window.renderApp === 'function' && !window.__YEAR_RENDER_HOOKED_V3__) {
-    window.__YEAR_RENDER_HOOKED_V3__ = true;
-    const origRender = window.renderApp;
-    window.renderApp = function() {
-      const res = origRender.apply(this, arguments);
-      requestAnimationFrame(() => {
-        updateMainHeaderYearButtons();
-        ensureYearCardInSystemTab();
+  function cleanBloatDomNodes(rootDoc = document) {
+    try {
+      // Xóa các thẻ link manifest blob chết sinh ra qua nhiều lần lưu
+      const manifests = Array.from(rootDoc.querySelectorAll('link[rel="manifest"]'));
+      manifests.forEach((lnk, idx) => {
+        const href = lnk.getAttribute('href') || '';
+        if (href.startsWith('blob:null') || idx < manifests.length - 1) lnk.remove();
       });
-      return res;
+
+      // Xóa các thẻ script gapi trùng lặp
+      rootDoc.querySelectorAll('script[src*="apis.google.com"]').forEach(s => s.remove());
+
+      // Xóa các thẻ <style> Tailwind preflight bị nhân bản (chỉ giữ lại 1 thẻ duy nhất)
+      const twStyles = Array.from(rootDoc.querySelectorAll('head > style:not([id])')).filter(
+        s => (s.textContent || '').includes('--tw-border-spacing-x:0')
+      );
+      if (twStyles.length > 1) {
+        twStyles.slice(0, twStyles.length - 1).forEach(s => s.remove());
+      }
+    } catch (e) {}
+  }
+  cleanBloatDomNodes(document);
+
+  // Bọc lại hàm Xuất file HTML đơn để file tải về luôn sạch bóng, không bị phình dung lượng
+  const origDownloadHtml = window.appActions.downloadSingleHtmlFile;
+  if (typeof origDownloadHtml === 'function') {
+    window.appActions.downloadSingleHtmlFile = function() {
+      cleanBloatDomNodes(document);
+      return origDownloadHtml.apply(this, arguments);
     };
   }
-  updateMainHeaderYearButtons();
 
   // =========================================================================
-  // 3. ĐỒNG BỘ FIREBASE CLOUD 2 CHIỀU
+  // 2. KHỞI TẠO CẤU HÌNH ADMIN MỞ RỘNG (NĂM, ĐƠN GIÁ CTP, MÀU ĐỊA ĐIỂM, THÔNG BÁO, THÙNG RÁC)
   // =========================================================================
-  (async function connectFirebaseYears() {
+  const DEFAULT_CTP_RATES = {
+    quay1Day: 1500000,
+    quayMultiDay: 1200000,
+    chup1Day: 1500000,
+    chupMultiDay: 1200000,
+    dung: 1000000,
+    flycam: 1000000,
+    lamhinh: 300000,
+    gimbal: 200000
+  };
+
+  try {
+    const savedYears = JSON.parse(localStorage.getItem('as_visible_years_config_2026') || 'null');
+    st.visibleYears = (Array.isArray(savedYears) && savedYears.length > 0)
+      ? savedYears.map(Number).filter(y => ALL_YEARS.includes(y)).sort((a, b) => a - b)
+      : [2026, 2027];
+
+    st.ctpRatesConfig = {
+      ...DEFAULT_CTP_RATES,
+      ...(JSON.parse(localStorage.getItem('as_ctp_rates_config_2026') || '{}'))
+    };
+
+    st.customColorRules = JSON.parse(localStorage.getItem('as_custom_color_rules_2026') || '[]');
+    st.studioBroadcast = JSON.parse(localStorage.getItem('as_studio_broadcast_2026') || '{"enabled":false,"text":""}');
+    st.deletedShowsTrash = JSON.parse(localStorage.getItem('as_deleted_shows_trash_2026') || '[]');
+  } catch (e) {
+    st.visibleYears = [2026, 2027];
+    st.ctpRatesConfig = { ...DEFAULT_CTP_RATES };
+    st.customColorRules = [];
+    st.studioBroadcast = { enabled: false, text: '' };
+    st.deletedShowsTrash = [];
+  }
+
+  function saveAdminConfigsLocal() {
+    try {
+      localStorage.setItem('as_visible_years_config_2026', JSON.stringify(st.visibleYears));
+      localStorage.setItem('as_ctp_rates_config_2026', JSON.stringify(st.ctpRatesConfig));
+      localStorage.setItem('as_custom_color_rules_2026', JSON.stringify(st.customColorRules));
+      localStorage.setItem('as_studio_broadcast_2026', JSON.stringify(st.studioBroadcast));
+      localStorage.setItem('as_deleted_shows_trash_2026', JSON.stringify(st.deletedShowsTrash));
+    } catch (e) {}
+  }
+
+  // =========================================================================
+  // 3. KẾT NỐI FIREBASE CLOUD CHO TOÀN BỘ CẤU HÌNH ADMIN MỚI
+  // =========================================================================
+  (async function syncAdminConfigsCloud() {
     try {
       const { getApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
       const { getFirestore, doc, setDoc, onSnapshot } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
@@ -10269,199 +10295,627 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       onSnapshot(masterRef, (snap) => {
         if (!snap.exists()) return;
         const d = snap.data();
+        let changed = false;
+
         if (Array.isArray(d?.visibleYears) && d.visibleYears.length > 0) {
-          const remote = d.visibleYears.map(Number).filter(y => ALL_YEARS.includes(y)).sort((a, b) => a - b);
-          if (JSON.stringify(remote) !== JSON.stringify(st.visibleYears)) {
-            st.visibleYears = remote;
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)); } catch (e) {}
+          const rYears = d.visibleYears.map(Number).filter(y => ALL_YEARS.includes(y)).sort((a, b) => a - b);
+          if (JSON.stringify(rYears) !== JSON.stringify(st.visibleYears)) {
+            st.visibleYears = rYears;
             if (!st.visibleYears.includes(Number(st.selectedYear))) {
               st.selectedYear = st.visibleYears[0] || 2026;
             }
-            updateMainHeaderYearButtons();
-            ensureYearCardInSystemTab(true);
+            changed = true;
           }
+        }
+        if (d?.ctpRatesConfig && typeof d.ctpRatesConfig === 'object') {
+          st.ctpRatesConfig = { ...DEFAULT_CTP_RATES, ...d.ctpRatesConfig };
+          changed = true;
+        }
+        if (Array.isArray(d?.customColorRules)) {
+          st.customColorRules = d.customColorRules;
+          changed = true;
+        }
+        if (d?.studioBroadcast && typeof d.studioBroadcast === 'object') {
+          st.studioBroadcast = d.studioBroadcast;
+          changed = true;
+        }
+        if (Array.isArray(d?.deletedShowsTrash)) {
+          st.deletedShowsTrash = d.deletedShowsTrash;
+        }
+
+        if (changed) {
+          saveAdminConfigsLocal();
+          updateMainAppUIEnhancements();
+          if (st.isBackendPortal) injectProSuiteIntoAdminSystemTab(true);
         }
       });
 
-      window.__pushVisibleYearsCloud = async function(arr) {
+      window.__pushAdminConfigToCloud = async function() {
         try {
-          await setDoc(masterRef, { visibleYears: arr, updatedAt: Date.now() }, { merge: true });
+          await setDoc(masterRef, {
+            visibleYears: st.visibleYears,
+            ctpRatesConfig: st.ctpRatesConfig,
+            customColorRules: st.customColorRules,
+            studioBroadcast: st.studioBroadcast,
+            deletedShowsTrash: (st.deletedShowsTrash || []).slice(0, 30),
+            lockedMonths: st.lockedMonths || {},
+            updatedAt: Date.now()
+          }, { merge: true });
         } catch (e) {}
       };
     } catch (e) {}
   })();
 
   // =========================================================================
-  // 4. HÀM BẬT / TẮT NĂM (2026 - 2030)
+  // 4. ÁP DỤNG ĐƠN GIÁ CTP ĐỘNG, MÀU ĐỊA ĐIỂM ĐỘNG, KHÓA SỔ THÁNG & THÙNG RÁC
   // =========================================================================
-  window.appActions.toggleVisibleYear = async function(yearNum) {
-    const y = Number(yearNum);
-    if (!ALL_YEARS.includes(y)) return;
+  function getShowDaysCount(sh) {
+    if (!sh || !sh.startDate || !sh.endDate) return 1;
+    const s = new Date(sh.startDate + 'T00:00:00');
+    const e = new Date(sh.endDate + 'T00:00:00');
+    const d = Math.round((e - s) / 86400000) + 1;
+    return d > 0 ? d : 1;
+  }
 
-    const current = Array.isArray(st.visibleYears) ? [...st.visibleYears] : [2026, 2027];
-    const idx = current.indexOf(y);
-    if (idx >= 0) {
-      if (current.length <= 1) {
-        alert('⚠️ Phải giữ lại ít nhất 1 năm hiển thị trên bảng lịch!');
+  function getDynamicCtpRate(taskKey, sh) {
+    const cfg = st.ctpRatesConfig || DEFAULT_CTP_RATES;
+    const days = getShowDaysCount(sh);
+    if (taskKey === 'quay') return days === 1 ? Number(cfg.quay1Day) : Number(cfg.quayMultiDay) * days;
+    if (taskKey === 'chup') return days === 1 ? Number(cfg.chup1Day) : Number(cfg.chupMultiDay) * days;
+    if (taskKey === 'dung') return Number(cfg.dung);
+    if (taskKey === 'flycam') return Number(cfg.flycam);
+    if (taskKey === 'lamhinh') return Number(cfg.lamhinh);
+    if (taskKey === 'gimbal') return Number(cfg.gimbal);
+    return 0;
+  }
+
+  // Ghi đè hàm tích chọn nhiệm vụ CTP để lấy đúng Đơn Giá mới trong Admin
+  if (window.ctpActions && typeof window.ctpActions.toggleTask === 'function') {
+    window.ctpActions.toggleTask = function(showId, taskKey) {
+      if (!st.ctpItems[showId]) st.ctpItems[showId] = { tasks: {}, extras: [] };
+      const tasks = st.ctpItems[showId].tasks;
+      if (tasks[taskKey] !== undefined) {
+        delete tasks[taskKey];
+      } else {
+        const sh = (st.shows || []).find(s => s && s.id === showId) || (st.ctpCustomShows || []).find(s => s && s.id === showId);
+        tasks[taskKey] = getDynamicCtpRate(taskKey, sh);
+      }
+      try { localStorage.setItem('as_ctp_items_2026', JSON.stringify(st.ctpItems)); } catch (e) {}
+      if (typeof window.renderApp === 'function') window.renderApp();
+    };
+  }
+
+  // Ghi đè hàm gõ địa điểm trong Form Nổ Show để nhận diện Từ khóa màu mới của Admin
+  const origUpdateFormField = window.appActions.updateFormField;
+  if (typeof origUpdateFormField === 'function') {
+    window.appActions.updateFormField = function(field, val) {
+      const res = origUpdateFormField.apply(this, arguments);
+      if (field === 'location' && st.formModal && st.formModal.mode === 'add') {
+        const s = `${val || ''} ${st.formModal.partner || ''}`.toLowerCase();
+        const customRule = (st.customColorRules || []).find(r => r.keyword && s.includes(r.keyword.toLowerCase()));
+        if (customRule && customRule.color) {
+          st.formModal.color = customRule.color;
+          if (typeof window.renderApp === 'function') window.renderApp();
+        }
+      }
+      return res;
+    };
+  }
+
+  // Chặn sửa/xóa show nếu Tháng đó đã bị Admin khóa sổ (trừ khi đang bật quyền Admin)
+  function checkLockedMonthGuard(dateStr) {
+    if (!dateStr || st.isAdminMode) return false;
+    const m = parseInt(String(dateStr).split('-')[1], 10);
+    if (st.lockedMonths && st.lockedMonths[m]) {
+      alert(`🔒 Tháng ${m} đã được Admin khóa sổ! Vui lòng liên hệ Admin nếu cần điều chỉnh.`);
+      return true;
+    }
+    return false;
+  }
+
+  const origSaveShowForm = window.appActions.saveShowForm;
+  window.appActions.saveShowForm = async function() {
+    if (st.formModal && checkLockedMonthGuard(st.formModal.startDate)) return;
+    return origSaveShowForm.apply(this, arguments);
+  };
+
+  // Bọc hàm Xóa Show: Kiểm tra khóa sổ + Tự động lưu vào Thùng Rác 30 ngày để Admin khôi phục được
+  const prevDeleteShow = window.appActions.deleteShow;
+  window.appActions.deleteShow = async function(showId) {
+    const sh = (st.shows || []).find(s => s && s.id === showId);
+    if (!sh) return;
+    if (checkLockedMonthGuard(sh.startDate)) return;
+
+    // Lưu bản sao vào thùng rác trước khi xóa
+    const backupClone = JSON.parse(JSON.stringify(sh));
+    backupClone.deletedAt = Date.now();
+
+    const res = await prevDeleteShow.apply(this, arguments);
+
+    // Nếu show đã thực sự bị xóa khỏi st.shows -> đẩy vào Thùng rác
+    if (!(st.shows || []).some(s => s && s.id === showId)) {
+      if (!Array.isArray(st.deletedShowsTrash)) st.deletedShowsTrash = [];
+      st.deletedShowsTrash = [backupClone, ...st.deletedShowsTrash.filter(x => x && x.id !== showId)].slice(0, 30);
+      saveAdminConfigsLocal();
+      if (typeof window.__pushAdminConfigToCloud === 'function') window.__pushAdminConfigToCloud();
+    }
+    return res;
+  };
+
+  // =========================================================================
+  // 5. CÁC HÀM ĐIỀU KHIỂN TRONG TAB "⚙️ HỆ THỐNG" CỦA ADMIN
+  // =========================================================================
+  window.adminProActions = {
+    async toggleYear(yr) {
+      const y = Number(yr);
+      const cur = Array.isArray(st.visibleYears) ? [...st.visibleYears] : [2026, 2027];
+      const idx = cur.indexOf(y);
+      if (idx >= 0) {
+        if (cur.length <= 1) {
+          alert('⚠️ Phải giữ lại ít nhất 1 năm hiển thị trên App!');
+          return;
+        }
+        cur.splice(idx, 1);
+      } else {
+        cur.push(y);
+      }
+      cur.sort((a, b) => a - b);
+      st.visibleYears = cur;
+      if (!st.visibleYears.includes(Number(st.selectedYear))) {
+        st.selectedYear = st.visibleYears[0] || 2026;
+      }
+      saveAdminConfigsLocal();
+      injectProSuiteIntoAdminSystemTab(true);
+      updateMainAppUIEnhancements();
+      if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+      if (typeof window.__asNotify === 'function') window.__asNotify(`📅 Năm hiển thị: ${cur.join(', ')}`, 'success');
+    },
+
+    async toggleLockMonthAdmin(m) {
+      const monthNum = Number(m);
+      if (!st.lockedMonths) st.lockedMonths = {};
+      st.lockedMonths[monthNum] = !st.lockedMonths[monthNum];
+      try { localStorage.setItem('as_locked_months_2026', JSON.stringify(st.lockedMonths)); } catch (e) {}
+      injectProSuiteIntoAdminSystemTab(true);
+      if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+      if (typeof window.__asNotify === 'function') {
+        window.__asNotify(st.lockedMonths[monthNum] ? `🔒 Đã khóa sổ Tháng ${monthNum}` : `🔓 Đã mở khóa Tháng ${monthNum}`, 'success');
+      }
+    },
+
+    async saveBroadcast() {
+      const txt = (document.getElementById('as-adm-broadcast-input')?.value || '').trim();
+      const enabled = Boolean(document.getElementById('as-adm-broadcast-toggle')?.checked);
+      st.studioBroadcast = { enabled: enabled && txt.length > 0, text: txt, updatedAt: Date.now() };
+      saveAdminConfigsLocal();
+      injectProSuiteIntoAdminSystemTab(true);
+      updateMainAppUIEnhancements();
+      if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+      if (typeof window.__asNotify === 'function') {
+        window.__asNotify(st.studioBroadcast.enabled ? '📢 Đã phát thông báo lên đầu App!' : '🔕 Đã tắt thanh thông báo', 'success');
+      }
+    },
+
+    async saveCtpRates() {
+      const parseNum = (id, def) => {
+        const raw = String(document.getElementById(id)?.value || '').replace(/\D/g, '');
+        return raw ? parseInt(raw, 10) : def;
+      };
+      st.ctpRatesConfig = {
+        quay1Day: parseNum('as-rate-quay1', 1500000),
+        quayMultiDay: parseNum('as-rate-quayN', 1200000),
+        chup1Day: parseNum('as-rate-chup1', 1500000),
+        chupMultiDay: parseNum('as-rate-chupN', 1200000),
+        dung: parseNum('as-rate-dung', 1000000),
+        flycam: parseNum('as-rate-flycam', 1000000),
+        lamhinh: parseNum('as-rate-lamhinh', 300000),
+        gimbal: parseNum('as-rate-gimbal', 200000)
+      };
+      saveAdminConfigsLocal();
+      injectProSuiteIntoAdminSystemTab(true);
+      if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+      if (typeof window.__asNotify === 'function') window.__asNotify('💰 Đã lưu bảng đơn giá CTP mặc định!', 'success');
+    },
+
+    async addColorRule() {
+      const kw = (document.getElementById('as-adm-color-kw')?.value || '').trim();
+      const col = document.getElementById('as-adm-color-hex')?.value || '#bae6fd';
+      if (!kw) {
+        alert('Vui lòng nhập từ khóa địa điểm (VD: Sapa, Măng Đen, Côn Đảo...)');
         return;
       }
-      current.splice(idx, 1);
-    } else {
-      current.push(y);
-    }
-    current.sort((a, b) => a - b);
-    st.visibleYears = current;
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(current)); } catch (e) {}
+      if (!Array.isArray(st.customColorRules)) st.customColorRules = [];
+      st.customColorRules.push({ id: 'cr_' + Date.now(), keyword: kw, color: col });
+      saveAdminConfigsLocal();
+      injectProSuiteIntoAdminSystemTab(true);
+      if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+      if (typeof window.__asNotify === 'function') window.__asNotify(`🎨 Đã thêm màu cho "${kw}"`, 'success');
+    },
 
-    if (!st.visibleYears.includes(Number(st.selectedYear))) {
-      st.selectedYear = st.visibleYears[0] || 2026;
-    }
+    async removeColorRule(ruleId) {
+      st.customColorRules = (st.customColorRules || []).filter(r => r.id !== ruleId);
+      saveAdminConfigsLocal();
+      injectProSuiteIntoAdminSystemTab(true);
+      if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+    },
 
-    ensureYearCardInSystemTab(true);
-    updateMainHeaderYearButtons();
+    async restoreDeletedShow(showId) {
+      const target = (st.deletedShowsTrash || []).find(s => s && s.id === showId);
+      if (!target) return;
+      delete target.deletedAt;
+      target.updatedAt = Date.now();
+      st.shows.push(target);
+      st.localDeletedShowIds = (st.localDeletedShowIds || []).filter(id => id !== showId);
+      if (!st.localShowEditsMap) st.localShowEditsMap = {};
+      st.localShowEditsMap[target.id] = target;
+      st.deletedShowsTrash = (st.deletedShowsTrash || []).filter(s => s && s.id !== showId);
 
-    if (typeof window.__pushVisibleYearsCloud === 'function') {
-      await window.__pushVisibleYearsCloud(current);
-    }
-    if (typeof window.__asNotify === 'function') {
-      window.__asNotify(`📅 Năm hiển thị: ${current.join(', ')}`, 'success');
+      try {
+        localStorage.setItem('as_shows_backup_2026', JSON.stringify(st.shows));
+        localStorage.setItem('as_local_show_edits_2026', JSON.stringify(st.localShowEditsMap));
+        localStorage.setItem('as_local_deleted_shows_2026', JSON.stringify(st.localDeletedShowIds));
+      } catch (e) {}
+      saveAdminConfigsLocal();
+      injectProSuiteIntoAdminSystemTab(true);
+      if (typeof window.syncShowsToSingleDoc === 'function') await window.syncShowsToSingleDoc();
+      if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+      if (typeof window.__asNotify === 'function') window.__asNotify(`♻️ Đã khôi phục show "${target.location}"!`, 'success');
+    },
+
+    async emptyTrash() {
+      if (!confirm('Xóa sạch thùng rác?')) return;
+      st.deletedShowsTrash = [];
+      saveAdminConfigsLocal();
+      injectProSuiteIntoAdminSystemTab(true);
+      if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+    },
+
+    exportFullJsonBackup() {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        shows: st.shows || [],
+        members: st.members || [],
+        pinsMap: st.pinsMap || {},
+        ownerFinanceMap: st.ownerFinanceMap || {},
+        memberProfiles: st.memberProfiles || {},
+        lockedMonths: st.lockedMonths || {},
+        visibleYears: st.visibleYears || [2026, 2027],
+        ctpRatesConfig: st.ctpRatesConfig || DEFAULT_CTP_RATES,
+        customColorRules: st.customColorRules || []
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ActionSay_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      if (typeof window.__asNotify === 'function') window.__asNotify('📦 Đã tải file Backup .JSON!', 'success');
+    },
+
+    triggerJsonRestore() {
+      let inp = document.getElementById('as-json-restore-input');
+      if (!inp) {
+        inp = document.createElement('input');
+        inp.type = 'file';
+        inp.id = 'as-json-restore-input';
+        inp.accept = '.json';
+        inp.style.display = 'none';
+        inp.onchange = async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            if (!Array.isArray(data.shows)) {
+              alert('File JSON không hợp lệ!');
+              return;
+            }
+            if (!confirm(`Khôi phục ${data.shows.length} dòng lịch show và toàn bộ cài đặt từ bản sao lưu này?`)) return;
+            st.shows = data.shows;
+            if (Array.isArray(data.members) && data.members.length > 0) st.members = data.members;
+            if (data.pinsMap) st.pinsMap = data.pinsMap;
+            if (data.ownerFinanceMap) st.ownerFinanceMap = data.ownerFinanceMap;
+            if (data.lockedMonths) st.lockedMonths = data.lockedMonths;
+            if (Array.isArray(data.visibleYears)) st.visibleYears = data.visibleYears;
+            if (data.ctpRatesConfig) st.ctpRatesConfig = data.ctpRatesConfig;
+            if (Array.isArray(data.customColorRules)) st.customColorRules = data.customColorRules;
+
+            localStorage.setItem('as_shows_backup_2026', JSON.stringify(st.shows));
+            saveAdminConfigsLocal();
+            if (typeof window.syncShowsToSingleDoc === 'function') await window.syncShowsToSingleDoc();
+            if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+            if (typeof window.renderApp === 'function') window.renderApp();
+            injectProSuiteIntoAdminSystemTab(true);
+            if (typeof window.__asNotify === 'function') window.__asNotify('✅ Đã khôi phục dữ liệu từ file JSON!', 'success');
+          } catch (err) {
+            alert('Lỗi đọc file JSON: ' + err.message);
+          }
+          e.target.value = '';
+        };
+        document.body.appendChild(inp);
+      }
+      inp.click();
     }
   };
 
   // =========================================================================
-  // 5. GIỮ KHUNG QUẢN LÝ NĂM LUÔN CỐ ĐỊNH TRONG TAB "⚙️ HỆ THỐNG" (KHÔNG BỊ MẤT)
+  // 6. CẬP NHẬT THANH NĂM & THANH THÔNG BÁO KHẨN NGOÀI GIAO DIỆN CHÍNH
   // =========================================================================
-  let isSystemTabSelected = false;
-  let isMountingCard = false;
+  function updateMainAppUIEnhancements() {
+    if (st.isBackendPortal || window.location.hash === '#admin') return;
 
-  // Kiểm tra xem giao diện Admin hiện tại có đang ở tab Hệ Thống không
-  function checkIfSystemTabInDom(shell) {
-    if (st.backendTab === 'system' || st.backendTab === 'settings') return true;
-    // Tìm nút Hệ Thống trong thanh 3 tab
-    const buttons = shell.querySelectorAll('button');
-    for (let i = 0; i < buttons.length; i++) {
-      const b = buttons[i];
-      const t = (b.textContent || '').trim();
-      if (t.includes('Hệ Thống')) {
-        // Trong giao diện STUDIO CONTROL, nút tab đang chọn sẽ có nền trắng (#ffffff / bg-white) hoặc shadow
-        const cls = b.className || '';
-        const inlineBg = b.style?.backgroundColor || '';
-        if (cls.includes('bg-white') || cls.includes('shadow') || inlineBg.includes('255') || inlineBg.includes('#fff')) {
-          return true;
+    // A. Cập nhật các nút Năm trên thanh Header
+    const activeYears = st.visibleYears || [2026, 2027];
+    document.querySelectorAll('.as-year-pinned').forEach((wrap) => {
+      wrap.innerHTML = activeYears.map(y => `
+        <button type="button" onclick="appActions.setYear(${y})" class="as-year-btn ${Number(st.selectedYear) === y ? 'active' : 'inactive'}">${y}</button>
+      `).join('');
+    });
+
+    // B. Hiển thị thanh Thông Báo Chung (Studio Broadcast) ngay trên Header nếu Admin đang bật
+    const header = document.querySelector('#app header');
+    if (header) {
+      let banner = document.getElementById('as-studio-broadcast-banner');
+      if (st.studioBroadcast && st.studioBroadcast.enabled && st.studioBroadcast.text) {
+        if (!banner) {
+          banner = document.createElement('div');
+          banner.id = 'as-studio-broadcast-banner';
+          banner.style.cssText = 'background:linear-gradient(90deg,#fff1f2,#ffe4e6);border:1px solid #fecdd3;color:#be123c;border-radius:14px;padding:6px 12px;font-size:11px;font-weight:800;display:flex;align-items:center;gap:8px;box-shadow:0 2px 8px rgba(225,29,72,0.08);';
+          header.appendChild(banner);
         }
+        banner.innerHTML = `<span style="background:#e11d48;color:#fff;font-size:9px;font-weight:900;padding:2px 7px;border-radius:999px;flex-shrink:0;">📢 THÔNG BÁO</span><span style="flex:1;line-height:1.35;">${st.studioBroadcast.text.replace(/</g, '&lt;')}</span>`;
+      } else if (banner) {
+        banner.remove();
       }
     }
-    return isSystemTabSelected;
   }
 
-  function ensureYearCardInSystemTab(forceRefresh = false) {
-    if (isMountingCard) return;
+  // =========================================================================
+  // 7. GẮN TRỰC TIẾP BỘ CÔNG CỤ QUẢN TRỊ VÀO TAB "⚙️ HỆ THỐNG" (KHÔNG BAO GIỜ MẤT)
+  // =========================================================================
+  function injectProSuiteIntoAdminSystemTab(forceRebuild = false) {
     const shell = document.getElementById('as-light-admin-shell');
-    if (!shell) return;
+    if (!shell || !st.isBackendPortal) return;
 
-    const activeInSys = checkIfSystemTabInDom(shell);
-    const existingBox = document.getElementById('as-admin-years-toggle-card');
+    // Kiểm tra xem tab Hệ Thống có đang mở không (dựa trên biến hoặc nút active trong #as-light-admin-shell)
+    const sysBtn = shell.querySelector('button[onclick*="__admSetTab(\'system\')"]');
+    const isSystemTabOpen = sysBtn && sysBtn.classList.contains('active');
+    if (!isSystemTabOpen) return;
 
-    if (!activeInSys) {
-      if (existingBox) existingBox.remove();
-      return;
-    }
+    const container = shell.querySelector('.as-adm-container');
+    if (!container) return;
 
-    // Nếu khung đã tồn tại trong DOM và không cần vẽ lại số năm thì giữ nguyên (0% tốn tài nguyên)
-    if (existingBox && !forceRefresh) return;
+    let suiteHost = document.getElementById('as-admin-pro-suite-host');
+    if (suiteHost && !forceRebuild) return;
 
-    const buttons = shell.querySelectorAll('button');
-    let sysBtn = null;
-    for (let i = 0; i < buttons.length; i++) {
-      if ((buttons[i].textContent || '').includes('Hệ Thống')) {
-        sysBtn = buttons[i];
-        break;
+    if (!suiteHost) {
+      suiteHost = document.createElement('div');
+      suiteHost.id = 'as-admin-pro-suite-host';
+      // Chèn ngay phía dưới thanh 3 nút Tab (Tổng Quan | Cấp PIN | Hệ Thống)
+      const tabsRow = container.querySelector('.as-adm-tabs')?.parentElement;
+      if (tabsRow && tabsRow.nextElementSibling) {
+        container.insertBefore(suiteHost, tabsRow.nextElementSibling);
+      } else {
+        container.appendChild(suiteHost);
       }
     }
-    if (!sysBtn || !sysBtn.parentElement || !sysBtn.parentElement.parentElement) return;
 
-    isMountingCard = true;
-    try {
-      const tabBar = sysBtn.parentElement;
-      const mainWrap = tabBar.parentElement;
+    const activeYears = st.visibleYears || [2026, 2027];
+    const rates = st.ctpRatesConfig || DEFAULT_CTP_RATES;
+    const locked = st.lockedMonths || {};
+    const rules = st.customColorRules || [];
+    const trash = st.deletedShowsTrash || [];
+    const bc = st.studioBroadcast || { enabled: false, text: '' };
 
-      let box = existingBox;
-      if (!box) {
-        box = document.createElement('div');
-        box.id = 'as-admin-years-toggle-card';
-        box.style.cssText = 'background:#ffffff;border:1.5px solid #cbd5e1;border-radius:22px;padding:16px;margin:12px 0;box-shadow:0 8px 20px -4px rgba(15,23,42,0.06);';
-        mainWrap.insertBefore(box, tabBar.nextElementSibling);
-      }
+    suiteHost.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px;margin-bottom:14px;">
 
-      const activeYears = st.visibleYears || [2026, 2027];
-      box.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-          <div>
-            <div style="font-size:12.5px;font-weight:900;color:#0f172a;text-transform:uppercase;">
-              📅 QUẢN LÝ NĂM HIỂN THỊ TRÊN APP (2026 – 2030)
+        <!-- 1. QUẢN LÝ NĂM HIỂN THỊ (2026 - 2030) -->
+        <div class="as-adm-section" style="margin-bottom:0;">
+          <div class="as-adm-sec-head">
+            <div>
+              <div class="as-adm-sec-title">📅 1. BẬT / ẨN NĂM HIỂN THỊ (2026 – 2030)</div>
+              <div class="as-adm-sec-sub">Nên bật 1–2 năm để thanh chọn năm trên điện thoại gọn nhất</div>
             </div>
-            <div style="font-size:11px;color:#64748b;margin-top:2px;">
-              Bấm vào từng năm để Bật (🟢 Hiện) hoặc Tắt (⚪ Ẩn). Nên bật 1–2 năm cùng lúc.
+            <span class="as-adm-badge as-adm-badge-ok">Đang mở: ${activeYears.join(', ')}</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            ${ALL_YEARS.map(yr => {
+              const isOn = activeYears.includes(yr);
+              return `
+                <button type="button" onclick="window.adminProActions.toggleYear(${yr})"
+                  style="padding:8px 14px;border-radius:999px;font-size:12px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:0.15s;${
+                    isOn
+                      ? 'background:#0f172a;color:#fbbf24;border:1.5px solid #0f172a;box-shadow:0 4px 10px rgba(15,23,42,0.16);'
+                      : 'background:#f8fafc;color:#64748b;border:1.5px dashed #cbd5e1;'
+                  }">
+                  <span>${isOn ? '🟢' : '⚪'}</span>
+                  <span>Năm ${yr}</span>
+                  <span style="font-size:10px;opacity:0.8;">(${isOn ? 'Hiện' : 'Ẩn'})</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- 2. KHÓA SỔ THÁNG (T1 - T12) -->
+        <div class="as-adm-section" style="margin-bottom:0;">
+          <div class="as-adm-sec-head">
+            <div>
+              <div class="as-adm-sec-title">🔒 2. KHÓA SỔ THÁNG ĐÃ CHỐT CTP</div>
+              <div class="as-adm-sec-sub">Tháng bị khóa chỉ Admin mới sửa/xóa được lịch</div>
             </div>
           </div>
-          <span style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:4px 12px;border-radius:999px;font-size:11px;font-weight:800;">
-            Đang hiển thị: ${activeYears.join(', ')}
-          </span>
+          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;">
+            ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m => {
+              const isLck = Boolean(locked[m]);
+              return `
+                <button type="button" onclick="window.adminProActions.toggleLockMonthAdmin(${m})"
+                  style="padding:7px 4px;border-radius:10px;font-size:11px;font-weight:800;cursor:pointer;text-align:center;${
+                    isLck
+                      ? 'background:#fff1f2;color:#e11d48;border:1.5px solid #fda4af;'
+                      : 'background:#f8fafc;color:#334155;border:1px solid #e2e8f0;'
+                  }">
+                  ${isLck ? '🔒' : '🔓'} T${m}
+                </button>
+              `;
+            }).join('')}
+          </div>
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;">
-          ${ALL_YEARS.map(yr => {
-            const isOn = activeYears.includes(yr);
-            return `
-              <button
-                type="button"
-                onclick="window.appActions.toggleVisibleYear(${yr})"
-                style="padding:8px 15px;border-radius:999px;font-size:12px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s ease;${
-                  isOn
-                    ? 'background:#0f172a;color:#fbbf24;border:1.5px solid #0f172a;box-shadow:0 4px 10px rgba(15,23,42,0.18);'
-                    : 'background:#f8fafc;color:#64748b;border:1.5px dashed #cbd5e1;'
-                }"
-              >
-                <span>${isOn ? '🟢' : '⚪'}</span>
-                <span>Năm ${yr}</span>
-                <span style="font-size:10px;font-weight:700;opacity:0.85;">(${isOn ? 'Hiện' : 'Ẩn'})</span>
-              </button>
-            `;
-          }).join('')}
+
+        <!-- 3. THÔNG BÁO KHẨN GHIM ĐẦU APP (STUDIO BROADCAST) -->
+        <div class="as-adm-section" style="margin-bottom:0;">
+          <div class="as-adm-sec-head">
+            <div>
+              <div class="as-adm-sec-title">📢 3. THÔNG BÁO GHIM ĐẦU APP (13 MÁY)</div>
+              <div class="as-adm-sec-sub">Ghim nhắc nhở chốt bill CTP, bảo trì thiết bị, họp team...</div>
+            </div>
+            <label style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;cursor:pointer;color:${bc.enabled ? '#059669' : '#64748b'};">
+              <input type="checkbox" id="as-adm-broadcast-toggle" ${bc.enabled ? 'checked' : ''} onchange="window.adminProActions.saveBroadcast()" style="width:16px;height:16px;accent-color:#e11d48;" />
+              <span>${bc.enabled ? 'Đang BẬT' : 'Đang TẮT'}</span>
+            </label>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="as-adm-broadcast-input" class="as-adm-input" value="${(bc.text || '').replace(/"/g, '&quot;')}" placeholder="VD: Anh em chốt bill CTP Tháng 11 trước ngày 02/12 nhé!" />
+            <button type="button" onclick="window.adminProActions.saveBroadcast()" class="as-adm-btn as-adm-btn-primary" style="flex-shrink:0;">Lưu & Phát</button>
+          </div>
         </div>
-      `;
-    } finally {
-      isMountingCard = false;
-    }
+
+        <!-- 4. ĐIỀU CHỈNH ĐƠN GIÁ CTP MẶC ĐỊNH -->
+        <div class="as-adm-section" style="margin-bottom:0;">
+          <div class="as-adm-sec-head">
+            <div>
+              <div class="as-adm-sec-title">💰 4. ĐƠN GIÁ CTP MẶC ĐỊNH (VNĐ)</div>
+              <div class="as-adm-sec-sub">Tự động áp dụng khi anh em bấm chọn nhiệm vụ ở tab Tính CTP</div>
+            </div>
+            <button type="button" onclick="window.adminProActions.saveCtpRates()" class="as-adm-btn as-adm-btn-emerald" style="padding:6px 12px;font-size:11px;">💾 Lưu Giá</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:11px;">
+            <div>
+              <span style="font-weight:700;color:#64748b;">🎥 Quay (Show 1 ngày):</span>
+              <input type="text" id="as-rate-quay1" class="as-adm-input" style="padding:6px 10px;margin-top:2px;" value="${Number(rates.quay1Day).toLocaleString('vi-VN')}" />
+            </div>
+            <div>
+              <span style="font-weight:700;color:#64748b;">🎥 Quay (Show ≥2 ngày/ngày):</span>
+              <input type="text" id="as-rate-quayN" class="as-adm-input" style="padding:6px 10px;margin-top:2px;" value="${Number(rates.quayMultiDay).toLocaleString('vi-VN')}" />
+            </div>
+            <div>
+              <span style="font-weight:700;color:#64748b;">📸 Chụp (Show 1 ngày):</span>
+              <input type="text" id="as-rate-chup1" class="as-adm-input" style="padding:6px 10px;margin-top:2px;" value="${Number(rates.chup1Day).toLocaleString('vi-VN')}" />
+            </div>
+            <div>
+              <span style="font-weight:700;color:#64748b;">📸 Chụp (Show ≥2 ngày/ngày):</span>
+              <input type="text" id="as-rate-chupN" class="as-adm-input" style="padding:6px 10px;margin-top:2px;" value="${Number(rates.chupMultiDay).toLocaleString('vi-VN')}" />
+            </div>
+            <div>
+              <span style="font-weight:700;color:#64748b;">✂️ Dựng Video:</span>
+              <input type="text" id="as-rate-dung" class="as-adm-input" style="padding:6px 10px;margin-top:2px;" value="${Number(rates.dung).toLocaleString('vi-VN')}" />
+            </div>
+            <div>
+              <span style="font-weight:700;color:#64748b;">🚁 Bay Flycam:</span>
+              <input type="text" id="as-rate-flycam" class="as-adm-input" style="padding:6px 10px;margin-top:2px;" value="${Number(rates.flycam).toLocaleString('vi-VN')}" />
+            </div>
+            <div>
+              <span style="font-weight:700;color:#64748b;">🖼️ Làm Hình:</span>
+              <input type="text" id="as-rate-lamhinh" class="as-adm-input" style="padding:6px 10px;margin-top:2px;" value="${Number(rates.lamhinh).toLocaleString('vi-VN')}" />
+            </div>
+            <div>
+              <span style="font-weight:700;color:#64748b;">⚖️ Phụ cấp Gimbal:</span>
+              <input type="text" id="as-rate-gimbal" class="as-adm-input" style="padding:6px 10px;margin-top:2px;" value="${Number(rates.gimbal).toLocaleString('vi-VN')}" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. TỪ KHÓA ĐỊA ĐIỂM & MÀU TÔ TỰ ĐỘNG -->
+        <div class="as-adm-section" style="margin-bottom:0;">
+          <div class="as-adm-sec-head">
+            <div>
+              <div class="as-adm-sec-title">🎨 5. MÀU TÔ TỰ ĐỘNG THEO ĐỊA ĐIỂM</div>
+              <div class="as-adm-sec-sub">Tự động tô màu trên Bảng Công Tác khi gõ trúng từ khóa</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:8px;">
+            <input type="text" id="as-adm-color-kw" class="as-adm-input" placeholder="Từ khóa (VD: Sapa, Măng Đen...)" style="padding:7px 10px;" />
+            <input type="color" id="as-adm-color-hex" value="#a7f3d0" style="width:42px;height:36px;border-radius:10px;border:1px solid #cbd5e1;cursor:pointer;flex-shrink:0;" />
+            <button type="button" onclick="window.adminProActions.addColorRule()" class="as-adm-btn as-adm-btn-primary" style="padding:7px 12px;flex-shrink:0;">+ Thêm</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;max-height:95px;overflow-y:auto;">
+            ${rules.length === 0 ? `<span style="font-size:11px;color:#94a3b8;">Đang dùng bộ màu mặc định (HCM, Hồ Tràm, Đà Lạt, Phú Quốc, Nha Trang...).</span>` : rules.map(r => `
+              <span style="background:${r.color};color:#0f172a;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:800;display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(0,0,0,0.12);">
+                <span>${r.keyword.replace(/</g, '&lt;')}</span>
+                <button type="button" onclick="window.adminProActions.removeColorRule('${r.id}')" style="color:#e11d48;font-weight:900;">✕</button>
+              </span>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- 6. THÙNG RÁC KHÔI PHỤC SHOW & SAO LƯU JSON -->
+        <div class="as-adm-section" style="margin-bottom:0;">
+          <div class="as-adm-sec-head">
+            <div>
+              <div class="as-adm-sec-title">♻️ 6. THÙNG RÁC (${trash.length}) & BACKUP JSON</div>
+              <div class="as-adm-sec-sub">Khôi phục show lỡ tay xóa hẳn hoặc sao lưu toàn bộ DB</div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button type="button" onclick="window.adminProActions.exportFullJsonBackup()" class="as-adm-btn as-adm-btn-ghost" style="padding:5px 10px;font-size:11px;">📦 Tải .JSON</button>
+              <button type="button" onclick="window.adminProActions.triggerJsonRestore()" class="as-adm-btn as-adm-btn-ghost" style="padding:5px 10px;font-size:11px;">📂 Nạp .JSON</button>
+            </div>
+          </div>
+          <div style="max-height:110px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+            ${trash.length === 0 ? `<div style="font-size:11px;color:#94a3b8;padding:6px 0;">Thùng rác trống — Chưa có show nào bị xóa.</div>` : trash.map(sh => `
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;font-size:11px;">
+                <div style="min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                  <b style="color:#0f172a;">${(sh.location || 'Show').replace(/</g, '&lt;')}</b>
+                  <span style="color:#64748b;margin-left:6px;">(${sh.startDate || ''})</span>
+                </div>
+                <button type="button" onclick="window.adminProActions.restoreDeletedShow('${sh.id}')" style="background:#059669;color:#fff;padding:3px 9px;border-radius:8px;font-size:10.5px;font-weight:800;flex-shrink:0;">↩ Khôi phục</button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+      </div>
+    `;
   }
 
-  // Bắt sự kiện click vào 3 nút Tab trong Admin
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    const txt = (btn.textContent || '').trim();
-    if (txt.includes('Hệ Thống')) {
-      isSystemTabSelected = true;
-      requestAnimationFrame(() => ensureYearCardInSystemTab(true));
-    } else if (txt.includes('Tổng Quan') || txt.includes('Cấp PIN')) {
-      isSystemTabSelected = false;
-      document.getElementById('as-admin-years-toggle-card')?.remove();
+  // Bọc hàm chuyển tab của trang Admin (__admSetTab) để ngay khi bấm vào "⚙️ Hệ Thống" là vẽ luôn
+  const hookAdminTabFn = () => {
+    if (typeof window.__admSetTab === 'function' && !window.__ADM_TAB_PRO_HOOKED__) {
+      window.__ADM_TAB_PRO_HOOKED__ = true;
+      const origAdmSetTab = window.__admSetTab;
+      window.__admSetTab = function(t) {
+        const res = origAdmSetTab.apply(this, arguments);
+        if (t === 'system') {
+          setTimeout(() => injectProSuiteIntoAdminSystemTab(true), 5);
+          setTimeout(() => injectProSuiteIntoAdminSystemTab(true), 45);
+        }
+        return res;
+      };
     }
-  }, true);
+  };
+  hookAdminTabFn();
 
-  // Canh gác riêng khung #as-light-admin-shell: nếu trang Admin tự vẽ lại làm mất thẻ thì gắn trả lại ngay
-  function attachAdminShellWatcher() {
+  // Canh gác trực tiếp thẻ #as-light-admin-shell: Hễ hàm renderLightAdmin gốc vừa gán lại shell.innerHTML
+  // thì lập tức gắn trả lại bộ công cụ vào tab Hệ Thống ngay trong cùng frame (0% nháy, không bao giờ mất!)
+  function watchAdminShellOnly() {
     const shell = document.getElementById('as-light-admin-shell');
-    if (!shell || shell.dataset.yearWatcherAttached) return;
-    shell.dataset.yearWatcherAttached = '1';
+    if (!shell || shell.dataset.proSuiteWatched) return;
+    shell.dataset.proSuiteWatched = '1';
     new MutationObserver(() => {
-      if (isSystemTabSelected && !document.getElementById('as-admin-years-toggle-card')) {
-        ensureYearCardInSystemTab();
+      if (!document.getElementById('as-admin-pro-suite-host')) {
+        injectProSuiteIntoAdminSystemTab(false);
       }
-    }).observe(shell, { childList: true, subtree: true });
+    }).observe(shell, { childList: true });
   }
 
-  setInterval(attachAdminShellWatcher, 600);
-  attachAdminShellWatcher();
+  setInterval(() => {
+    hookAdminTabFn();
+    watchAdminShellOnly();
+    updateMainAppUIEnhancements();
+  }, 400);
+
+  updateMainAppUIEnhancements();
 })();
 </script>
 </body></html>
