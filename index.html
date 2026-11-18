@@ -10153,19 +10153,27 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 })();
 </script>
       <style id="as-red-buttons-theme">
-  /* 1. Nút NỔ SHOW ở thanh điều hướng dưới cùng -> Màu đỏ nổi bật */
+  /* 1. Nút NỔ SHOW ở thanh điều hướng dưới cùng -> Màu đỏ nổi bật, không viền trắng */
   nav button[onclick*="appActions.openAddModal"] {
     background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important;
-    border-color: #f43f5e !important;
+    border: none !important;
+    outline: none !important;
     color: #ffffff !important;
     box-shadow: 0 4px 14px rgba(225, 29, 72, 0.4) !important;
   }
 
-  /* 2. Nút Đăng xuất trong Thẻ VIP Card -> Màu đỏ đặc chữ trắng như hình mẫu */
+  /* 2. Bỏ hoàn toàn viền trắng trên các nút dưới đáy Thẻ VIP (Đổi NS, Đăng xuất, Đóng) */
+  #as-super-portal button.rounded-2xl {
+    border: none !important;
+    outline: none !important;
+  }
+
+  /* 3. Nút Đăng xuất trong Thẻ VIP Card -> Màu đỏ đặc chữ trắng, phẳng lì không viền */
   #as-super-portal button[onclick*="__logoutFromVipCard"],
   #as-super-portal button[onclick*="logoutMember"] {
     background-color: #e11d48 !important;
-    border: 1px solid #f43f5e !important;
+    border: none !important;
+    outline: none !important;
     color: #ffffff !important;
     box-shadow: 0 4px 12px rgba(225, 29, 72, 0.35) !important;
   }
@@ -10174,15 +10182,10 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     background-color: #be123c !important;
     transform: scale(0.96) !important;
   }
-</style>
 
-<script id="as-red-logout-icon-fix">
-  new MutationObserver(() => {
-    const logoutBtn = document.querySelector('#as-super-portal button[onclick*="__logoutFromVipCard"], #as-super-portal button[onclick*="logoutMember"]');
-    if (logoutBtn && !logoutBtn.dataset.redIconUpgraded) {
-      logoutBtn.dataset.redIconUpgraded = '1';
-      logoutBtn.innerHTML = '<i class="fa-solid fa-right-from-bracket mr-1"></i><span>Đăng xuất</span>';
-    }
-  }).observe(document.body, { childList: true, subtree: true });
-</script>
+#as-super-portal .rounded-3xl,
+  #as-super-portal .rounded-\[28px\] {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+  }
+</style>
 </body></html>
