@@ -6284,11 +6284,15 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
               </div>
             `}
 
-            <!-- Cụm 3 nút dưới cùng: Đổi Nhân Sự / Đăng Xuất / Đóng -->
-            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;" class="pt-0.5 text-xs">
-              <button onclick="window.appActions.switchAccountPinModal()" style="background-color:rgba(255,255,255,0.09);" class="py-2.5 rounded-2xl text-amber-300 font-extrabold truncate">🔄 Đổi NS</button>
-              <button onclick="window.__logoutFromVipCard()" style="background-color:rgba(244,63,94,0.18);border:1px solid rgba(244,63,94,0.35);color:#fb7185;" class="py-2.5 rounded-2xl font-extrabold truncate">🚪 Đăng xuất</button>
-              <button onclick="document.getElementById('as-super-portal').innerHTML=''" style="background-color:rgba(255,255,255,0.06);" class="py-2.5 rounded-2xl text-slate-300 font-bold truncate">Đóng ✕</button>
+           <!-- Cụm 2 nút dưới cùng: Đổi Nhân Sự & Đăng Xuất đỏ rực chuẩn mẫu -->
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;" class="pt-1 text-xs">
+              <button onclick="window.appActions.switchAccountPinModal()" style="background-color:#1c1c22;border:1px solid rgba(255,255,255,0.08);" class="py-3 rounded-2xl text-amber-400 font-black flex items-center justify-center gap-1.5">
+                <span>🔄 Đổi Nhân Sự</span>
+              </button>
+              <button onclick="window.__logoutFromVipCard()" style="background-color:#e11d48;border:1px solid #f43f5e;color:#ffffff;box-shadow:0 4px 12px rgba(225,29,72,0.35);" class="py-3 rounded-2xl font-black flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-right-from-bracket"></i>
+                <span>Đăng xuất</span>
+              </button>
             </div>
           </div>
         </div>
