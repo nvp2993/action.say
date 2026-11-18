@@ -10190,19 +10190,19 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 
 // bật tắt năm trong tab trong trang Admin
 <script id="as-multi-year-manager-2026-2030">
-(function initFastAdminAndMultiYear() {
+(function initStableAdminSystemYearManager() {
   if (!window.state || !window.appActions) {
-    setTimeout(initFastAdminAndMultiYear, 80);
+    setTimeout(initStableAdminSystemYearManager, 80);
     return;
   }
-  if (window.__AS_FAST_ADMIN_YEAR_READY__) return;
-  window.__AS_FAST_ADMIN_YEAR_READY__ = true;
+  if (window.__AS_STABLE_ADMIN_YEAR_V3__) return;
+  window.__AS_STABLE_ADMIN_YEAR_V3__ = true;
 
   const st = window.state;
   const ALL_YEARS = [2026, 2027, 2028, 2029, 2030];
   const STORAGE_KEY = 'as_visible_years_config_2026';
 
-  // 1. Khởi tạo danh sách năm hiển thị (Mặc định: 2026, 2027)
+  // 1. Khởi tạo danh sách năm hiển thị (Mặc định: [2026, 2027])
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     if (Array.isArray(saved) && saved.length > 0) {
@@ -10218,23 +10218,20 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   }
 
   // =========================================================================
-  // 2. CHỐNG LAG TUYỆT ĐỐI CHO TRANG ADMIN:
-  // Ngắt các hàm quét DOM nặng của bảng Lịch Show khi đang mở trang Admin
+  // 2. GIỮ NGUYÊN CƠ CHẾ CHỐNG LAG CHO TRANG ADMIN
   // =========================================================================
-  const origQuerySelectorAll = document.querySelectorAll.bind(document);
+  const origQSA = document.querySelectorAll.bind(document);
   document.querySelectorAll = function(selector) {
-    // Khi đang ở trang Admin, bỏ qua ngay việc quét các dòng tr[onclick*="openShowDetail"] của bảng Lịch Show bên dưới
     if (isInsideAdminMode() && typeof selector === 'string' && selector.includes('openShowDetail')) {
       return [];
     }
-    return origQuerySelectorAll(selector);
+    return origQSA(selector);
   };
 
-  // Cập nhật thanh nút Năm ngoài trang chính (chỉ chạy khi KHÔNG ở trang Admin)
   function updateMainHeaderYearButtons() {
     if (isInsideAdminMode()) return;
     const activeYears = st.visibleYears || [2026, 2027];
-    origQuerySelectorAll('.as-year-pinned').forEach((wrap) => {
+    origQSA('.as-year-pinned').forEach((wrap) => {
       const sig = activeYears.join(',') + ':' + st.selectedYear;
       if (wrap.dataset.yearSig === sig) return;
       wrap.dataset.yearSig = sig;
@@ -10244,13 +10241,15 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     });
   }
 
-  // Bọc nhẹ hàm renderApp để tự động cập nhật nút năm ngoài Header mà không cần setInterval
-  if (typeof window.renderApp === 'function' && !window.__YEAR_RENDER_HOOKED__) {
-    window.__YEAR_RENDER_HOOKED__ = true;
+  if (typeof window.renderApp === 'function' && !window.__YEAR_RENDER_HOOKED_V3__) {
+    window.__YEAR_RENDER_HOOKED_V3__ = true;
     const origRender = window.renderApp;
     window.renderApp = function() {
       const res = origRender.apply(this, arguments);
-      requestAnimationFrame(updateMainHeaderYearButtons);
+      requestAnimationFrame(() => {
+        updateMainHeaderYearButtons();
+        ensureYearCardInSystemTab();
+      });
       return res;
     };
   }
@@ -10279,7 +10278,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
               st.selectedYear = st.visibleYears[0] || 2026;
             }
             updateMainHeaderYearButtons();
-            renderYearCardInsideSystemTab();
+            ensureYearCardInSystemTab(true);
           }
         }
       });
@@ -10318,7 +10317,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       st.selectedYear = st.visibleYears[0] || 2026;
     }
 
-    renderYearCardInsideSystemTab();
+    ensureYearCardInSystemTab(true);
     updateMainHeaderYearButtons();
 
     if (typeof window.__pushVisibleYearsCloud === 'function') {
@@ -10330,88 +10329,139 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   };
 
   // =========================================================================
-  // 5. HIỂN THỊ BẢNG BẬT/TẮT NĂM TRONG TAB "⚙️ HỆ THỐNG" CỦA ADMIN
-  // (Chỉ chạy đúng lúc bấm chuột vào tab Hệ Thống -> 0% lag)
+  // 5. GIỮ KHUNG QUẢN LÝ NĂM LUÔN CỐ ĐỊNH TRONG TAB "⚙️ HỆ THỐNG" (KHÔNG BỊ MẤT)
   // =========================================================================
-  let currentAdminTabTracked = 'dashboard';
+  let isSystemTabSelected = false;
+  let isMountingCard = false;
 
-  function renderYearCardInsideSystemTab() {
-    const existingBox = document.getElementById('as-admin-years-toggle-card');
+  // Kiểm tra xem giao diện Admin hiện tại có đang ở tab Hệ Thống không
+  function checkIfSystemTabInDom(shell) {
+    if (st.backendTab === 'system' || st.backendTab === 'settings') return true;
+    // Tìm nút Hệ Thống trong thanh 3 tab
+    const buttons = shell.querySelectorAll('button');
+    for (let i = 0; i < buttons.length; i++) {
+      const b = buttons[i];
+      const t = (b.textContent || '').trim();
+      if (t.includes('Hệ Thống')) {
+        // Trong giao diện STUDIO CONTROL, nút tab đang chọn sẽ có nền trắng (#ffffff / bg-white) hoặc shadow
+        const cls = b.className || '';
+        const inlineBg = b.style?.backgroundColor || '';
+        if (cls.includes('bg-white') || cls.includes('shadow') || inlineBg.includes('255') || inlineBg.includes('#fff')) {
+          return true;
+        }
+      }
+    }
+    return isSystemTabSelected;
+  }
+
+  function ensureYearCardInSystemTab(forceRefresh = false) {
+    if (isMountingCard) return;
     const shell = document.getElementById('as-light-admin-shell');
     if (!shell) return;
 
-    if (currentAdminTabTracked !== 'system') {
+    const activeInSys = checkIfSystemTabInDom(shell);
+    const existingBox = document.getElementById('as-admin-years-toggle-card');
+
+    if (!activeInSys) {
       if (existingBox) existingBox.remove();
       return;
     }
 
-    // Tìm thanh chứa 3 nút Tab (Tổng Quan | Cấp PIN | Hệ Thống)
-    const sysBtn = Array.from(shell.querySelectorAll('button')).find(b => (b.textContent || '').includes('Hệ Thống'));
+    // Nếu khung đã tồn tại trong DOM và không cần vẽ lại số năm thì giữ nguyên (0% tốn tài nguyên)
+    if (existingBox && !forceRefresh) return;
+
+    const buttons = shell.querySelectorAll('button');
+    let sysBtn = null;
+    for (let i = 0; i < buttons.length; i++) {
+      if ((buttons[i].textContent || '').includes('Hệ Thống')) {
+        sysBtn = buttons[i];
+        break;
+      }
+    }
     if (!sysBtn || !sysBtn.parentElement || !sysBtn.parentElement.parentElement) return;
 
-    const tabBar = sysBtn.parentElement;
-    const mainWrap = tabBar.parentElement;
+    isMountingCard = true;
+    try {
+      const tabBar = sysBtn.parentElement;
+      const mainWrap = tabBar.parentElement;
 
-    let box = existingBox;
-    if (!box) {
-      box = document.createElement('div');
-      box.id = 'as-admin-years-toggle-card';
-      box.style.cssText = 'background:#ffffff;border:1.5px solid #cbd5e1;border-radius:22px;padding:16px;margin:12px 0;box-shadow:0 8px 20px -4px rgba(15,23,42,0.06);';
-      mainWrap.insertBefore(box, tabBar.nextElementSibling);
-    }
+      let box = existingBox;
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'as-admin-years-toggle-card';
+        box.style.cssText = 'background:#ffffff;border:1.5px solid #cbd5e1;border-radius:22px;padding:16px;margin:12px 0;box-shadow:0 8px 20px -4px rgba(15,23,42,0.06);';
+        mainWrap.insertBefore(box, tabBar.nextElementSibling);
+      }
 
-    const activeYears = st.visibleYears || [2026, 2027];
-    box.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-        <div>
-          <div style="font-size:12.5px;font-weight:900;color:#0f172a;text-transform:uppercase;">
-            📅 QUẢN LÝ NĂM HIỂN THỊ TRÊN APP (2026 – 2030)
+      const activeYears = st.visibleYears || [2026, 2027];
+      box.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:12.5px;font-weight:900;color:#0f172a;text-transform:uppercase;">
+              📅 QUẢN LÝ NĂM HIỂN THỊ TRÊN APP (2026 – 2030)
+            </div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px;">
+              Bấm vào từng năm để Bật (🟢 Hiện) hoặc Tắt (⚪ Ẩn). Nên bật 1–2 năm cùng lúc.
+            </div>
           </div>
-          <div style="font-size:11px;color:#64748b;margin-top:2px;">
-            Bấm vào từng năm để Bật (🟢 Hiện) hoặc Tắt (⚪ Ẩn). Nên chỉ bật 1–2 năm cùng lúc.
-          </div>
+          <span style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:4px 12px;border-radius:999px;font-size:11px;font-weight:800;">
+            Đang hiển thị: ${activeYears.join(', ')}
+          </span>
         </div>
-        <span style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:4px 12px;border-radius:999px;font-size:11px;font-weight:800;">
-          Đang hiển thị: ${activeYears.join(', ')}
-        </span>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;">
-        ${ALL_YEARS.map(yr => {
-          const isOn = activeYears.includes(yr);
-          return `
-            <button
-              type="button"
-              onclick="window.appActions.toggleVisibleYear(${yr})"
-              style="padding:8px 15px;border-radius:999px;font-size:12px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s ease;${
-                isOn
-                  ? 'background:#0f172a;color:#fbbf24;border:1.5px solid #0f172a;box-shadow:0 4px 10px rgba(15,23,42,0.18);'
-                  : 'background:#f8fafc;color:#64748b;border:1.5px dashed #cbd5e1;'
-              }"
-            >
-              <span>${isOn ? '🟢' : '⚪'}</span>
-              <span>Năm ${yr}</span>
-              <span style="font-size:10px;font-weight:700;opacity:0.85;">(${isOn ? 'Hiện' : 'Ẩn'})</span>
-            </button>
-          `;
-        }).join('')}
-      </div>
-    `;
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          ${ALL_YEARS.map(yr => {
+            const isOn = activeYears.includes(yr);
+            return `
+              <button
+                type="button"
+                onclick="window.appActions.toggleVisibleYear(${yr})"
+                style="padding:8px 15px;border-radius:999px;font-size:12px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s ease;${
+                  isOn
+                    ? 'background:#0f172a;color:#fbbf24;border:1.5px solid #0f172a;box-shadow:0 4px 10px rgba(15,23,42,0.18);'
+                    : 'background:#f8fafc;color:#64748b;border:1.5px dashed #cbd5e1;'
+                }"
+              >
+                <span>${isOn ? '🟢' : '⚪'}</span>
+                <span>Năm ${yr}</span>
+                <span style="font-size:10px;font-weight:700;opacity:0.85;">(${isOn ? 'Hiện' : 'Ẩn'})</span>
+              </button>
+            `;
+          }).join('')}
+        </div>
+      `;
+    } finally {
+      isMountingCard = false;
+    }
   }
 
-  // Lắng nghe cú bấm chuột vào 3 nút tab trong trang Admin
+  // Bắt sự kiện click vào 3 nút Tab trong Admin
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
     const txt = (btn.textContent || '').trim();
     if (txt.includes('Hệ Thống')) {
-      currentAdminTabTracked = 'system';
-      setTimeout(renderYearCardInsideSystemTab, 20);
-      setTimeout(renderYearCardInsideSystemTab, 120);
+      isSystemTabSelected = true;
+      requestAnimationFrame(() => ensureYearCardInSystemTab(true));
     } else if (txt.includes('Tổng Quan') || txt.includes('Cấp PIN')) {
-      currentAdminTabTracked = 'other';
+      isSystemTabSelected = false;
       document.getElementById('as-admin-years-toggle-card')?.remove();
     }
   }, true);
+
+  // Canh gác riêng khung #as-light-admin-shell: nếu trang Admin tự vẽ lại làm mất thẻ thì gắn trả lại ngay
+  function attachAdminShellWatcher() {
+    const shell = document.getElementById('as-light-admin-shell');
+    if (!shell || shell.dataset.yearWatcherAttached) return;
+    shell.dataset.yearWatcherAttached = '1';
+    new MutationObserver(() => {
+      if (isSystemTabSelected && !document.getElementById('as-admin-years-toggle-card')) {
+        ensureYearCardInSystemTab();
+      }
+    }).observe(shell, { childList: true, subtree: true });
+  }
+
+  setInterval(attachAdminShellWatcher, 600);
+  attachAdminShellWatcher();
 })();
 </script>
 </body></html>
