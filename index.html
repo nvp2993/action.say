@@ -10186,6 +10186,247 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     background-color: #be123c !important;
     transform: scale(0.96) !important;
   }
-
 </style>
+
+<style id="as-sticky-stats-and-admin-month-css">
+  /* 1. Khung ghim cố định 4 ô tiền ở tab Công Nợ */
+  .as-sticky-finance-cards {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 25 !important;
+    background: rgba(244, 245, 247, 0.96) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    padding-top: 6px !important;
+    padding-bottom: 10px !important;
+    margin-bottom: 6px !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.07) !important;
+    box-shadow: 0 8px 20px -6px rgba(15, 23, 42, 0.05) !important;
+  }
+
+  /* 2. Khung ghim cố định Header + 3 ô thống kê ở trang Admin Backend */
+  .as-sticky-admin-topbar {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 40 !important;
+    background: rgba(255, 255, 255, 0.96) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+  }
+
+  .as-sticky-admin-kpis {
+    position: sticky !important;
+    top: var(--as-admin-header-h, 0px) !important;
+    z-index: 35 !important;
+    background: rgba(244, 245, 247, 0.96) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+    margin-bottom: 8px !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.07) !important;
+    box-shadow: 0 8px 20px -6px rgba(15, 23, 42, 0.05) !important;
+  }
+
+  /* 3. Nút chọn Tháng/Năm ngay trên ô THÁNG của Admin */
+  .as-admin-month-ctrl {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    padding: 2px 6px;
+  }
+  .as-admin-month-ctrl button {
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 900;
+    color: #334155;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .as-admin-month-ctrl button:active {
+    transform: scale(0.9);
+  }
+  .as-admin-month-ctrl select {
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 11px;
+    font-weight: 900;
+    color: #0f172a;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 0 2px;
+  }
+</style>
+
+<script id="as-sticky-stats-and-admin-month-script">
+(function initStickyStatsAndAdminMonthSelector() {
+  if (!window.state) {
+    setTimeout(initStickyStatsAndAdminMonthSelector, 80);
+    return;
+  }
+  if (window.__AS_STICKY_AND_ADMIN_MONTH_READY__) return;
+  window.__AS_STICKY_AND_ADMIN_MONTH_READY__ = true;
+
+  const st = window.state;
+  // Mặc định lấy tháng & năm thực tế hiện tại cho bộ chọn trong trang Admin
+  if (!st.adminViewMonth) st.adminViewMonth = new Date().getMonth() + 1;
+  if (!st.adminViewYear) st.adminViewYear = st.selectedYear || new Date().getFullYear();
+
+  // Đếm tổng số show hoạt động (không tính show đã báo hủy) trong Tháng/Năm được chọn
+  function countShowsInMonthYear(month, year) {
+    const showsList = Array.isArray(st.shows) ? st.shows : [];
+    const mStart = new Date(year, month - 1, 1);
+    const mEnd = new Date(year, month, 0, 23, 59, 59);
+    let count = 0;
+
+    showsList.forEach((sh) => {
+      if (!sh || sh.isCancelled || !sh.startDate) return;
+      const s = new Date(sh.startDate + 'T00:00:00');
+      const e = new Date(((sh.endDate && sh.endDate >= sh.startDate) ? sh.endDate : sh.startDate) + 'T00:00:00');
+      if (isNaN(s) || isNaN(e)) return;
+      if (e >= mStart && s <= mEnd) {
+        count++;
+      }
+    });
+    return count;
+  }
+
+  window.__changeAdminMonthStat = function(delta, explicitMonth = null, explicitYear = null) {
+    if (explicitYear !== null) {
+      st.adminViewYear = Number(explicitYear);
+    }
+    if (explicitMonth !== null) {
+      st.adminViewMonth = Number(explicitMonth);
+    } else if (delta !== 0) {
+      let nextM = st.adminViewMonth + delta;
+      if (nextM < 1) {
+        nextM = 12;
+        st.adminViewYear = st.adminViewYear > 2026 ? st.adminViewYear - 1 : 2026;
+      } else if (nextM > 12) {
+        nextM = 1;
+        st.adminViewYear = st.adminViewYear < 2027 ? st.adminViewYear + 1 : 2027;
+      }
+      st.adminViewMonth = nextM;
+    }
+    updateAdminMonthCardDisplay();
+  };
+
+  function updateAdminMonthCardDisplay() {
+    const valEl = document.getElementById('as-admin-month-count-val');
+    const selMonthEl = document.getElementById('as-admin-month-select');
+    const selYearEl = document.getElementById('as-admin-year-select');
+    if (valEl) {
+      valEl.textContent = String(countShowsInMonthYear(st.adminViewMonth, st.adminViewYear));
+    }
+    if (selMonthEl && Number(selMonthEl.value) !== st.adminViewMonth) {
+      selMonthEl.value = String(st.adminViewMonth);
+    }
+    if (selYearEl && Number(selYearEl.value) !== st.adminViewYear) {
+      selYearEl.value = String(st.adminViewYear);
+    }
+  }
+
+  function applyStickyAndInteractiveMonth() {
+    // =======================================================================
+    // A. GHIM CỐ ĐỊNH 4 Ô TỔNG THU NHẬP / LÃI / CTP / CHƯA THU Ở TAB CÔNG NỢ
+    // =======================================================================
+    document.querySelectorAll('div, span').forEach((el) => {
+      const txt = (el.textContent || '').trim();
+      if (el.children.length <= 1 && (txt === '💎 TỔNG THU NHẬP (RÒNG)' || txt.includes('TỔNG THU NHẬP (RÒNG)'))) {
+        const card = el.closest('.bg-white, .rounded-2xl, .rounded-3xl');
+        const gridRow = card ? card.parentElement : null;
+        if (gridRow && !gridRow.classList.contains('as-sticky-finance-cards')) {
+          gridRow.classList.add('as-sticky-finance-cards');
+        }
+      }
+    });
+
+    // =======================================================================
+    // B. GHIM CỐ ĐỊNH 3 Ô TỔNG SHOW / THÁNG / HÔM NAY & CHỌN THÁNG Ở TRANG ADMIN
+    // =======================================================================
+    let totalShowCard = null;
+    let monthShowCard = null;
+
+    document.querySelectorAll('div, span').forEach((el) => {
+      if (el.children.length === 0) {
+        const t = (el.textContent || '').trim().toUpperCase();
+        if (t === 'TỔNG SHOW') {
+          const c = el.closest('.bg-white, .rounded-2xl, .rounded-3xl, div[style*="border-radius"]');
+          if (c) totalShowCard = c;
+        }
+      }
+    });
+
+    if (totalShowCard && totalShowCard.parentElement) {
+      const kpiGrid = totalShowCard.parentElement;
+      if (!kpiGrid.classList.contains('as-sticky-admin-kpis')) {
+        kpiGrid.classList.add('as-sticky-admin-kpis');
+      }
+
+      // Kiểm tra xem phía trên kpiGrid có thanh STUDIO CONTROL đang ghim không để cộng chiều cao tránh đè nhau
+      const adminShell = document.getElementById('as-light-admin-shell') || kpiGrid.parentElement;
+      if (adminShell) {
+        const topHeader = adminShell.querySelector('header') || adminShell.firstElementChild;
+        if (topHeader && topHeader !== kpiGrid && (topHeader.textContent || '').includes('STUDIO CONTROL')) {
+          topHeader.classList.add('as-sticky-admin-topbar');
+          const h = topHeader.offsetHeight || 0;
+          kpiGrid.style.setProperty('--as-admin-header-h', h + 'px');
+        }
+      }
+
+      // Thẻ thứ 2 trong cụm 3 thẻ chính là thẻ "THÁNG 11"
+      monthShowCard = kpiGrid.children[1];
+      if (monthShowCard && !monthShowCard.dataset.monthSelectorEnhanced) {
+        monthShowCard.dataset.monthSelectorEnhanced = '1';
+
+        // Tìm phần hiển thị con số lớn (VD: 43) bên trong thẻ Tháng
+        const allNodes = Array.from(monthShowCard.children);
+        const labelNode = allNodes[0];
+        const numberNode = allNodes[1] || monthShowCard.querySelector('.text-emerald-600, .text-2xl, .text-3xl, b, strong');
+
+        if (numberNode) {
+          numberNode.id = 'as-admin-month-count-val';
+        }
+
+        if (labelNode) {
+          labelNode.innerHTML = `
+            <div class="flex items-center justify-between gap-1.5 w-full">
+              <div class="as-admin-month-ctrl" onclick="event.stopPropagation()">
+                <button type="button" onclick="window.__changeAdminMonthStat(-1)" title="Tháng trước">◀</button>
+                <select id="as-admin-month-select" onchange="window.__changeAdminMonthStat(0, this.value, null)">
+                  ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m => `<option value="${m}" ${m === st.adminViewMonth ? 'selected' : ''}>THÁNG ${m}</option>`).join('')}
+                </select>
+                <select id="as-admin-year-select" onchange="window.__changeAdminMonthStat(0, null, this.value)">
+                  ${[2026, 2027].map(y => `<option value="${y}" ${y === st.adminViewYear ? 'selected' : ''}>/${y}</option>`).join('')}
+                </select>
+                <button type="button" onclick="window.__changeAdminMonthStat(1)" title="Tháng sau">▶</button>
+              </div>
+            </div>
+          `;
+        }
+        updateAdminMonthCardDisplay();
+      } else if (monthShowCard) {
+        updateAdminMonthCardDisplay();
+      }
+    }
+  }
+
+  let rafId = null;
+  new MutationObserver(() => {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(applyStickyAndInteractiveMonth);
+  }).observe(document.body, { childList: true, subtree: true });
+
+  applyStickyAndInteractiveMonth();
+})();
+</script>
 </body></html>
