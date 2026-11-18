@@ -9276,7 +9276,7 @@ function renderHeaderHtml() {
       opacity: 0 !important;
       cursor: pointer !important;
     }
-    .as-date-ddmmyyyy-display {
+   .as-date-ddmmyyyy-display {
       position: absolute !important;
       inset: 0 !important;
       z-index: 1 !important;
@@ -9285,17 +9285,29 @@ function renderHeaderHtml() {
       justify-content: space-between !important;
       padding: 0 11px !important;
       pointer-events: none !important;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-      font-weight: 800 !important;
-      font-size: 12px !important;
-      color: #0f172a !important;
       background-color: #f8fafc !important;
       border-radius: inherit !important;
     }
+    .as-date-ddmmyyyy-display span.as-date-text {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+      font-size: 13px !important;
+      font-weight: 800 !important;
+      color: #0f172a !important;
+      letter-spacing: -0.01em !important;
+      text-transform: none !important;
+    }
+    .as-date-ddmmyyyy-display i {
+      color: #475569 !important;
+      font-size: 12px !important;
+    }
     .as-ag-date-field .as-date-ddmmyyyy-display {
       background-color: transparent !important;
-      padding: 0 2px !important;
-      font-size: 12.5px !important;
+      padding: 2px 2px 0 0 !important;
+    }
+    .as-ag-date-field .as-date-ddmmyyyy-display span.as-date-text {
+      font-size: 14px !important;
+      font-weight: 900 !important;
+      color: #0f172a !important;
     }
 
     /* 3. Khung Năm cố định + Tháng kéo ngang siêu nhạy, không bao giờ che T1-T6 */
