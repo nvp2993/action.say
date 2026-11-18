@@ -6099,6 +6099,7 @@ function renderHeaderHtml() {
     };
 
     // Giao diện Thẻ VIP Crew Pass có khung Avatar + Mục INFO tối giản
+    // Giao diện Thẻ VIP Crew Pass có khung Avatar + Mục INFO tối giản (Đã ép cứng màu nền đặc cho iPhone)
     window.appActions.openCrewPassModal = function(forceEdit = null) {
       const uid = st.currentUserId;
       if (!uid) {
@@ -6120,10 +6121,25 @@ function renderHeaderHtml() {
       const bankNames = {
         '970436': 'Vietcombank', '970407': 'Techcombank', '970415': 'VietinBank',
         '970418': 'BIDV', '970422': 'MB Bank', '970416': 'ACB',
-        '970432': 'VPBank', '970403': 'Sacombank', '970423': 'TPBank', '970405': 'Agribank'
+        '970432': 'VPBank', '970403': 'Sacombank', '970423': 'TPBank',
+        '970405': 'Agribank'
       };
       const bankLabel = bankNames[prof.bankBin || '970436'] || 'Ngân hàng';
       const initials = displayFullName.split(' ').filter(Boolean).slice(-2).map(w => w[0]).join('').toUpperCase() || 'VIP';
+
+      // Hàm xử lý Đăng xuất dứt điểm ngay trên thẻ VIP
+      window.__logoutFromVipCard = function() {
+        try {
+          localStorage.removeItem('as_keep_login_uid_2026');
+          localStorage.removeItem('as_user_backup_2026');
+          document.documentElement.classList.remove('as-has-saved-session');
+        } catch (e) {}
+        const p = document.getElementById('as-super-portal');
+        if (p) p.innerHTML = '';
+        if (window.appActions && typeof window.appActions.logoutMember === 'function') {
+          window.appActions.logoutMember();
+        }
+      };
 
       let portal = document.getElementById('as-super-portal');
       if (!portal) {
@@ -6133,65 +6149,67 @@ function renderHeaderHtml() {
       }
 
       portal.innerHTML = `
-        <div onclick="document.getElementById('as-super-portal').innerHTML=''" class="fixed inset-0 z-[9998] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3.5">
-          <div onclick="event.stopPropagation()" class="w-full max-w-sm bg-[#0c0c0f] text-white border border-white/10 rounded-[28px] p-4 sm:p-5 space-y-3.5 shadow-2xl max-h-[92dvh] overflow-y-auto custom-scroll">
+        <div onclick="document.getElementById('as-super-portal').innerHTML=''" style="position:fixed;inset:0;z-index:9998;background-color:rgba(0,0,0,0.82);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);" class="flex items-center justify-center p-3.5">
+          <div onclick="event.stopPropagation()" style="background-color:#0c0c0f;border:1px solid rgba(255,255,255,0.14);border-radius:28px;" class="w-full max-w-sm text-white p-4 sm:p-5 space-y-3.5 shadow-2xl max-h-[92dvh] overflow-y-auto custom-scroll relative">
             
-            <!-- THẺ VIP CREW PASS (CÓ KHUNG UPLOAD AVATAR TRỰC TIẾP) -->
-            <div style="background: linear-gradient(140deg, ${me.bg || '#10b981'} 0%, #111827 55%, #09090b 100%);" class="rounded-3xl p-4 sm:p-5 border border-white/20 shadow-2xl relative overflow-hidden">
+            <!-- THẺ VIP CREW PASS (CÓ KHUNG UPLOAD AVATAR TRỰC TIẾP + NÚT ĐÓNG X) -->
+            <div style="background: linear-gradient(140deg, ${me.bg || '#10b981'} 0%, #111827 55%, #09090b 100%); border: 1px solid rgba(255,255,255,0.22);" class="rounded-3xl p-4 sm:p-5 shadow-2xl relative overflow-hidden">
               <div class="flex items-center justify-between gap-2 mb-3">
-                <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/45 border border-white/10 text-[9px] font-black uppercase tracking-widest text-amber-300">
+                <div style="background-color:rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.12);" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest text-amber-300">
                   <span>⚡ ACTION x SAY</span>
                   <span>•</span>
                   <span>VIP PASS</span>
                 </div>
-                <div class="bg-black/35 border border-white/10 rounded-xl px-2.5 py-1 flex items-center gap-1.5 shrink-0">
-                  <span class="text-sm font-black text-amber-300 font-mono leading-none">${myShowsCount}</span>
-                  <span class="text-[8.5px] uppercase text-white/75 font-bold tracking-wider">Shows</span>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <div style="background-color:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.12);" class="rounded-xl px-2.5 py-1 flex items-center gap-1.5">
+                    <span class="text-sm font-black text-amber-300 font-mono leading-none">${myShowsCount}</span>
+                    <span style="color:rgba(255,255,255,0.75);" class="text-[8.5px] uppercase font-bold tracking-wider">Shows</span>
+                  </div>
+                  <button type="button" onclick="document.getElementById('as-super-portal').innerHTML=''" title="Đóng" style="background-color:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.2);" class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-black active:scale-90">
+                    ✕
+                  </button>
                 </div>
               </div>
 
               <!-- Khung Avatar + Họ Tên Đầy Đủ -->
               <div class="flex items-center gap-3.5">
-                <div onclick="window.appActions.triggerAvatarUpload()" title="Bấm để đổi ảnh đại diện" class="relative w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl border-2 border-amber-300/80 shadow-lg bg-black/50 shrink-0 cursor-pointer group overflow-hidden flex items-center justify-center">
+                <div onclick="window.appActions.triggerAvatarUpload()" title="Bấm để đổi ảnh đại diện" style="width:64px;height:64px;background-color:rgba(0,0,0,0.5);border:2px solid rgba(252,211,77,0.85);" class="relative rounded-2xl shadow-lg shrink-0 cursor-pointer overflow-hidden flex items-center justify-center">
                   ${prof.avatar
                     ? `<img src="${prof.avatar}" alt="Avatar" class="w-full h-full object-cover" />`
-                    : `<span class="text-lg font-black text-white/80 tracking-tighter">${esc(initials)}</span>`
+                    : `<span class="text-lg font-black text-white tracking-tighter">${esc(initials)}</span>`
                   }
-                  <div class="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] font-bold text-white">
-                    📷 Đổi
-                  </div>
-                  <span class="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-amber-400 text-slate-950 text-[10px] flex items-center justify-center shadow">
+                  <span style="position:absolute;bottom:3px;right:3px;width:18px;height:18px;background-color:#fbbf24;color:#020617;font-size:9px;" class="rounded-full flex items-center justify-center shadow">
                     📷
                   </span>
                 </div>
 
                 <div class="min-w-0 flex-1">
-                  <h3 class="text-base sm:text-lg font-black text-white uppercase tracking-tight leading-snug break-words">${esc(displayFullName)}</h3>
-                  <div class="text-[11px] text-amber-300/95 font-bold mt-0.5 truncate">${esc(displayRole)}</div>
-                  <div class="inline-block mt-1 px-2 py-0.5 rounded-md bg-white/10 text-white/80 text-[9.5px] font-bold uppercase">
-                    Nickname: ${esc(me.name)}
+                  <h3 style="font-size:16px;line-height:1.3;" class="font-black text-white uppercase tracking-tight break-words">${esc(displayFullName)}</h3>
+                  <div class="text-[11px] text-amber-300 font-bold mt-0.5 truncate">${esc(displayRole)}</div>
+                  <div style="background-color:rgba(255,255,255,0.12);color:rgba(255,255,255,0.9);" class="inline-block mt-1 px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase">
+                    ${esc(me.name)}
                   </div>
                 </div>
               </div>
 
               <!-- Mã VietQR bên dưới thẻ -->
               ${qrUrl ? `
-                <div class="mt-4 pt-3.5 border-t border-white/15 flex items-center justify-between gap-3">
-                  <div class="text-[11px] text-white/95 space-y-0.5 min-w-0">
+                <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.15);" class="flex items-center justify-between gap-3">
+                  <div class="text-[11px] text-white space-y-0.5 min-w-0">
                     <div class="text-[9px] uppercase tracking-widest text-emerald-300 font-black flex items-center gap-1">
                       <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                       <span>VIETQR NHẬN CTP</span>
                     </div>
                     <div class="font-extrabold text-white text-xs pt-0.5">${esc(bankLabel)}</div>
                     <div class="font-mono font-black text-amber-300 text-sm tracking-wider">${esc(prof.bankAcc)}</div>
-                    <div class="text-[10px] text-white/65 font-semibold uppercase truncate">${esc(displayFullName)}</div>
+                    <div style="color:rgba(255,255,255,0.7);" class="text-[10px] font-semibold uppercase truncate">${esc(displayFullName)}</div>
                   </div>
                   <div class="bg-white p-1.5 rounded-2xl shadow-xl shrink-0">
-                    <img src="${qrUrl}" alt="VietQR" class="w-28 h-28 object-contain rounded-xl block" onerror="this.onerror=null; this.src='https://api.qrserver.com/v1/create-qr-code/?size=240x240&data='+encodeURIComponent('${esc(bankLabel)} - STK: ${esc(prof.bankAcc)}');" />
+                    <img src="${qrUrl}" alt="VietQR" class="w-24 h-24 object-contain rounded-xl block" onerror="this.onerror=null; this.src='https://api.qrserver.com/v1/create-qr-code/?size=240x240&data='+encodeURIComponent('${esc(bankLabel)} - STK: ${esc(prof.bankAcc)}');" />
                   </div>
                 </div>
               ` : `
-                <div class="mt-4 pt-3 border-t border-white/15 text-[10.5px] text-amber-300 font-semibold flex items-center justify-between">
+                <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.15);" class="text-[10.5px] text-amber-300 font-semibold flex items-center justify-between">
                   <span>💡 Chưa có mã QR ngân hàng</span>
                   <button onclick="window.appActions.toggleEditCrewProfile(true)" class="px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 font-black text-[10px]">+ Thêm STK</button>
                 </div>
@@ -6200,55 +6218,52 @@ function renderHeaderHtml() {
 
             <!-- MỤC INFO TỐI GIẢN, PHẲNG LÌ -->
             ${!isEditing ? `
-              <div class="bg-white/[0.04] border border-white/[0.08] rounded-3xl px-4 py-3 space-y-2">
-                <div class="flex items-center justify-between pb-2 border-b border-white/[0.07]">
+              <div style="background-color:#16161d;border:1px solid rgba(255,255,255,0.1);" class="rounded-3xl px-4 py-3 space-y-2">
+                <div style="border-bottom:1px solid rgba(255,255,255,0.08);" class="flex items-center justify-between pb-2">
                   <span class="font-black text-xs uppercase tracking-widest text-amber-400">INFO</span>
                   <div class="flex items-center gap-1.5 shrink-0">
-                    <button onclick="window.appActions.triggerAvatarUpload()" class="px-2.5 py-1 rounded-full bg-white/[0.07] hover:bg-white/15 text-[10.5px] font-bold text-zinc-200 whitespace-nowrap">
-                      📷 Ảnh
-                    </button>
-                    <button onclick="window.appActions.copyMyProfileText()" class="px-2.5 py-1 rounded-full bg-white/[0.07] hover:bg-white/15 text-[10.5px] font-bold text-zinc-200 whitespace-nowrap">
+                    <button onclick="window.appActions.copyMyProfileText()" style="background-color:rgba(255,255,255,0.08);" class="px-2.5 py-1 rounded-full text-[10.5px] font-bold text-white whitespace-nowrap">
                       📋 Copy
                     </button>
-                    <button onclick="window.appActions.toggleEditCrewProfile(true)" class="px-3 py-1 rounded-full bg-amber-400/15 hover:bg-amber-400/25 text-[10.5px] font-extrabold text-amber-300 whitespace-nowrap">
+                    <button onclick="window.appActions.toggleEditCrewProfile(true)" style="background-color:rgba(251,191,36,0.18);" class="px-3 py-1 rounded-full text-[10.5px] font-extrabold text-amber-300 whitespace-nowrap">
                       ✏️ Sửa
                     </button>
                   </div>
                 </div>
 
-                <div class="divide-y divide-white/[0.06] text-xs">
-                  <div class="py-2 flex items-center justify-between gap-2">
-                    <span class="text-zinc-400 font-medium">CCCD</span>
+                <div class="text-xs">
+                  <div style="border-bottom:1px solid rgba(255,255,255,0.06);" class="py-2 flex items-center justify-between gap-2">
+                    <span class="text-slate-400 font-medium">CCCD</span>
                     <span class="font-mono font-bold text-white tracking-wide">${esc(prof.cccd || '—')}</span>
                   </div>
-                  <div class="py-2 flex items-center justify-between gap-2">
-                    <span class="text-zinc-400 font-medium">Ngày sinh</span>
+                  <div style="border-bottom:1px solid rgba(255,255,255,0.06);" class="py-2 flex items-center justify-between gap-2">
+                    <span class="text-slate-400 font-medium">Ngày sinh</span>
                     <span class="font-mono font-bold text-white">${esc(prof.dob || '—')}</span>
                   </div>
                   <div class="py-2 flex items-center justify-between gap-2">
-                    <span class="text-zinc-400 font-medium">Điện thoại</span>
+                    <span class="text-slate-400 font-medium">Điện thoại</span>
                     <span class="font-mono font-bold text-emerald-400">${esc(prof.phone || '—')}</span>
                   </div>
                 </div>
               </div>
             ` : `
-              <!-- FORM CHỈNH SỬA KHI BẤM NÚT SỬA -->
-              <div class="bg-white/[0.04] border border-amber-400/30 rounded-3xl p-4 space-y-2.5 text-xs">
+              <!-- FORM CHỈNH SỬA KHI BẤM NÚT SỬA (Có đủ TPBank & Agribank) -->
+              <div style="background-color:#16161d;border:1px solid rgba(251,191,36,0.35);" class="rounded-3xl p-4 space-y-2.5 text-xs">
                 <div class="flex items-center justify-between pb-1">
-                  <span class="font-black text-amber-400 text-xs uppercase">✏️ EDIT INFO</span>
-                  ${hasSavedData ? `<button onclick="window.appActions.toggleEditCrewProfile(false)" class="text-[11px] text-zinc-400 hover:text-white font-bold">Đóng</button>` : ''}
+                  <span class="font-black text-amber-300 text-xs uppercase">✏️ EDIT INFO</span>
+                  ${hasSavedData ? `<button onclick="window.appActions.toggleEditCrewProfile(false)" class="text-[11px] text-slate-400 font-bold">Đóng</button>` : ''}
                 </div>
-                <input id="prof-fullname" type="text" value="${esc(prof.fullName || '')}" placeholder="Họ và Tên đầy đủ (VD: NGUYỄN VĂN PHÚ)" class="w-full px-3 py-2 bg-black/50 border border-white/10 rounded-xl text-white font-bold" />
+                <input id="prof-fullname" type="text" value="${esc(prof.fullName || '')}" placeholder="Họ và Tên đầy đủ (VD: NGUYỄN VĂN PHÚ)" style="background-color:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.14);" class="w-full px-3 py-2 rounded-xl text-white font-bold" />
                 <div class="grid grid-cols-2 gap-2">
-                  <input id="prof-cccd" type="text" inputmode="numeric" value="${esc(prof.cccd || '')}" placeholder="Số CCCD" class="w-full px-3 py-2 bg-black/50 border border-white/10 rounded-xl text-white font-mono" />
-                  <input id="prof-dob" type="text" value="${esc(prof.dob || '')}" placeholder="Ngày sinh (DD/MM/YYYY)" class="w-full px-3 py-2 bg-black/50 border border-white/10 rounded-xl text-white font-mono" />
+                  <input id="prof-cccd" type="text" inputmode="numeric" value="${esc(prof.cccd || '')}" placeholder="Số CCCD" style="background-color:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.14);" class="w-full px-3 py-2 rounded-xl text-white font-mono" />
+                  <input id="prof-dob" type="text" value="${esc(prof.dob || '')}" placeholder="Ngày sinh (DD/MM/YYYY)" style="background-color:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.14);" class="w-full px-3 py-2 rounded-xl text-white font-mono" />
                 </div>
                 <div class="grid grid-cols-2 gap-2">
-                  <input id="prof-phone" type="tel" value="${esc(prof.phone || '')}" placeholder="Số điện thoại" class="w-full px-3 py-2 bg-black/50 border border-white/10 rounded-xl text-white font-mono" />
-                  <input id="prof-title" type="text" value="${esc(prof.title || '')}" placeholder="Chức danh (DOP / Producer)" class="w-full px-3 py-2 bg-black/50 border border-white/10 rounded-xl text-white" />
+                  <input id="prof-phone" type="tel" value="${esc(prof.phone || '')}" placeholder="Số điện thoại" style="background-color:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.14);" class="w-full px-3 py-2 rounded-xl text-white font-mono" />
+                  <input id="prof-title" type="text" value="${esc(prof.title || '')}" placeholder="Chức danh (DOP / Producer)" style="background-color:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.14);" class="w-full px-3 py-2 rounded-xl text-white" />
                 </div>
-                <div class="grid grid-cols-3 gap-2">
-                  <select id="prof-bank-bin" class="px-2 py-2 bg-black/60 border border-white/10 rounded-xl text-white text-[11px] font-bold">
+                <div style="display:grid;grid-template-columns:1fr 1.8fr;gap:8px;">
+                  <select id="prof-bank-bin" style="background-color:#09090b;border:1px solid rgba(255,255,255,0.14);" class="px-2 py-2 rounded-xl text-white text-[11px] font-bold">
                     <option value="970436" ${prof.bankBin === '970436' ? 'selected' : ''}>Vietcombank</option>
                     <option value="970407" ${prof.bankBin === '970407' ? 'selected' : ''}>Techcombank</option>
                     <option value="970415" ${prof.bankBin === '970415' ? 'selected' : ''}>VietinBank</option>
@@ -6257,10 +6272,10 @@ function renderHeaderHtml() {
                     <option value="970416" ${prof.bankBin === '970416' ? 'selected' : ''}>ACB</option>
                     <option value="970432" ${prof.bankBin === '970432' ? 'selected' : ''}>VPBank</option>
                     <option value="970403" ${prof.bankBin === '970403' ? 'selected' : ''}>Sacombank</option>
-                    <option value="970405" ${prof.bankBin === '970405' ? 'selected' : ''}>Agribank</option>
                     <option value="970423" ${prof.bankBin === '970423' ? 'selected' : ''}>TPBank</option>
+                    <option value="970405" ${prof.bankBin === '970405' ? 'selected' : ''}>Agribank</option>
                   </select>
-                  <input id="prof-bank-acc" type="text" inputmode="numeric" value="${esc(prof.bankAcc || '')}" placeholder="Số tài khoản nhận CTP" class="col-span-2 px-3 py-2 bg-black/50 border border-white/10 rounded-xl text-white font-mono font-bold" />
+                  <input id="prof-bank-acc" type="text" inputmode="numeric" value="${esc(prof.bankAcc || '')}" placeholder="Số tài khoản nhận CTP" style="background-color:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.14);" class="px-3 py-2 rounded-xl text-white font-mono font-bold" />
                 </div>
                 <button onclick="window.appActions.saveMyMemberProfile()" class="w-full py-2.5 rounded-xl bg-emerald-500 text-slate-950 font-black uppercase tracking-tight shadow-lg mt-1">
                   💾 Lưu Thay Đổi
@@ -6268,16 +6283,16 @@ function renderHeaderHtml() {
               </div>
             `}
 
-            <!-- Nút Đổi Người / Đóng -->
-            <div class="grid grid-cols-2 gap-2 pt-0.5 text-xs">
-              <button onclick="window.appActions.switchAccountPinModal()" class="py-2.5 rounded-2xl bg-white/[0.08] hover:bg-white/15 text-amber-300 font-extrabold">🔄 Đổi Nhân Sự</button>
-              <button onclick="document.getElementById('as-super-portal').innerHTML=''" class="py-2.5 rounded-2xl bg-white/[0.04] hover:bg-white/10 text-zinc-400 font-bold">Đóng ✕</button>
+            <!-- Cụm 3 nút dưới cùng: Đổi Nhân Sự / Đăng Xuất / Đóng -->
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;" class="pt-0.5 text-xs">
+              <button onclick="window.appActions.switchAccountPinModal()" style="background-color:rgba(255,255,255,0.09);" class="py-2.5 rounded-2xl text-amber-300 font-extrabold truncate">🔄 Đổi NS</button>
+              <button onclick="window.__logoutFromVipCard()" style="background-color:rgba(244,63,94,0.18);border:1px solid rgba(244,63,94,0.35);color:#fb7185;" class="py-2.5 rounded-2xl font-extrabold truncate">🚪 Đăng xuất</button>
+              <button onclick="document.getElementById('as-super-portal').innerHTML=''" style="background-color:rgba(255,255,255,0.06);" class="py-2.5 rounded-2xl text-slate-300 font-bold truncate">Đóng ✕</button>
             </div>
           </div>
         </div>
       `;
     };
-
     // Giữ lại ảnh Avatar hiện có khi bấm nút Lưu thông tin chữ
     window.appActions.saveMyMemberProfile = async function() {
       const uid = st.currentUserId;
