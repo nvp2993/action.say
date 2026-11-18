@@ -5613,16 +5613,7 @@ function renderHeaderHtml() {
           <div onclick="event.stopPropagation()" class="w-full max-w-sm bg-[#0c0c0f] text-white border border-white/15 rounded-[28px] p-4 sm:p-5 space-y-4 shadow-2xl max-h-[92dvh] overflow-y-auto custom-scroll">
             
 <!-- THẺ VIP CREW PASS (CÓ KHUNG UPLOAD AVATAR TRỰC TIẾP) -->
-            <!-- THẺ VIP CREW PASS -->
-<div style="background: linear-gradient(140deg, ${me.bg || '#10b981'} 0%, #111827 55%, #09090b 100%);" class="rounded-3xl p-4 sm:p-5 border border-white/20 shadow-2xl relative overflow-hidden">
-  
-  <!-- 👉 THÊM NÚT DẤU X Ở ĐÂY (Góc trên bên phải) -->
-  <button onclick="document.getElementById('as-super-portal').innerHTML=''" class="absolute top-3.5 right-3.5 w-7 h-7 rounded-full bg-black/40 hover:bg-black/70 border border-white/20 flex items-center justify-center text-white font-bold text-xs z-10 transition-colors" title="Đóng">
-    ✕
-  </button>
-
-  <div class="flex items-center justify-between gap-2 mb-3 pr-8"> <!-- Thêm pr-8 để chữ không bị đè vào nút X -->
-    <!-- ... các nội dung phía trong giữ nguyên ... -->
+            <div style="background: linear-gradient(140deg, ${me.bg || '#10b981'} 0%, #111827 55%, #09090b 100%);" class="rounded-3xl p-4 sm:p-5 border border-white/20 shadow-2xl relative overflow-hidden">
               <div class="flex items-center justify-between gap-2 mb-3">
                 <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/45 border border-white/10 text-[9px] font-black uppercase tracking-widest text-amber-300">
                   <span>⚡ ACTION x SAY</span>
@@ -5752,13 +5743,9 @@ function renderHeaderHtml() {
               </div>
             `}
 
-<!-- Nút Đổi Nhân Sự / Đăng Xuất / Đóng -->
-            <div class="grid grid-cols-3 gap-2 pt-0.5 text-xs">
-              <button onclick="window.appActions.switchAccountPinModal()" class="py-2.5 rounded-2xl bg-white/[0.08] hover:bg-white/15 text-amber-300 font-extrabold truncate">🔄 Đổi NS</button>
-              
-              <!-- 👉 THÊM NÚT ĐĂNG XUẤT Ở ĐÂY -->
-              <button onclick="window.appActions.logoutCrewSession()" class="py-2.5 rounded-2xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 font-extrabold border border-rose-500/30 truncate">🚪 Đăng xuất</button>
-              
+            <!-- Nút Đổi Người / Đóng -->
+            <div class="grid grid-cols-2 gap-2 pt-0.5 text-xs">
+              <button onclick="window.appActions.switchAccountPinModal()" class="py-2.5 rounded-2xl bg-white/[0.08] hover:bg-white/15 text-amber-300 font-extrabold">🔄 Đổi Nhân Sự</button>
               <button onclick="document.getElementById('as-super-portal').innerHTML=''" class="py-2.5 rounded-2xl bg-white/[0.04] hover:bg-white/10 text-zinc-400 font-bold">Đóng ✕</button>
             </div>
           </div>
