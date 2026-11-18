@@ -10735,6 +10735,553 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       syncMainAppUI();
       logStudioActivity('Tắt thanh thông báo ghim đầu App');
       if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+      showInlineConfirm('🔕 Đã tắt thanh thông báo đầu App');<script id="as-final-admin-suite-pro-2026">
+(function initFinalAdminSuitePro() {
+  if (!window.state || !window.appActions) {
+    setTimeout(initFinalAdminSuitePro, 80);
+    return;
+  }
+  if (window.__AS_FINAL_ADMIN_SUITE_READY__) return;
+  window.__AS_FINAL_ADMIN_SUITE_READY__ = true;
+
+  const st = window.state;
+  const ALL_YEARS = [2026, 2027, 2028, 2029, 2030];
+
+  const DEFAULT_CTP_RATES = {
+    quay1Day: 1500000,
+    quayMultiDay: 1200000,
+    chup1Day: 1500000,
+    chupMultiDay: 1200000,
+    dung: 1000000,
+    flycam: 1000000,
+    lamhinh: 300000,
+    gimbal: 200000
+  };
+
+  const DEFAULT_COLOR_RULES = [
+    { id: 'def_1', keyword: 'hồ tràm, vũng tàu', color: '#c9bee8' },
+    { id: 'def_2', keyword: 'mũi né, phan thiết, nha trang, tây ninh, quy nhơn, hội an', color: '#f2c1a0' },
+    { id: 'def_3', keyword: 'đà lạt, đl, đà nẵng, huế', color: '#dbe89c' },
+    { id: 'def_4', keyword: 'phú quốc, kê gà', color: '#faeec7' },
+    { id: 'def_5', keyword: 'cam ranh, ninh chữ, long khánh, lk', color: '#a8d0a0' },
+    { id: 'def_6', keyword: 'bình dương, đồng tháp, bến tre, vĩnh long, bình phước', color: '#f2cbc6' },
+    { id: 'def_7', keyword: 'long an, đồng nai, ninh bình, hà nội', color: '#cbd6db' },
+    { id: 'def_8', keyword: 'sg, sài gòn, golf, q2', color: '#a4d8f7' },
+    { id: 'def_9', keyword: 'hcm, nhà bè, cần giờ', color: '#c7ebd8' },
+    { id: 'def_10', keyword: 'cần thơ, bận', color: '#f5e18c' }
+  ];
+
+  let adminLockViewYear = Number(st.selectedYear) || 2026;
+  let isModalOpen = false;
+  let statusBannerMsg = '';
+
+  // =========================================================================
+  // 0. SỬA TRIỆT ĐỂ LỖI Ô "HÔM NAY" NHẢY LÊN 360 DO ĐỔI MÀU HÀNG LOẠT
+  // =========================================================================
+  function fixMassColorUpdatedAtBug() {
+    if (!Array.isArray(st.shows) || st.shows.length === 0) return;
+    const tsFreq = {};
+    st.shows.forEach(sh => {
+      if (sh && sh.updatedAt) {
+        const secKey = Math.floor(Number(sh.updatedAt) / 2000);
+        tsFreq[secKey] = (tsFreq[secKey] || 0) + 1;
+      }
+    });
+
+    let fixedCount = 0;
+    st.shows.forEach(sh => {
+      if (!sh || !sh.updatedAt) return;
+      const secKey = Math.floor(Number(sh.updatedAt) / 2000);
+      const isExcelRow = /^sh_xl_\d+$/.test(String(sh.id || ''));
+      if (tsFreq[secKey] >= 25 || isExcelRow) {
+        delete sh.updatedAt;
+        if (st.localShowEditsMap && st.localShowEditsMap[sh.id]) {
+          delete st.localShowEditsMap[sh.id].updatedAt;
+        }
+        fixedCount++;
+      }
+    });
+
+    if (fixedCount > 0) {
+      try {
+        localStorage.setItem('as_shows_backup_2026', JSON.stringify(st.shows));
+        localStorage.setItem('as_local_show_edits_2026', JSON.stringify(st.localShowEditsMap || {}));
+      } catch (e) {}
+      if (typeof window.syncShowsToSingleDoc === 'function') window.syncShowsToSingleDoc();
+      if (typeof window.renderApp === 'function') window.renderApp();
+    }
+  }
+  setTimeout(fixMassColorUpdatedAtBug, 250);
+
+  // =========================================================================
+  // 1. KHỞI TẠO CẤU HÌNH LOCAL & CLOUD
+  // =========================================================================
+  try {
+    const savedYears = JSON.parse(localStorage.getItem('as_visible_years_config_2026') || 'null');
+    st.visibleYears = (Array.isArray(savedYears) && savedYears.length > 0)
+      ? savedYears.map(Number).filter(y => ALL_YEARS.includes(y)).sort((a, b) => a - b)
+      : [2026, 2027];
+
+    st.ctpRatesConfig = {
+      ...DEFAULT_CTP_RATES,
+      ...(JSON.parse(localStorage.getItem('as_ctp_rates_config_2026') || '{}'))
+    };
+
+    const rawSavedRules = localStorage.getItem('as_custom_color_rules_2026');
+    if (rawSavedRules !== null) {
+      const parsedRules = JSON.parse(rawSavedRules);
+      st.customColorRules = Array.isArray(parsedRules) ? parsedRules : [...DEFAULT_COLOR_RULES];
+    } else {
+      st.customColorRules = [...DEFAULT_COLOR_RULES];
+    }
+
+    st.studioBroadcast = JSON.parse(localStorage.getItem('as_studio_broadcast_2026') || '{"enabled":false,"text":""}');
+    st.deletedShowsTrash = JSON.parse(localStorage.getItem('as_deleted_shows_trash_2026') || '[]');
+    st.activityLogs = JSON.parse(localStorage.getItem('as_activity_logs_2026') || '[]');
+    st.readonlyMaintenanceMode = localStorage.getItem('as_readonly_maintenance_2026') === 'true';
+  } catch (e) {
+    st.visibleYears = [2026, 2027];
+    st.ctpRatesConfig = { ...DEFAULT_CTP_RATES };
+    st.customColorRules = [...DEFAULT_COLOR_RULES];
+    st.studioBroadcast = { enabled: false, text: '' };
+    st.deletedShowsTrash = [];
+    st.activityLogs = [];
+    st.readonlyMaintenanceMode = false;
+  }
+
+  function saveConfigsLocal() {
+    try {
+      localStorage.setItem('as_visible_years_config_2026', JSON.stringify(st.visibleYears));
+      localStorage.setItem('as_ctp_rates_config_2026', JSON.stringify(st.ctpRatesConfig));
+      localStorage.setItem('as_custom_color_rules_2026', JSON.stringify(st.customColorRules));
+      localStorage.setItem('as_studio_broadcast_2026', JSON.stringify(st.studioBroadcast));
+      localStorage.setItem('as_deleted_shows_trash_2026', JSON.stringify(st.deletedShowsTrash));
+      localStorage.setItem('as_activity_logs_2026', JSON.stringify(st.activityLogs || []));
+      localStorage.setItem('as_readonly_maintenance_2026', String(st.readonlyMaintenanceMode));
+      localStorage.setItem('as_locked_months_2026', JSON.stringify(st.lockedMonths || {}));
+    } catch (e) {}
+  }
+
+  function logStudioActivity(actionText) {
+    if (!Array.isArray(st.activityLogs)) st.activityLogs = [];
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} ${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}`;
+    st.activityLogs.unshift({ time: timeStr, text: actionText });
+    st.activityLogs = st.activityLogs.slice(0, 30);
+    saveConfigsLocal();
+  }
+
+  function showInlineConfirm(msg) {
+    statusBannerMsg = msg;
+    renderCaiDatModal();
+    if (typeof window.__asNotify === 'function') window.__asNotify(msg, 'success');
+    setTimeout(() => {
+      if (statusBannerMsg === msg) {
+        statusBannerMsg = '';
+        if (isModalOpen) renderCaiDatModal();
+      }
+    }, 3500);
+  }
+
+  function isYearMonthLocked(yearNum, monthNum) {
+    const lm = st.lockedMonths || {};
+    const keyYM = `${yearNum}-${monthNum}`;
+    if (lm[keyYM] !== undefined) return Boolean(lm[keyYM]);
+    if (Number(yearNum) === 2026 && lm[monthNum] !== undefined) return Boolean(lm[monthNum]);
+    return false;
+  }
+
+  function getDaysCount(sh) {
+    if (!sh || !sh.startDate || !sh.endDate) return 1;
+    const s = new Date(sh.startDate + 'T00:00:00');
+    const e = new Date(sh.endDate + 'T00:00:00');
+    const d = Math.round((e - s) / 86400000) + 1;
+    return d > 0 ? d : 1;
+  }
+
+  function getDynamicCtpRate(taskKey, sh) {
+    const cfg = st.ctpRatesConfig || DEFAULT_CTP_RATES;
+    const days = getDaysCount(sh);
+    if (taskKey === 'quay') return days === 1 ? Number(cfg.quay1Day) : Number(cfg.quayMultiDay) * days;
+    if (taskKey === 'chup') return days === 1 ? Number(cfg.chup1Day) : Number(cfg.chupMultiDay) * days;
+    if (taskKey === 'dung') return Number(cfg.dung);
+    if (taskKey === 'flycam') return Number(cfg.flycam);
+    if (taskKey === 'lamhinh') return Number(cfg.lamhinh);
+    if (taskKey === 'gimbal') return Number(cfg.gimbal);
+    return 0;
+  }
+
+  function resolveDynamicLocationColor(locationStr = '', partnerStr = '') {
+    const s = `${locationStr} ${partnerStr}`.toLowerCase();
+    const rules = Array.isArray(st.customColorRules) ? st.customColorRules : [];
+    for (const r of rules) {
+      if (!r || !r.keyword) continue;
+      const kwList = String(r.keyword).split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+      if (kwList.some(k => s.includes(k))) {
+        return r.color || '#ffffff';
+      }
+    }
+    return '#ffffff';
+  }
+
+  async function applyColorsToAllExistingShows() {
+    let updatedCount = 0;
+    if (!st.localShowEditsMap) st.localShowEditsMap = {};
+
+    st.shows = (st.shows || []).map((sh) => {
+      if (!sh) return sh;
+      const newCol = resolveDynamicLocationColor(sh.location, sh.partner);
+      if (sh.color !== newCol) {
+        updatedCount++;
+        sh.color = newCol;
+        if (st.localShowEditsMap[sh.id]) {
+          st.localShowEditsMap[sh.id].color = newCol;
+        }
+      }
+      return sh;
+    });
+
+    try {
+      localStorage.setItem('as_shows_backup_2026', JSON.stringify(st.shows));
+      localStorage.setItem('as_local_show_edits_2026', JSON.stringify(st.localShowEditsMap));
+    } catch (e) {}
+
+    if (typeof window.syncShowsToSingleDoc === 'function') await window.syncShowsToSingleDoc();
+    if (typeof window.renderApp === 'function') window.renderApp();
+    return updatedCount;
+  }
+
+  // =========================================================================
+  // 2. ĐỒNG BỘ CLOUD & BẢO VỆ CHẾ ĐỘ READ-ONLY (MAINTENANCE MODE)
+  // =========================================================================
+  (async function syncAdminConfigsCloud() {
+    try {
+      const { getApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
+      const { getFirestore, doc, setDoc, onSnapshot } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+      const db = getFirestore(getApp());
+      const appId = typeof __app_id !== 'undefined' ? __app_id : 'action-say-media-2026';
+      const masterRef = doc(db, 'artifacts', appId, 'public', 'data', 'app_single_doc', 'shows_master');
+
+      onSnapshot(masterRef, (snap) => {
+        if (!snap.exists()) return;
+        const d = snap.data();
+        let changed = false;
+
+        if (Array.isArray(d?.visibleYears) && d.visibleYears.length > 0) {
+          const rYears = d.visibleYears.map(Number).filter(y => ALL_YEARS.includes(y)).sort((a, b) => a - b);
+          if (JSON.stringify(rYears) !== JSON.stringify(st.visibleYears)) {
+            st.visibleYears = rYears;
+            if (!st.visibleYears.includes(Number(st.selectedYear))) {
+              st.selectedYear = st.visibleYears[0] || 2026;
+            }
+            changed = true;
+          }
+        }
+        if (d?.ctpRatesConfig && typeof d.ctpRatesConfig === 'object') {
+          st.ctpRatesConfig = { ...DEFAULT_CTP_RATES, ...d.ctpRatesConfig };
+          changed = true;
+        }
+        if (Array.isArray(d?.customColorRules)) {
+          st.customColorRules = d.customColorRules;
+          changed = true;
+        }
+        if (d?.studioBroadcast && typeof d.studioBroadcast === 'object') {
+          st.studioBroadcast = d.studioBroadcast;
+          changed = true;
+        }
+        if (Array.isArray(d?.deletedShowsTrash)) {
+          st.deletedShowsTrash = d.deletedShowsTrash;
+        }
+        if (Array.isArray(d?.activityLogs)) {
+          st.activityLogs = d.activityLogs;
+        }
+        if (d?.readonlyMaintenanceMode !== undefined) {
+          st.readonlyMaintenanceMode = Boolean(d.readonlyMaintenanceMode);
+          changed = true;
+        }
+
+        if (changed) {
+          saveConfigsLocal();
+          syncMainAppUI();
+          if (isModalOpen) renderCaiDatModal();
+        }
+      });
+
+      window.__pushAdminConfigToCloud = async function() {
+        try {
+          await setDoc(masterRef, {
+            visibleYears: st.visibleYears,
+            ctpRatesConfig: st.ctpRatesConfig,
+            customColorRules: st.customColorRules,
+            studioBroadcast: st.studioBroadcast,
+            deletedShowsTrash: (st.deletedShowsTrash || []).slice(0, 30),
+            activityLogs: (st.activityLogs || []).slice(0, 30),
+            readonlyMaintenanceMode: st.readonlyMaintenanceMode,
+            lockedMonths: st.lockedMonths || {},
+            updatedAt: Date.now()
+          }, { merge: true });
+        } catch (e) {}
+      };
+
+      window.__pushCurrentUserCtpCloud = async function() {
+        if (!st.currentUserId) return;
+        try {
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'user_ctp_data', st.currentUserId), {
+            items: st.ctpItems || {},
+            customShows: st.ctpCustomShows || [],
+            updatedAt: Date.now()
+          });
+        } catch (e) {}
+      };
+    } catch (e) {}
+  })();
+
+  function checkMaintenanceGuard() {
+    if (st.readonlyMaintenanceMode && !st.isAdminMode) {
+      alert('🛡️ Hệ thống đang tạm khóa Nổ Show / Sửa lịch để bảo trì/đối soát công nợ. Vui lòng liên hệ Admin!');
+      return true;
+    }
+    return false;
+  }
+
+  const origSaveShow = window.appActions.saveShowForm;
+  window.appActions.saveShowForm = async function() {
+    if (checkMaintenanceGuard()) return;
+    if (st.formModal && isLockedForUser(st.formModal.startDate)) return;
+    if (st.formModal) {
+      st.formModal.color = resolveDynamicLocationColor(st.formModal.location, st.formModal.partner);
+    }
+    return origSaveShow.apply(this, arguments);
+  };
+
+  const prevDelShow = window.appActions.deleteShow;
+  window.appActions.deleteShow = async function(showId) {
+    if (checkMaintenanceGuard()) return;
+    const sh = (st.shows || []).find(s => s && s.id === showId);
+    if (!sh) return;
+    if (isLockedForUser(sh.startDate)) return;
+    const clone = JSON.parse(JSON.stringify(sh));
+    clone.deletedAt = Date.now();
+    const res = await prevDelShow.apply(this, arguments);
+    if (!(st.shows || []).some(s => s && s.id === showId)) {
+      if (!Array.isArray(st.deletedShowsTrash)) st.deletedShowsTrash = [];
+      st.deletedShowsTrash = [clone, ...st.deletedShowsTrash.filter(x => x && x.id !== showId)].slice(0, 30);
+      saveConfigsLocal();
+      logStudioActivity(`Xóa show: ${sh.location}`);
+      if (typeof window.__pushAdminConfigToCloud === 'function') window.__pushAdminConfigToCloud();
+    }
+    return res;
+  };
+
+  function isLockedForUser(dateStr) {
+    if (!dateStr || st.isAdminMode) return false;
+    const parts = String(dateStr).split('-');
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (isYearMonthLocked(y, m)) {
+      alert(`🔒 Tháng ${m}/${y} đã được Admin khóa sổ sau khi chốt CTP!`);
+      return true;
+    }
+    return false;
+  }
+
+  // =========================================================================
+  // 3. TÍCH HỢP MỤC 1 (ĐỔI MÀU & THỨ TỰ NHÂN SỰ) VÀO TAB "CẤP PIN" SẴN CÓ
+  // =========================================================================
+  function injectMemberStylingIntoPinsTab() {
+    const shell = document.getElementById('as-light-admin-shell');
+    if (!shell) return;
+    const container = shell.querySelector('.as-adm-container');
+    if (!container) return;
+
+    const isPinsTab = (container.textContent || '').includes('MÃ PIN & HỌ TÊN');
+    if (!isPinsTab) return;
+
+    let hostBox = document.getElementById('as-admin-member-style-host');
+    if (!hostBox) {
+      hostBox = document.createElement('div');
+      hostBox.id = 'as-admin-member-style-host';
+      container.insertBefore(hostBox, container.firstChild);
+    }
+
+    const membersSorted = [...(st.members || [])].sort((a, b) => (a.order || 99) - (b.order || 99));
+
+    hostBox.innerHTML = `
+      <div style="background:#fff;border:1px solid #cbd5e1;border-radius:20px;padding:16px;margin-bottom:18px;box-shadow:0 4px 14px rgba(15,23,42,0.04);">
+        <div style="font-size:13px;font-weight:900;color:#0f172a;text-transform:uppercase;margin-bottom:4px;">🎨 TÙY CHỈNH MÀU SẮC THẺ & THỨ TỰ CỘT NHÂN SỰ (13 NGƯỜI)</div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:12px;">Thay đổi thứ tự đứng cột (1, 2, 3...) hoặc đổi màu thẻ tên của anh em ngay bên dưới:</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:8px;">
+          ${membersSorted.map((m, idx) => `
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
+              <input type="color" value="${m.bg || '#333333'}" onchange="window.adminProActions.updateMemberColor('${m.id}', this.value)" style="width:32px;height:32px;border-radius:8px;border:1.5px solid #fff;cursor:pointer;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,0.2);" title="Đổi màu nền thẻ" />
+              <div style="flex:1;min-width:0;font-size:12px;font-weight:900;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                ${escapeHtml(m.name)} <span style="font-size:10px;color:#64748b;font-weight:700;">(${escapeHtml(m.shortLabel)})</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+                <span style="font-size:10px;font-weight:700;color:#64748b;">Thứ tự:</span>
+                <input type="number" min="1" max="50" value="${m.order !== undefined ? m.order : (idx + 1)}" onchange="window.adminProActions.updateMemberOrder('${m.id}', this.value)" style="width:44px;padding:4px;text-align:center;border:1px solid #cbd5e1;border-radius:8px;font-size:11px;font-weight:800;" />
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // =========================================================================
+  // 4. NÚT "⚙️ CÀI ĐẶT" NỔI ĐỒNG BỘ Ở GÓC DƯỚI BÊN PHẢI TRANG ADMIN
+  // =========================================================================
+  const floatCaiDatBtn = document.createElement('button');
+  floatCaiDatBtn.id = 'as-floating-caidat-btn';
+  floatCaiDatBtn.type = 'button';
+  floatCaiDatBtn.style.cssText = [
+    'position:fixed',
+    'bottom:max(22px, calc(env(safe-area-inset-bottom, 12px) + 12px))',
+    'right:20px',
+    'z-index:2147483645',
+    'background:#0f172a',
+    'color:#ffffff',
+    'border:1.5px solid rgba(255,255,255,0.16)',
+    'border-radius:999px',
+    'padding:11px 20px',
+    'font-size:12.5px',
+    'font-weight:900',
+    'letter-spacing:0.03em',
+    'display:none',
+    'align-items:center',
+    'gap:8px',
+    'box-shadow:0 12px 28px -4px rgba(15,23,42,0.45)',
+    'cursor:pointer',
+    'font-family:Inter,-apple-system,sans-serif',
+    'transition:transform 0.15s ease'
+  ].join(';');
+  floatCaiDatBtn.innerHTML = `<i class="fa-solid fa-sliders" style="color:#fbbf24;font-size:13px;"></i><span>CÀI ĐẶT</span>`;
+  floatCaiDatBtn.onclick = () => {
+    isModalOpen = !isModalOpen;
+    renderCaiDatModal();
+  };
+  document.body.appendChild(floatCaiDatBtn);
+
+  const modalBackdrop = document.createElement('div');
+  modalBackdrop.id = 'as-caidat-modal-backdrop';
+  modalBackdrop.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:rgba(15,23,42,0.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;font-family:Inter,-apple-system,sans-serif;';
+  modalBackdrop.onclick = () => {
+    isModalOpen = false;
+    renderCaiDatModal();
+  };
+  document.body.appendChild(modalBackdrop);
+
+  function syncMainAppUI() {
+    const inAdmin = Boolean(st.isBackendPortal || window.location.hash === '#admin' || document.body.classList.contains('as-admin-mode-active'));
+    floatCaiDatBtn.style.display = inAdmin ? 'inline-flex' : 'none';
+    if (!inAdmin && isModalOpen) {
+      isModalOpen = false;
+      modalBackdrop.style.display = 'none';
+    }
+    if (inAdmin) {
+      setTimeout(injectMemberStylingIntoPinsTab, 30);
+      return;
+    }
+
+    const activeYears = st.visibleYears || [2026, 2027];
+    document.querySelectorAll('.as-year-pinned').forEach((wrap) => {
+      const sig = activeYears.join(',') + ':' + st.selectedYear;
+      if (wrap.dataset.ySig === sig) return;
+      wrap.dataset.ySig = sig;
+      wrap.innerHTML = activeYears.map(y => `
+        <button type="button" onclick="appActions.setYear(${y})" class="as-year-btn ${Number(st.selectedYear) === y ? 'active' : 'inactive'}">${y}</button>
+      `).join('');
+    });
+
+    const header = document.querySelector('#app header');
+    if (header) {
+      let banner = document.getElementById('as-studio-broadcast-banner');
+      if (st.studioBroadcast && st.studioBroadcast.enabled && st.studioBroadcast.text) {
+        if (!banner) {
+          banner = document.createElement('div');
+          banner.id = 'as-studio-broadcast-banner';
+          banner.style.cssText = 'background:linear-gradient(90deg,#fff1f2,#ffe4e6);border:1.5px solid #fda4af;color:#be123c;border-radius:14px;padding:7px 12px;margin-top:6px;font-size:11.5px;font-weight:800;display:flex;align-items:center;gap:8px;box-shadow:0 4px 12px rgba(225,29,72,0.12);';
+          header.appendChild(banner);
+        }
+        const newHtml = `<span style="background:#e11d48;color:#fff;font-size:9.5px;font-weight:900;padding:2.5px 8px;border-radius:999px;flex-shrink:0;">📢 THÔNG BÁO</span><span style="flex:1;line-height:1.35;">${st.studioBroadcast.text.replace(/</g, '&lt;')}</span>`;
+        if (banner.innerHTML !== newHtml) banner.innerHTML = newHtml;
+      } else if (banner) {
+        banner.remove();
+      }
+    }
+  }
+
+  // =========================================================================
+  // 5. CÁC HÀM XỬ LÝ TRONG CỬA SỔ CÀI ĐẶT (ĐÃ GỒM MỤC 8 & MỤC 12)
+  // =========================================================================
+  window.adminProActions = {
+    closeModal() {
+      isModalOpen = false;
+      renderCaiDatModal();
+    },
+
+    async toggleYear(yr) {
+      const y = Number(yr);
+      const cur = Array.isArray(st.visibleYears) ? [...st.visibleYears] : [2026, 2027];
+      const idx = cur.indexOf(y);
+      if (idx >= 0) {
+        if (cur.length <= 1) return alert('⚠️ Phải giữ lại ít nhất 1 năm hiển thị trên App!');
+        cur.splice(idx, 1);
+      } else {
+        cur.push(y);
+      }
+      cur.sort((a, b) => a - b);
+      st.visibleYears = cur;
+      if (!st.visibleYears.includes(Number(st.selectedYear))) {
+        st.selectedYear = st.visibleYears[0] || 2026;
+      }
+      saveConfigsLocal();
+      syncMainAppUI();
+      logStudioActivity(`Bật/ẩn năm hiển thị: ${cur.join(', ')}`);
+      if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+      showInlineConfirm(`✅ Đã lưu Năm hiển thị: ${cur.join(', ')}`);
+    },
+
+    setLockViewYear(yr) {
+      adminLockViewYear = Number(yr);
+      renderCaiDatModal();
+    },
+
+    async toggleLockMonthAdmin(m) {
+      const monthNum = Number(m);
+      const y = Number(adminLockViewYear) || 2026;
+      if (!st.lockedMonths) st.lockedMonths = {};
+      const keyYM = `${y}-${monthNum}`;
+      const nextVal = !isYearMonthLocked(y, monthNum);
+      st.lockedMonths[keyYM] = nextVal;
+      if (y === 2026 && st.lockedMonths[monthNum] !== undefined) delete st.lockedMonths[monthNum];
+      saveConfigsLocal();
+      logStudioActivity(`${nextVal ? 'Khóa sổ' : 'Mở khóa'} Tháng ${monthNum}/${y}`);
+      if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+      showInlineConfirm(nextVal ? `🔒 Đã khóa sổ Tháng ${monthNum}/${y}` : `🔓 Đã mở khóa Tháng ${monthNum}/${y}`);
+    },
+
+    async publishBroadcastNow() {
+      const txt = (document.getElementById('as-pro-bc-input')?.value || '').trim();
+      if (!txt) {
+        alert('Vui lòng nhập nội dung thông báo trước khi bấm Phát!');
+        document.getElementById('as-pro-bc-input')?.focus();
+        return;
+      }
+      st.studioBroadcast = { enabled: true, text: txt, updatedAt: Date.now() };
+      saveConfigsLocal();
+      syncMainAppUI();
+      logStudioActivity('Phát thông báo ghim đầu App');
+      if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
+      showInlineConfirm('📢 ĐÃ LƯU & GHIM THÔNG BÁO LÊN ĐẦU APP!');
+    },
+
+    async disableBroadcastNow() {
+      st.studioBroadcast = { enabled: false, text: st.studioBroadcast?.text || '', updatedAt: Date.now() };
+      saveConfigsLocal();
+      syncMainAppUI();
+      logStudioActivity('Tắt thanh thông báo ghim đầu App');
+      if (typeof window.__pushAdminConfigToCloud === 'function') await window.__pushAdminConfigToCloud();
       showInlineConfirm('🔕 Đã tắt thanh thông báo đầu App');
     },
 
