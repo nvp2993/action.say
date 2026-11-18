@@ -10188,63 +10188,82 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   }
 </style>
 
-      <script id="as-multi-year-manager-2026-2030">
-(function initMultiYearManagerSystemTabOnly() {
+// bật tắt năm trong tab trong trang Admin
+<script id="as-multi-year-manager-2026-2030">
+(function initFastAdminAndMultiYear() {
   if (!window.state || !window.appActions) {
-    setTimeout(initMultiYearManagerSystemTabOnly, 80);
+    setTimeout(initFastAdminAndMultiYear, 80);
     return;
   }
-  if (window.__AS_MULTI_YEAR_SYS_ONLY__) return;
-  window.__AS_MULTI_YEAR_SYS_ONLY__ = true;
+  if (window.__AS_FAST_ADMIN_YEAR_READY__) return;
+  window.__AS_FAST_ADMIN_YEAR_READY__ = true;
 
   const st = window.state;
-  const ALL_SUPPORTED_YEARS = [2026, 2027, 2028, 2029, 2030];
-  const LOCAL_KEY = 'as_visible_years_config_2026';
+  const ALL_YEARS = [2026, 2027, 2028, 2029, 2030];
+  const STORAGE_KEY = 'as_visible_years_config_2026';
 
-  // 1. Khởi tạo danh sách năm hiển thị (Mặc định: [2026, 2027])
+  // 1. Khởi tạo danh sách năm hiển thị (Mặc định: 2026, 2027)
   try {
-    const saved = JSON.parse(localStorage.getItem(LOCAL_KEY) || 'null');
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     if (Array.isArray(saved) && saved.length > 0) {
-      st.visibleYears = saved.map(Number).filter(y => ALL_SUPPORTED_YEARS.includes(y)).sort((a, b) => a - b);
+      st.visibleYears = saved.map(Number).filter(y => ALL_YEARS.includes(y)).sort((a, b) => a - b);
     }
   } catch (e) {}
   if (!Array.isArray(st.visibleYears) || st.visibleYears.length === 0) {
     st.visibleYears = [2026, 2027];
   }
 
-  function ensureValidSelectedYear() {
-    if (!st.visibleYears.includes(Number(st.selectedYear))) {
-      const targetY = st.visibleYears[0] || 2026;
-      window.appActions.setYear(targetY);
-    }
+  function isInsideAdminMode() {
+    return Boolean(st.isBackendPortal || window.location.hash === '#admin' || document.body.classList.contains('as-admin-mode-active'));
   }
 
-  // 2. Đồng bộ các nút Năm trên thanh Header ngoài App
-  function syncHeaderYearButtonsDom() {
+  // =========================================================================
+  // 2. CHỐNG LAG TUYỆT ĐỐI CHO TRANG ADMIN:
+  // Ngắt các hàm quét DOM nặng của bảng Lịch Show khi đang mở trang Admin
+  // =========================================================================
+  const origQuerySelectorAll = document.querySelectorAll.bind(document);
+  document.querySelectorAll = function(selector) {
+    // Khi đang ở trang Admin, bỏ qua ngay việc quét các dòng tr[onclick*="openShowDetail"] của bảng Lịch Show bên dưới
+    if (isInsideAdminMode() && typeof selector === 'string' && selector.includes('openShowDetail')) {
+      return [];
+    }
+    return origQuerySelectorAll(selector);
+  };
+
+  // Cập nhật thanh nút Năm ngoài trang chính (chỉ chạy khi KHÔNG ở trang Admin)
+  function updateMainHeaderYearButtons() {
+    if (isInsideAdminMode()) return;
     const activeYears = st.visibleYears || [2026, 2027];
-    document.querySelectorAll('.as-year-pinned').forEach((wrap) => {
-      const currentBtns = Array.from(wrap.querySelectorAll('button')).map(b => Number(b.textContent.trim()));
-      const isSameList = currentBtns.length === activeYears.length && currentBtns.every((v, i) => v === activeYears[i]);
-      if (!isSameList) {
-        wrap.innerHTML = activeYears.map(y => `
-          <button type="button" onclick="appActions.setYear(${y})" class="as-year-btn ${Number(st.selectedYear) === y ? 'active' : 'inactive'}">${y}</button>
-        `).join('');
-      } else {
-        wrap.querySelectorAll('button').forEach((btn) => {
-          const y = Number(btn.textContent.trim());
-          btn.className = `as-year-btn ${Number(st.selectedYear) === y ? 'active' : 'inactive'}`;
-        });
-      }
+    origQuerySelectorAll('.as-year-pinned').forEach((wrap) => {
+      const sig = activeYears.join(',') + ':' + st.selectedYear;
+      if (wrap.dataset.yearSig === sig) return;
+      wrap.dataset.yearSig = sig;
+      wrap.innerHTML = activeYears.map(y => `
+        <button type="button" onclick="appActions.setYear(${y})" class="as-year-btn ${Number(st.selectedYear) === y ? 'active' : 'inactive'}">${y}</button>
+      `).join('');
     });
   }
 
-  // 3. Đồng bộ 2 chiều với Firebase Cloud (shows_master)
-  (async function syncVisibleYearsWithFirebase() {
+  // Bọc nhẹ hàm renderApp để tự động cập nhật nút năm ngoài Header mà không cần setInterval
+  if (typeof window.renderApp === 'function' && !window.__YEAR_RENDER_HOOKED__) {
+    window.__YEAR_RENDER_HOOKED__ = true;
+    const origRender = window.renderApp;
+    window.renderApp = function() {
+      const res = origRender.apply(this, arguments);
+      requestAnimationFrame(updateMainHeaderYearButtons);
+      return res;
+    };
+  }
+  updateMainHeaderYearButtons();
+
+  // =========================================================================
+  // 3. ĐỒNG BỘ FIREBASE CLOUD 2 CHIỀU
+  // =========================================================================
+  (async function connectFirebaseYears() {
     try {
       const { getApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
       const { getFirestore, doc, setDoc, onSnapshot } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-      const fbApp = getApp();
-      const db = getFirestore(fbApp);
+      const db = getFirestore(getApp());
       const appId = typeof __app_id !== 'undefined' ? __app_id : 'action-say-media-2026';
       const masterRef = doc(db, 'artifacts', appId, 'public', 'data', 'app_single_doc', 'shows_master');
 
@@ -10252,37 +10271,36 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         if (!snap.exists()) return;
         const d = snap.data();
         if (Array.isArray(d?.visibleYears) && d.visibleYears.length > 0) {
-          const remoteYears = d.visibleYears.map(Number).filter(y => ALL_SUPPORTED_YEARS.includes(y)).sort((a, b) => a - b);
-          if (JSON.stringify(remoteYears) !== JSON.stringify(st.visibleYears)) {
-            st.visibleYears = remoteYears;
-            try { localStorage.setItem(LOCAL_KEY, JSON.stringify(remoteYears)); } catch (e) {}
-            ensureValidSelectedYear();
-            if (typeof window.renderApp === 'function') window.renderApp();
-            syncHeaderYearButtonsDom();
-            mountOrUpdateAdminYearCard();
+          const remote = d.visibleYears.map(Number).filter(y => ALL_YEARS.includes(y)).sort((a, b) => a - b);
+          if (JSON.stringify(remote) !== JSON.stringify(st.visibleYears)) {
+            st.visibleYears = remote;
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)); } catch (e) {}
+            if (!st.visibleYears.includes(Number(st.selectedYear))) {
+              st.selectedYear = st.visibleYears[0] || 2026;
+            }
+            updateMainHeaderYearButtons();
+            renderYearCardInsideSystemTab();
           }
         }
       });
 
-      window.__saveVisibleYearsToCloud = async function(yearsArr) {
+      window.__pushVisibleYearsCloud = async function(arr) {
         try {
-          await setDoc(masterRef, {
-            visibleYears: yearsArr,
-            updatedAt: Date.now()
-          }, { merge: true });
+          await setDoc(masterRef, { visibleYears: arr, updatedAt: Date.now() }, { merge: true });
         } catch (e) {}
       };
     } catch (e) {}
   })();
 
-  // 4. Hàm Bật / Tắt từng năm
+  // =========================================================================
+  // 4. HÀM BẬT / TẮT NĂM (2026 - 2030)
+  // =========================================================================
   window.appActions.toggleVisibleYear = async function(yearNum) {
     const y = Number(yearNum);
-    if (!ALL_SUPPORTED_YEARS.includes(y)) return;
+    if (!ALL_YEARS.includes(y)) return;
 
     const current = Array.isArray(st.visibleYears) ? [...st.visibleYears] : [2026, 2027];
     const idx = current.indexOf(y);
-
     if (idx >= 0) {
       if (current.length <= 1) {
         alert('⚠️ Phải giữ lại ít nhất 1 năm hiển thị trên bảng lịch!');
@@ -10292,103 +10310,87 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     } else {
       current.push(y);
     }
-
     current.sort((a, b) => a - b);
     st.visibleYears = current;
-    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(current)); } catch (e) {}
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(current)); } catch (e) {}
 
-    ensureValidSelectedYear();
-    if (typeof window.renderApp === 'function') window.renderApp();
-    syncHeaderYearButtonsDom();
-    mountOrUpdateAdminYearCard();
+    if (!st.visibleYears.includes(Number(st.selectedYear))) {
+      st.selectedYear = st.visibleYears[0] || 2026;
+    }
 
-    if (typeof window.__saveVisibleYearsToCloud === 'function') {
-      await window.__saveVisibleYearsToCloud(current);
+    renderYearCardInsideSystemTab();
+    updateMainHeaderYearButtons();
+
+    if (typeof window.__pushVisibleYearsCloud === 'function') {
+      await window.__pushVisibleYearsCloud(current);
     }
     if (typeof window.__asNotify === 'function') {
       window.__asNotify(`📅 Năm hiển thị: ${current.join(', ')}`, 'success');
     }
   };
 
-  // Kiểm tra chính xác xem Admin có đang mở đúng tab "⚙️ Hệ Thống" hay không
-  function isAdminSystemTabActive(shell) {
-    if (!shell) return false;
-    // Nếu đang có chữ "HIỆU SUẤT EKIP" hoặc "SHOW MỚI NHẬP" -> đang ở tab Tổng Quan -> KHÔNG HIỆN
-    const text = (shell.textContent || '').toUpperCase();
-    if (text.includes('HIỆU SUẤT EKIP') || text.includes('SHOW MỚI NHẬP')) return false;
+  // =========================================================================
+  // 5. HIỂN THỊ BẢNG BẬT/TẮT NĂM TRONG TAB "⚙️ HỆ THỐNG" CỦA ADMIN
+  // (Chỉ chạy đúng lúc bấm chuột vào tab Hệ Thống -> 0% lag)
+  // =========================================================================
+  let currentAdminTabTracked = 'dashboard';
 
-    // Kiểm tra nút tab "Hệ Thống" có đang active (nền trắng / chữ đậm) hoặc nội dung có chứa phần cài đặt Hệ Thống
-    const sysBtn = Array.from(shell.querySelectorAll('button')).find(b => (b.textContent || '').includes('Hệ Thống'));
-    if (sysBtn) {
-      const bg = window.getComputedStyle(sysBtn).backgroundColor;
-      if (bg === 'rgb(255, 255, 255)' || sysBtn.className.includes('bg-white') || sysBtn.className.includes('shadow')) {
-        return true;
-      }
-    }
-    return st.backendTab === 'system' || text.includes('TẢI FILE') || text.includes('ĐỔI LOGO') || text.includes('EXCEL');
-  }
-
-  // 5. Chỉ gắn bảng Bật/Tắt Năm (2026 - 2030) bên trong tab "⚙️ Hệ Thống"
-  function mountOrUpdateAdminYearCard() {
-    syncHeaderYearButtonsDom();
-
+  function renderYearCardInsideSystemTab() {
+    const existingBox = document.getElementById('as-admin-years-toggle-card');
     const shell = document.getElementById('as-light-admin-shell');
-    if (!shell || shell.offsetParent === null) return;
+    if (!shell) return;
 
-    let box = document.getElementById('as-admin-years-toggle-card');
-
-    // Nếu KHÔNG phải tab Hệ Thống -> xóa/ẩn ngay lập tức
-    if (!isAdminSystemTabActive(shell)) {
-      if (box) box.remove();
+    if (currentAdminTabTracked !== 'system') {
+      if (existingBox) existingBox.remove();
       return;
     }
 
-    if (!box) {
-      const tabBtn = Array.from(shell.querySelectorAll('button')).find(b => (b.textContent || '').includes('Hệ Thống'));
-      const tabBar = tabBtn ? tabBtn.parentElement : null;
-      if (!tabBar || !tabBar.parentElement) return;
+    // Tìm thanh chứa 3 nút Tab (Tổng Quan | Cấp PIN | Hệ Thống)
+    const sysBtn = Array.from(shell.querySelectorAll('button')).find(b => (b.textContent || '').includes('Hệ Thống'));
+    if (!sysBtn || !sysBtn.parentElement || !sysBtn.parentElement.parentElement) return;
 
+    const tabBar = sysBtn.parentElement;
+    const mainWrap = tabBar.parentElement;
+
+    let box = existingBox;
+    if (!box) {
       box = document.createElement('div');
       box.id = 'as-admin-years-toggle-card';
-      box.style.cssText = 'background:#ffffff;border:1px solid #e2e8f0;border-radius:22px;padding:14px 16px;margin-top:12px;margin-bottom:12px;box-shadow:0 4px 14px rgba(15,23,42,0.04);';
-      tabBar.parentElement.insertBefore(box, tabBar.nextElementSibling);
+      box.style.cssText = 'background:#ffffff;border:1.5px solid #cbd5e1;border-radius:22px;padding:16px;margin:12px 0;box-shadow:0 8px 20px -4px rgba(15,23,42,0.06);';
+      mainWrap.insertBefore(box, tabBar.nextElementSibling);
     }
 
     const activeYears = st.visibleYears || [2026, 2027];
-    const sig = activeYears.join(',');
-    if (box.dataset.renderedSig === sig) return;
-    box.dataset.renderedSig = sig;
-
     box.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
         <div>
-          <div style="font-size:12px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:0.02em;">
-            📅 BẬT / ẨN NĂM HIỂN THỊ TRÊN APP (2026 – 2030)
+          <div style="font-size:12.5px;font-weight:900;color:#0f172a;text-transform:uppercase;">
+            📅 QUẢN LÝ NĂM HIỂN THỊ TRÊN APP (2026 – 2030)
           </div>
           <div style="font-size:11px;color:#64748b;margin-top:2px;">
-            Bấm vào năm để Bật hoặc Ẩn. Nên bật 1–2 năm để thanh lịch ngoài App gọn nhất.
+            Bấm vào từng năm để Bật (🟢 Hiện) hoặc Tắt (⚪ Ẩn). Nên chỉ bật 1–2 năm cùng lúc.
           </div>
         </div>
-        <span style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">
-          Đang mở: ${activeYears.join(', ')}
+        <span style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:4px 12px;border-radius:999px;font-size:11px;font-weight:800;">
+          Đang hiển thị: ${activeYears.join(', ')}
         </span>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;">
-        ${ALL_SUPPORTED_YEARS.map(yr => {
+        ${ALL_YEARS.map(yr => {
           const isOn = activeYears.includes(yr);
           return `
             <button
               type="button"
               onclick="window.appActions.toggleVisibleYear(${yr})"
-              style="padding:7px 14px;border-radius:999px;font-size:12px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s ease;${
+              style="padding:8px 15px;border-radius:999px;font-size:12px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s ease;${
                 isOn
-                  ? 'background:#0f172a;color:#fbbf24;border:1.5px solid #0f172a;box-shadow:0 4px 10px rgba(15,23,42,0.16);'
-                  : 'background:#f8fafc;color:#94a3b8;border:1.5px dashed #cbd5e1;'
+                  ? 'background:#0f172a;color:#fbbf24;border:1.5px solid #0f172a;box-shadow:0 4px 10px rgba(15,23,42,0.18);'
+                  : 'background:#f8fafc;color:#64748b;border:1.5px dashed #cbd5e1;'
               }"
             >
               <span>${isOn ? '🟢' : '⚪'}</span>
-              <span>${yr}</span>
-              <span style="font-size:10px;font-weight:700;opacity:0.85;">${isOn ? 'Hiện' : 'Ẩn'}</span>
+              <span>Năm ${yr}</span>
+              <span style="font-size:10px;font-weight:700;opacity:0.85;">(${isOn ? 'Hiện' : 'Ẩn'})</span>
             </button>
           `;
         }).join('')}
@@ -10396,8 +10398,20 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     `;
   }
 
-  setInterval(mountOrUpdateAdminYearCard, 350);
-  document.addEventListener('click', () => setTimeout(mountOrUpdateAdminYearCard, 40));
+  // Lắng nghe cú bấm chuột vào 3 nút tab trong trang Admin
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const txt = (btn.textContent || '').trim();
+    if (txt.includes('Hệ Thống')) {
+      currentAdminTabTracked = 'system';
+      setTimeout(renderYearCardInsideSystemTab, 20);
+      setTimeout(renderYearCardInsideSystemTab, 120);
+    } else if (txt.includes('Tổng Quan') || txt.includes('Cấp PIN')) {
+      currentAdminTabTracked = 'other';
+      document.getElementById('as-admin-years-toggle-card')?.remove();
+    }
+  }, true);
 })();
 </script>
 </body></html>
