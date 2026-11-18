@@ -5517,15 +5517,16 @@ function renderHeaderHtml() {
       const newScrollEls = root.querySelectorAll('.custom-scroll, .no-scrollbar, .overflow-y-auto, .overflow-auto');
       savedScrolls.forEach(s => {
         let target = s.id ? document.getElementById(s.id) : null;
-        if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
+if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         if (target) {
           target.scrollTop = s.top;
-          target.scrollLeft = s.left;
+          // Đã bỏ target.scrollLeft = s.left; để thanh Tháng không bị giật
         }
       });
     }
 
     window.state = state;
+    window.renderApp = renderApp;
     window.saveCtpStateToLocal = saveCtpStateToLocal;
     applyHomeScreenIcon(state.customLogoUrl);
     renderApp();
