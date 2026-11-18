@@ -10187,4 +10187,175 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     transform: scale(0.96) !important;
   }
 </style>
+
+      <script id="as-multi-year-manager-2026-2030">
+(function initMultiYearManager() {
+  if (!window.state || !window.appActions) {
+    setTimeout(initMultiYearManager, 80);
+    return;
+  }
+  if (window.__AS_MULTI_YEAR_READY__) return;
+  window.__AS_MULTI_YEAR_READY__ = true;
+
+  const st = window.state;
+  const ALL_SUPPORTED_YEARS = [2026, 2027, 2028, 2029, 2030];
+  const LOCAL_KEY = 'as_visible_years_config_2026';
+
+  // 1. Khởi tạo danh sách năm hiển thị (Mặc định: [2026, 2027])
+  try {
+    const saved = JSON.parse(localStorage.getItem(LOCAL_KEY) || 'null');
+    if (Array.isArray(saved) && saved.length > 0) {
+      st.visibleYears = saved.map(Number).filter(y => ALL_SUPPORTED_YEARS.includes(y)).sort((a, b) => a - b);
+    }
+  } catch (e) {}
+  if (!Array.isArray(st.visibleYears) || st.visibleYears.length === 0) {
+    st.visibleYears = [2026, 2027];
+  }
+
+  function ensureValidSelectedYear() {
+    if (!st.visibleYears.includes(Number(st.selectedYear))) {
+      const targetY = st.visibleYears[0] || 2026;
+      window.appActions.setYear(targetY);
+    }
+  }
+
+  // 2. Đồng bộ 2 chiều với Firebase Cloud (nằm chung trong document shows_master)
+  (async function syncVisibleYearsWithFirebase() {
+    try {
+      const { getApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
+      const { getFirestore, doc, setDoc, onSnapshot } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+      const fbApp = getApp();
+      const db = getFirestore(fbApp);
+      const appId = typeof __app_id !== 'undefined' ? __app_id : 'action-say-media-2026';
+      const masterRef = doc(db, 'artifacts', appId, 'public', 'data', 'app_single_doc', 'shows_master');
+
+      // Lắng nghe khi Admin bật/tắt năm trên Cloud -> tự cập nhật cho toàn bộ anh em
+      onSnapshot(masterRef, (snap) => {
+        if (!snap.exists()) return;
+        const d = snap.data();
+        if (Array.isArray(d?.visibleYears) && d.visibleYears.length > 0) {
+          const remoteYears = d.visibleYears.map(Number).filter(y => ALL_SUPPORTED_YEARS.includes(y)).sort((a, b) => a - b);
+          if (JSON.stringify(remoteYears) !== JSON.stringify(st.visibleYears)) {
+            st.visibleYears = remoteYears;
+            try { localStorage.setItem(LOCAL_KEY, JSON.stringify(remoteYears)); } catch (e) {}
+            ensureValidSelectedYear();
+            if (typeof window.renderApp === 'function') window.renderApp();
+            refreshAdminYearButtonsUI();
+          }
+        }
+      });
+
+      window.__saveVisibleYearsToCloud = async function(yearsArr) {
+        try {
+          await setDoc(masterRef, {
+            visibleYears: yearsArr,
+            updatedAt: Date.now()
+          }, { merge: true });
+        } catch (e) {}
+      };
+    } catch (e) {}
+  })();
+
+  // 3. Hàm Bật / Tắt từng năm trong trang Admin
+  window.appActions.toggleVisibleYear = async function(yearNum) {
+    const y = Number(yearNum);
+    if (!ALL_SUPPORTED_YEARS.includes(y)) return;
+
+    const current = Array.isArray(st.visibleYears) ? [...st.visibleYears] : [2026, 2027];
+    const idx = current.indexOf(y);
+
+    if (idx >= 0) {
+      if (current.length <= 1) {
+        alert('⚠️ Phải giữ lại ít nhất 1 năm hiển thị trên bảng lịch!');
+        return;
+      }
+      current.splice(idx, 1);
+    } else {
+      current.push(y);
+    }
+
+    current.sort((a, b) => a - b);
+    st.visibleYears = current;
+    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(current)); } catch (e) {}
+
+    ensureValidSelectedYear();
+    if (typeof window.renderApp === 'function') window.renderApp();
+    refreshAdminYearButtonsUI();
+
+    if (typeof window.__saveVisibleYearsToCloud === 'function') {
+      await window.__saveVisibleYearsToCloud(current);
+    }
+    if (typeof window.__asNotify === 'function') {
+      window.__asNotify(`📅 Đã cập nhật năm: ${current.join(', ')}`, 'success');
+    }
+  };
+
+  // 4. Chèn bảng bật/tắt Năm (2026 - 2030) vào tab "⚙️ Hệ Thống" trong trang Admin
+  // (Chỉ kiểm tra khi bấm chuột trong trang Admin, hoàn toàn KHÔNG dùng MutationObserver nên 0% lag)
+  function refreshAdminYearButtonsUI() {
+    const shell = document.getElementById('as-light-admin-shell');
+    if (!shell) return;
+
+    let box = document.getElementById('as-admin-years-toggle-card');
+    if (!box) {
+      // Tìm thẻ chứa trong tab Hệ thống (nơi có chữ "ĐỔI LOGO" hoặc "XUẤT FILE")
+      const cards = Array.from(shell.querySelectorAll('div'));
+      const sysContainer = cards.find(el =>
+        el.children.length >= 2 &&
+        ((el.textContent || '').includes('LOGO') || (el.textContent || '').includes('EXCEL') || (el.textContent || '').includes('MẬT KHẨU ADMIN'))
+      );
+      if (!sysContainer) return;
+
+      box = document.createElement('div');
+      box.id = 'as-admin-years-toggle-card';
+      box.style.cssText = 'background:#ffffff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;margin-bottom:14px;box-shadow:0 4px 12px rgba(15,23,42,0.03);';
+      sysContainer.insertBefore(box, sysContainer.firstElementChild);
+    }
+
+    const activeYears = st.visibleYears || [2026, 2027];
+    box.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:12px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:0.02em;">
+            📅 QUẢN LÝ NĂM HIỂN THỊ TRÊN APP (2026 – 2030)
+          </div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px;">
+            Bấm để Bật / Ẩn từng năm. Nên bật 1–2 năm để thanh chọn năm trên điện thoại gọn đẹp nhất.
+          </div>
+        </div>
+        <span style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">
+          Đang hiện: ${activeYears.join(', ')}
+        </span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        ${ALL_SUPPORTED_YEARS.map(yr => {
+          const isOn = activeYears.includes(yr);
+          return `
+            <button
+              type="button"
+              onclick="window.appActions.toggleVisibleYear(${yr})"
+              style="padding:8px 16px;border-radius:999px;font-size:12px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s ease;${
+                isOn
+                  ? 'background:#0f172a;color:#fbbf24;border:1.5px solid #0f172a;box-shadow:0 4px 10px rgba(15,23,42,0.18);'
+                  : 'background:#f8fafc;color:#94a3b8;border:1.5px dashed #cbd5e1;'
+              }"
+            >
+              <span>${isOn ? '🟢' : '⚪'}</span>
+              <span>Năm ${yr}</span>
+              <span style="font-size:10px;font-weight:700;opacity:0.85;">(${isOn ? 'Đang hiện' : 'Đang ẩn'})</span>
+            </button>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  // Chỉ kích hoạt vẽ khung chọn năm khi người dùng bấm vào tab "⚙️ Hệ Thống" trong Admin
+  document.addEventListener('click', () => {
+    if (document.body.classList.contains('as-admin-mode-active') || window.location.hash === '#admin') {
+      setTimeout(refreshAdminYearButtonsUI, 60);
+    }
+  });
+})();
+</script>
 </body></html>
