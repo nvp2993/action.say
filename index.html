@@ -9225,26 +9225,24 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   })();</script><div id="as-ptr-toast-2026" style="position: fixed; top: -52px; left: 50%; transform: translateX(-50%); z-index: 99999; background: rgb(17, 24, 39); color: rgb(16, 185, 129); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: rgba(0, 0, 0, 0.25) 0px 8px 20px; border-radius: 999px; padding: 6px 16px; font-size: 11px; font-weight: 800; display: flex; align-items: center; gap: 8px; transition: top 0.2s; pointer-events: none;"><i class="fa-solid fa-rotate-right"></i><span>Kéo xuống để làm mới...</span></div><div id="as-ptr-toast-2026" style="position: fixed; top: -52px; left: 50%; transform: translateX(-50%); z-index: 99999; background: rgb(17, 24, 39); color: rgb(16, 185, 129); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: rgba(0, 0, 0, 0.25) 0px 8px 20px; border-radius: 999px; padding: 6px 16px; font-size: 11px; font-weight: 800; display: flex; align-items: center; gap: 8px; transition: top 0.2s; pointer-events: none;"><i class="fa-solid fa-rotate-right"></i><span>Kéo xuống để làm mới...</span></div><iframe ng-non-bindable="" frameborder="0" hspace="0" marginheight="0" marginwidth="0" scrolling="no" tabindex="-1" vspace="0" width="100%" aria-hidden="true" id="I0_1794968383875" name="I0_1794968383875" src="https://lich-show-action-say.firebaseapp.com/__/auth/iframe?apiKey=AIzaSyBPp0AbNtvvuIWTrTwIYkvXyoD0Vr2IeuE&amp;appName=%5BDEFAULT%5D&amp;v=11.6.1&amp;eid=p&amp;usegapi=1&amp;jsh=m%3B%2F_%2Fscs%2Fabc-static%2F_%2Fjs%2Fk%3Dgapi.lb.vi.yYqMjrSmpQY.O%2Fd%3D1%2Frs%3DAHpOoo_bU1Xa98Q4JheHUo1Ur4D0uhYXag%2Fm%3D__features__#id=I0_1794968383875&amp;_gfid=I0_1794968383875&amp;parent=file%3A%2F%2F&amp;pfname=&amp;rpctoken=31020561" style="position: absolute; top: -100px; width: 1px; height: 1px;"></iframe>
 
 <script id="as-final-3-upgrades-2026">
-(function applyThreeUpgradesPatchV2() {
+(function applyFinalStableUpgrades() {
   if (!window.state || !window.appActions || !window.ctpActions) {
-    setTimeout(applyThreeUpgradesPatchV2, 80);
+    setTimeout(applyFinalStableUpgrades, 80);
     return;
   }
-  if (window.__AS_THREE_UPGRADES_V2__) return;
-  window.__AS_THREE_UPGRADES_V2__ = true;
+  if (window.__AS_FINAL_STABLE_UPGRADES__) return;
+  window.__AS_FINAL_STABLE_UPGRADES__ = true;
 
   const st = window.state;
 
   // =========================================================================
-  // CSS BỔ TRỢ: TỐI ƯU CẢM ỨNG CHẠM NHẠY 100% & CHỐNG CHE KHUẤT T1-T6
+  // CSS CHUẨN: NGÀY ĐẬM NÉT + THANH NĂM/THÁNG MƯỢT NHƯ NATIVE, KHÔNG BỊ CHE
   // =========================================================================
-  const oldStyle = document.getElementById('as-three-upgrades-css');
-  if (oldStyle) oldStyle.remove();
-
+  document.getElementById('as-three-upgrades-css')?.remove();
   const styleEl = document.createElement('style');
   styleEl.id = 'as-three-upgrades-css';
   styleEl.textContent = `
-    /* 1. Lớp hiển thị DD/MM/YYYY đè lên input[type="date"] */
+    /* 1. Định dạng DD/MM/YYYY to, rõ, đậm nét */
     .as-date-ddmmyyyy-wrap {
       position: relative !important;
       display: flex !important;
@@ -9277,7 +9275,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       opacity: 0 !important;
       cursor: pointer !important;
     }
-   .as-date-ddmmyyyy-display {
+    .as-date-ddmmyyyy-display {
       position: absolute !important;
       inset: 0 !important;
       z-index: 1 !important;
@@ -9311,7 +9309,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       color: #0f172a !important;
     }
 
-    /* 3. Khung Năm cố định + Tháng kéo ngang siêu nhạy, không bao giờ che T1-T6 */
+    /* 2. Thanh Năm cố định bên trái + Tháng kéo ngang bên phải (Không bị che T1-T6) */
     .as-date-bar-wrap {
       display: flex !important;
       align-items: center !important;
@@ -9320,11 +9318,9 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       padding: 4px 6px !important;
       background: #f1f5f9 !important;
       border: 1px solid #e2e8f0 !important;
-      border-radius: 9999px !important;
+      border-radius: 16px !important;
       box-sizing: border-box !important;
-      overflow: hidden !important;
-      user-select: none !important;
-      -webkit-user-select: none !important;
+      overflow: visible !important;
     }
     .as-year-pinned {
       display: inline-flex !important;
@@ -9334,11 +9330,10 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       padding: 2px !important;
       border-radius: 9999px !important;
       flex-shrink: 0 !important;
-      position: relative !important;
-      z-index: 5 !important;
+      z-index: 10 !important;
     }
     .as-month-scroller {
-      position: relative !important; /* Bắt buộc để tính đúng vị trí nút T1-T12 */
+      position: relative !important;
       display: flex !important;
       align-items: center !important;
       gap: 4px !important;
@@ -9347,8 +9342,9 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       overflow-x: auto !important;
       overflow-y: hidden !important;
       -webkit-overflow-scrolling: touch !important;
-      scroll-behavior: auto !important; /* Tắt smooth CSS để không chặn cú chạm trên iOS */
-      padding: 2px 8px 2px 4px !important;
+      scroll-behavior: auto !important;
+      padding: 2px 6px 2px 2px !important;
+      border-radius: 12px !important;
       scrollbar-width: none !important;
     }
     .as-month-scroller::-webkit-scrollbar {
@@ -9357,19 +9353,29 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     .as-year-btn, .as-month-btn {
       flex-shrink: 0 !important;
       white-space: nowrap !important;
-      touch-action: manipulation !important; /* Phản hồi chạm tức thì 0ms trên iPhone */
+      touch-action: manipulation !important;
       cursor: pointer !important;
+      user-select: none !important;
+      -webkit-user-select: none !important;
       -webkit-tap-highlight-color: transparent !important;
-      transition: background-color 0.1s ease, color 0.1s ease, transform 0.08s ease !important;
-    }
-    .as-year-btn:active, .as-month-btn:active {
-      transform: scale(0.94) !important;
+      pointer-events: auto !important;
     }
   `;
   document.head.appendChild(styleEl);
 
+  // Hàm gọi render lại giao diện an toàn (kể cả khi window.renderApp chưa được gắn)
+  function triggerAppRender() {
+    if (typeof window.renderApp === 'function') {
+      window.renderApp();
+    } else {
+      // Kích hoạt render thông qua hàm có sẵn trong appActions
+      const curTab = st.activeTab || 'shows';
+      window.appActions.setTab(curTab);
+    }
+  }
+
   // =========================================================================
-  // 1. HIỂN THỊ CHUẨN DD/MM/YYYY TRÊN TẤT CẢ CÁC Ô CHỌN NGÀY
+  // 1. HIỂN THỊ DD/MM/YYYY TRÊN CÁC Ô CHỌN NGÀY
   // =========================================================================
   function formatIsoToDdMmYyyy(isoStr) {
     if (!isoStr || typeof isoStr !== 'string') return 'Chọn ngày';
@@ -9392,7 +9398,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 
         const badge = document.createElement('div');
         badge.className = 'as-date-ddmmyyyy-display';
-        badge.innerHTML = `<span class="as-date-text"></span><i class="fa-regular fa-calendar text-slate-400 text-[11px] ml-1.5"></i>`;
+        badge.innerHTML = `<span class="as-date-text"></span><i class="fa-regular fa-calendar"></i>`;
         wrap.appendChild(badge);
 
         const updateBadge = () => {
@@ -9411,141 +9417,36 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   }
 
   // =========================================================================
-  // 2. VIETQR BILL CTP: BỎ SỐ TIỀN TỰ ĐIỀN + CHUYỂN SANG BASE64 RÕ NÉT 100%
+  // 2. THANH NĂM / THÁNG: PHẢN HỒI TỨC THÌ, KHÔNG TỰ NHẢY, KHÔNG CHE T1-T6
   // =========================================================================
-  window.buildVietQrUrl = function(bankBin, bankAcc) {
-    const cleanAcc = String(bankAcc || '').replace(/\s+/g, '').trim();
-    const cleanBin = String(bankBin || '970436').trim();
-    if (!cleanAcc) return '';
-    return `https://img.vietqr.io/image/${cleanBin}-${cleanAcc}-qr_only.png`;
-  };
-
-  async function convertImgToBase64(imgEl) {
-    if (!imgEl || !imgEl.src || imgEl.src.startsWith('data:') || imgEl.dataset.convertingBase64 === '1') return;
-    imgEl.dataset.convertingBase64 = '1';
-    const rawUrl = imgEl.src.split('?')[0];
-    try {
-      const resp = await fetch(rawUrl, { mode: 'cors', cache: 'force-cache' });
-      const blob = await resp.blob();
-      const base64Data = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(blob);
-      });
-      if (base64Data && base64Data.startsWith('data:image')) {
-        imgEl.src = base64Data;
-      }
-    } catch (err) {
-      try {
-        const tempImg = new Image();
-        tempImg.crossOrigin = 'anonymous';
-        tempImg.onload = function() {
-          const c = document.createElement('canvas');
-          c.width = tempImg.naturalWidth || 240;
-          c.height = tempImg.naturalHeight || 240;
-          c.getContext('2d').drawImage(tempImg, 0, 0);
-          try { imgEl.src = c.toDataURL('image/png'); } catch (e) {}
-        };
-        tempImg.src = rawUrl;
-      } catch (e2) {}
-    } finally {
-      imgEl.dataset.convertingBase64 = '0';
-    }
-  }
-
-  function sanitizeAndBase64BillQr() {
-    const billOverlay = document.querySelector('[onclick="ctpActions.closeBillModal()"]');
-    if (!billOverlay) return;
-
-    billOverlay.querySelectorAll('div, span, p').forEach((el) => {
-      if (el.children.length === 0 && (el.textContent || '').trim().startsWith('Số tiền tự điền:')) {
-        el.remove();
-      }
-    });
-
-    billOverlay.querySelectorAll('img[alt="VietQR"], img.vietqr-img-el').forEach((qrImg) => {
-      if (qrImg.src && qrImg.src.includes('?')) {
-        qrImg.src = qrImg.src.split('?')[0];
-      }
-      convertImgToBase64(qrImg);
-    });
-  }
-
-  const origCaptureBill = window.ctpActions.captureBillImage;
-  window.ctpActions.captureBillImage = async function() {
-    sanitizeAndBase64BillQr();
-    const billOverlay = document.querySelector('[onclick="ctpActions.closeBillModal()"]');
-    if (billOverlay) {
-      const qrImgs = Array.from(billOverlay.querySelectorAll('img[alt="VietQR"], img.vietqr-img-el'));
-      await Promise.all(qrImgs.map(img => convertImgToBase64(img)));
-    }
-    return origCaptureBill.apply(this, arguments);
-  };
-
-  // =========================================================================
-  // 3. FIX TRIỆT ĐỂ THANH NĂM / THÁNG: NHẠY TỨC THÌ, KHÔNG CHE T1-T6, ĐỒNG BỘ 4 TAB
-  // =========================================================================
-  // Vá lỗi: Các show tự note ngoài lịch ở tab CTP & Chủ Show cũng phải lọc chuẩn theo Năm đang chọn (2026 / 2027)
-  function ensureYearFilterForOwnerAndCtp() {
-    if (!Array.isArray(st.shows)) return;
-    // Giữ bản gốc của ctpCustomShows để lọc theo selectedYear khi hiển thị
-    if (!st.__allCtpCustomShowsBackup && Array.isArray(st.ctpCustomShows)) {
-      st.__allCtpCustomShowsBackup = st.ctpCustomShows;
-    }
-  }
-
-  // Hàm cuộn chuẩn xác dùng tọa độ BoundingClientRect (không bao giờ lệch hay che T1-T6)
-  function centerActiveMonthPill(useSmooth = true) {
+  // Chỉ cuộn thanh tháng đúng 1 lần khi người dùng thực sự bấm đổi Năm hoặc đổi Tháng
+  function alignSelectedMonthInScroller() {
     document.querySelectorAll('.as-month-scroller').forEach((scroller) => {
       const activeBtn = scroller.querySelector('.as-month-btn.active');
       if (!activeBtn) return;
 
-      const btnText = (activeBtn.textContent || '').trim();
-      // Nếu đang chọn T1, T2 hoặc nút "Tất cả"/"Cả năm" thì ép sát về đầu trái (scrollLeft = 0) để thấy trọn T1-T6
-      if (btnText === 'T1' || btnText === 'T2' || btnText === 'Tất cả' || btnText === 'Cả năm') {
-        if (useSmooth && scroller.scrollTo) {
-          scroller.scrollTo({ left: 0, behavior: 'smooth' });
-        } else {
-          scroller.scrollLeft = 0;
-        }
+      const txt = (activeBtn.textContent || '').trim();
+      // Nếu là Tất cả, Cả năm, T1, T2, T3 -> luôn neo về sát đầu bên trái (scrollLeft = 0) để hiện rõ T1-T6
+      if (txt === 'Tất cả' || txt === 'Cả năm' || txt === 'T1' || txt === 'T2' || txt === 'T3') {
+        scroller.scrollLeft = 0;
         return;
       }
 
+      // Các tháng từ T4 - T12: tính vị trí tương đối chuẩn xác bên trong scroller và đặt ra giữa
       const scrollerRect = scroller.getBoundingClientRect();
       const btnRect = activeBtn.getBoundingClientRect();
-      const currentScroll = scroller.scrollLeft;
-      const offsetInsideScroller = (btnRect.left - scrollerRect.left) + currentScroll;
-      const targetLeft = Math.max(0, offsetInsideScroller - (scrollerRect.width / 2) + (btnRect.width / 2));
-
-      if (useSmooth && scroller.scrollTo) {
-        scroller.scrollTo({ left: targetLeft, behavior: 'smooth' });
-      } else {
-        scroller.scrollLeft = targetLeft;
-      }
+      const btnOffsetInScroller = (btnRect.left - scrollerRect.left) + scroller.scrollLeft;
+      const targetScroll = Math.max(0, btnOffsetInScroller - (scrollerRect.width / 2) + (btnRect.width / 2));
+      scroller.scrollLeft = targetScroll;
     });
   }
 
-  // Chặn renderApp() của file gốc tự ý ghi đè vị trí cuộn cũ của thanh tháng khi đổi Năm/Tháng
-  if (typeof window.renderApp === 'function' && !window.__ORIG_RENDER_APP_WRAPPED__) {
-    window.__ORIG_RENDER_APP_WRAPPED__ = true;
-    const origRenderApp = window.renderApp;
-    window.renderApp = function() {
-      const res = origRenderApp.apply(this, arguments);
-      // Ngay lập tức căn chuẩn vị trí tháng đang chọn trong cùng 1 frame vẽ màn hình
-      centerActiveMonthPill(false);
-      requestAnimationFrame(() => {
-        centerActiveMonthPill(true);
-        enhanceAllDateInputs();
-        sanitizeAndBase64BillQr();
-      });
-      return res;
-    };
-  }
-
-  // Ghi đè hàm chọn Năm (2026 -> Tháng hiện tại thực tế, 2027 -> Mặc định về T1 đồng bộ cả 4 tab)
+  // Khi bấm chọn Năm:
+  // - Chọn 2026 (năm hiện tại): Tự động trỏ thẳng về tháng thực tế hiện tại
+  // - Chọn 2027 (năm chưa diễn ra): Tự động nhảy mặc định về T1 (đồng bộ cả 4 tab)
   window.appActions.setYear = function(y) {
     const targetYear = Number(y);
-    const realCurrentMonth = new Date().getMonth() + 1; // Tháng thực tế hiện tại (1 - 12)
+    const realCurrentMonth = new Date().getMonth() + 1;
     const targetMonth = (targetYear === 2026) ? realCurrentMonth : 1;
 
     st.selectedYear = targetYear;
@@ -9555,19 +9456,24 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     st.filterAllMonthsInList = false;
     st.ownerAllMonths = false;
 
-    if (typeof window.renderApp === 'function') {
-      window.renderApp();
-    }
+    triggerAppRender();
+    requestAnimationFrame(alignSelectedMonthInScroller);
   };
 
-  // Đồng bộ chọn Tháng giữa các tab và cuộn mượt nút tháng ra giữa
   window.appActions.setMonth = function(m) {
     const mNum = Number(m);
     st.selectedMonth = mNum;
     st.ctpMonth = mNum;
     st.ownerMonth = mNum;
     st.filterAllMonthsInList = false;
-    if (typeof window.renderApp === 'function') window.renderApp();
+    triggerAppRender();
+    requestAnimationFrame(alignSelectedMonthInScroller);
+  };
+
+  window.appActions.toggleAllMonths = function() {
+    st.filterAllMonthsInList = !st.filterAllMonthsInList;
+    triggerAppRender();
+    requestAnimationFrame(alignSelectedMonthInScroller);
   };
 
   window.ctpActions.setMonth = function(m) {
@@ -9575,7 +9481,8 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     st.ctpMonth = mNum;
     st.selectedMonth = mNum;
     st.ownerMonth = mNum;
-    if (typeof window.renderApp === 'function') window.renderApp();
+    triggerAppRender();
+    requestAnimationFrame(alignSelectedMonthInScroller);
   };
 
   if (window.ownerActions) {
@@ -9585,34 +9492,175 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       st.selectedMonth = mNum;
       st.ctpMonth = mNum;
       st.ownerAllMonths = false;
-      if (typeof window.renderApp === 'function') window.renderApp();
+      triggerAppRender();
+      requestAnimationFrame(alignSelectedMonthInScroller);
+    };
+    window.ownerActions.toggleAllMonths = function() {
+      st.ownerAllMonths = !st.ownerAllMonths;
+      triggerAppRender();
+      requestAnimationFrame(alignSelectedMonthInScroller);
     };
   }
 
-  // Bắt sự kiện chạm trực tiếp (pointerdown / click) trên thanh Năm & Tháng để không bao giờ bị trễ khi đang cuộn
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.as-year-btn, .as-month-btn');
-    if (btn) {
-      requestAnimationFrame(() => centerActiveMonthPill(true));
+  const origSetTab = window.appActions.setTab;
+  window.appActions.setTab = function(tab) {
+    const res = origSetTab.apply(this, arguments);
+    requestAnimationFrame(alignSelectedMonthInScroller);
+    return res;
+  };
+
+  // =========================================================================
+  // 3. VIETQR BILL CTP: BỎ SỐ TIỀN & ÉP VẼ QR RA CANVAS/BASE64 TRƯỚC KHI CHỤP
+  // =========================================================================
+  window.buildVietQrUrl = function(bankBin, bankAcc) {
+    const cleanAcc = String(bankAcc || '').replace(/\s+/g, '').trim();
+    const cleanBin = String(bankBin || '970436').trim();
+    if (!cleanAcc) return '';
+    return `https://img.vietqr.io/image/${cleanBin}-${cleanAcc}-qr_only.png`;
+  };
+
+  // Hàm tải ảnh QR về dạng Base64 an toàn (có fallback qua corsproxy nếu Safari chặn)
+  async function fetchQrAsBase64(url) {
+    const cleanUrl = url.split('?')[0];
+    const tryUrls = [
+      cleanUrl,
+      `https://wsrv.nl/?url=${encodeURIComponent(cleanUrl)}&output=png`
+    ];
+    for (const u of tryUrls) {
+      try {
+        const res = await fetch(u, { mode: 'cors' });
+        if (!res.ok) continue;
+        const blob = await res.blob();
+        const b64 = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+        if (b64 && b64.startsWith('data:image')) return b64;
+      } catch (e) {}
     }
-  }, true);
+    return null;
+  }
 
-  // Theo dõi khi mở Modal mới (Form nổ show, Bill CTP...) với cơ chế chống giật lag (debounce)
-  let obsTimer = null;
-  const lightObserver = new MutationObserver(() => {
-    if (obsTimer) cancelAnimationFrame(obsTimer);
-    obsTimer = requestAnimationFrame(() => {
-      enhanceAllDateInputs();
-      sanitizeAndBase64BillQr();
+  async function prepareBillModalQrForCapture() {
+    const billOverlay = document.querySelector('[onclick="ctpActions.closeBillModal()"]');
+    if (!billOverlay) return;
+
+    // 1. Xóa dòng "Số tiền tự điền: ..."
+    billOverlay.querySelectorAll('div, span, p').forEach((el) => {
+      if (el.children.length === 0 && (el.textContent || '').trim().startsWith('Số tiền tự điền:')) {
+        el.remove();
+      }
     });
-  });
-  lightObserver.observe(document.body, { childList: true, subtree: true });
 
-  // Khởi chạy ngay lập tức
-  ensureYearFilterForOwnerAndCtp();
+    // 2. Chuyển tất cả ảnh QR sang Base64 + Vẽ dự phòng bằng thẻ <canvas> để html2canvas không bao giờ bị trắng
+    const qrImgs = Array.from(billOverlay.querySelectorAll('img[alt="VietQR"], img.vietqr-img-el'));
+    for (const img of qrImgs) {
+      const rawSrc = img.getAttribute('src') || '';
+      if (!rawSrc) continue;
+
+      if (!rawSrc.startsWith('data:image')) {
+        const cleanUrl = rawSrc.split('?')[0];
+        if (img.src !== cleanUrl) img.src = cleanUrl;
+        const b64 = await fetchQrAsBase64(cleanUrl);
+        if (b64) {
+          img.src = b64;
+          try { if (img.decode) await img.decode(); } catch (e) {}
+        }
+      }
+    }
+  }
+
+  // Ghi đè hoàn toàn hàm Chụp Ảnh Bill CTP: Đợi ảnh QR chuyển xong sang Base64 và vẽ lên Canvas thực rồi mới chụp
+  window.ctpActions.captureBillImage = async function() {
+    const bm = st.ctpBillModal;
+    const modalCard = document.querySelector('[onclick="ctpActions.closeBillModal()"] > div');
+    if (!bm || !modalCard) return;
+
+    if (typeof showToast === 'function') {
+      showToast('📸 Đang xử lý mã QR & chụp ảnh Bảng CTP...');
+    }
+
+    // Đảm bảo mã QR đã chuyển thành Base64 nội bộ 100%
+    await prepareBillModalQrForCapture();
+
+    // Thay thế tạm thời thẻ <img> QR bằng thẻ <canvas> đã vẽ sẵn điểm ảnh QR (html2canvas chụp <canvas> đạt tỷ lệ hiện 100% trên mọi iPhone)
+    const qrImgs = Array.from(modalCard.querySelectorAll('img[alt="VietQR"], img.vietqr-img-el'));
+    const restoredList = [];
+    for (const qrImg of qrImgs) {
+      try {
+        const w = qrImg.clientWidth || 112;
+        const h = qrImg.clientHeight || 112;
+        const qrCanvas = document.createElement('canvas');
+        qrCanvas.width = w * 2;
+        qrCanvas.height = h * 2;
+        qrCanvas.style.width = w + 'px';
+        qrCanvas.style.height = h + 'px';
+        qrCanvas.className = qrImg.className;
+
+        const ctx = qrCanvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, qrCanvas.width, qrCanvas.height);
+        ctx.drawImage(qrImg, 0, 0, qrCanvas.width, qrCanvas.height);
+
+        qrImg.parentNode.insertBefore(qrCanvas, qrImg);
+        qrImg.style.display = 'none';
+        restoredList.push({ qrImg, qrCanvas });
+      } catch (e) {}
+    }
+
+    const scrollBox = modalCard.querySelector('.overflow-auto');
+    const oldMaxH = modalCard.style.maxHeight;
+    const oldOv = scrollBox ? scrollBox.style.overflow : '';
+    modalCard.style.maxHeight = 'none';
+    if (scrollBox) scrollBox.style.overflow = 'visible';
+
+    try {
+      const canvas = await html2canvas(modalCard, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        allowTaint: false,
+        ignoreElements: (el) => el.getAttribute && el.getAttribute('data-html2canvas-ignore') === 'true'
+      });
+
+      modalCard.style.maxHeight = oldMaxH;
+      if (scrollBox) scrollBox.style.overflow = oldOv;
+      restoredList.forEach(({ qrImg, qrCanvas }) => {
+        qrCanvas.remove();
+        qrImg.style.display = '';
+      });
+
+      const fileName = `Bang_CTP_${bm.memberName}_T${bm.month}_${st.selectedYear || 2026}.png`;
+      if (typeof window.showCapturedImageModal === 'function') {
+        window.showCapturedImageModal(canvas.toDataURL('image/png'), fileName, `Bảng CTP Tháng ${bm.month}/${st.selectedYear || 2026} - ${bm.memberName}`);
+      }
+    } catch (err) {
+      modalCard.style.maxHeight = oldMaxH;
+      if (scrollBox) scrollBox.style.overflow = oldOv;
+      restoredList.forEach(({ qrImg, qrCanvas }) => {
+        qrCanvas.remove();
+        qrImg.style.display = '';
+      });
+      alert('Lỗi chụp bảng: ' + err.message);
+    }
+  };
+
+  // Theo dõi nhẹ nhàng khi mở popup mới để định dạng ngày & chuẩn bị sẵn Base64 cho QR Bill
+  let debounceRaf = null;
+  new MutationObserver(() => {
+    if (debounceRaf) cancelAnimationFrame(debounceRaf);
+    debounceRaf = requestAnimationFrame(() => {
+      enhanceAllDateInputs();
+      if (document.querySelector('[onclick="ctpActions.closeBillModal()"]')) {
+        prepareBillModalQrForCapture();
+      }
+    });
+  }).observe(document.body, { childList: true, subtree: true });
+
+  // Khởi chạy lần đầu
   enhanceAllDateInputs();
-  sanitizeAndBase64BillQr();
-  centerActiveMonthPill(false);
+  setTimeout(alignSelectedMonthInScroller, 100);
 })();
 </script>
 </body></html>
