@@ -10491,7 +10491,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 
   function checkMaintenanceGuard() {
     if (st.readonlyMaintenanceMode && !st.isAdminMode) {
-      alert('🛡️ Hệ thống đang tạm khóa Nổ Show / Sửa lịch để bảo trì/đối soát công nợ. Vui lòng liên hệ Admin!');
+      alert('🛡️ Hệ thống đang tạm khóa Nổ Show / Sửa lịch để bảo trì. Vui lòng đợi!');
       return true;
     }
     return false;
@@ -10539,11 +10539,22 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   }
 
   // =========================================================================
-  // 3. TÍCH HỢP MỤC 1 (ĐỔI MÀU & THỨ TỰ NHÂN SỰ) VÀO TAB "CẤP PIN" SẴN CÓ
+  // 3. ĐỔI TÊN TAB THÀNH "🔑 NHÂN SỰ & PIN" + TÍCH HỢP ĐỔI MÀU & THỨ TỰ NHÂN SỰ
   // =========================================================================
-  function injectMemberStylingIntoPinsTab() {
+  function upgradeAdminTabsAndInjectMemberStyling() {
     const shell = document.getElementById('as-light-admin-shell');
     if (!shell) return;
+
+    // 1. Đổi tên tab thứ 2 từ "Cấp PIN" thành "NHÂN SỰ & PIN" trên thanh menu của Admin
+    const tabsWrap = shell.querySelector('.as-adm-tabs');
+    if (tabsWrap) {
+      const btns = tabsWrap.querySelectorAll('button');
+      if (btns.length >= 2 && btns[1].textContent !== '🔑 NHÂN SỰ & PIN') {
+        btns[1].textContent = '🔑 NHÂN SỰ & PIN';
+      }
+    }
+
+    // 2. Kiểm tra nếu đang ở tab Cấp PIN / Nhân sự thì gắn bảng chỉnh Màu thẻ & Thứ tự cột
     const container = shell.querySelector('.as-adm-container');
     if (!container) return;
 
@@ -10562,7 +10573,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     hostBox.innerHTML = `
       <div style="background:#fff;border:1px solid #cbd5e1;border-radius:20px;padding:16px;margin-bottom:18px;box-shadow:0 4px 14px rgba(15,23,42,0.04);">
         <div style="font-size:13px;font-weight:900;color:#0f172a;text-transform:uppercase;margin-bottom:4px;">🎨 TÙY CHỈNH MÀU SẮC THẺ & THỨ TỰ CỘT NHÂN SỰ (13 NGƯỜI)</div>
-        <div style="font-size:11px;color:#64748b;margin-bottom:12px;">Thay đổi thứ tự đứng cột (1, 2, 3...) hoặc đổi màu thẻ tên của anh em ngay bên dưới:</div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:12px;">Thay đổi thứ tự đứng cột (1, 2, 3...) hoặc đổi màu thẻ tên của anh em trên Bảng Công Tác:</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:8px;">
           ${membersSorted.map((m, idx) => `
             <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
@@ -10632,7 +10643,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       modalBackdrop.style.display = 'none';
     }
     if (inAdmin) {
-      setTimeout(injectMemberStylingIntoPinsTab, 30);
+      setTimeout(upgradeAdminTabsAndInjectMemberStyling, 30);
       return;
     }
 
@@ -10665,7 +10676,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   }
 
   // =========================================================================
-  // 5. CÁC HÀM XỬ LÝ TRONG CỬA SỔ CÀI ĐẶT (ĐÃ GỒM MỤC 8 & MỤC 12)
+  // 5. CÁC HÀM XỬ LÝ TRONG CỬA SỔ CÀI ĐẶT
   // =========================================================================
   window.adminProActions = {
     closeModal() {
@@ -11083,7 +11094,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
                   <div style="font-size:12.5px;font-weight:900;color:#0f172a;">💰 4. ĐƠN GIÁ CTP MẶC ĐỊNH</div>
                   <div style="font-size:11px;color:#64748b;margin-top:2px;">Sửa số tiền rồi bấm "💾 Lưu Giá"</div>
                 </div>
-                <button type="button" onclick="window.adminProActions.saveCtpRates()" style="background:#059669;color:#fff;border:none;padding:7px 13px;border-radius:10px;font-size:11.5px;font-weight:900;cursor:pointer;">💾 Lưu Giá</button>
+                <button type="button" onclick="window.adminProActions.saveCtpRates()" style="background:#059669;color:#fff;border:none;padding:7px 13px;border-radius:10px;font-size:11px;font-weight:900;cursor:pointer;">💾 Lưu Giá</button>
               </div>
               <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px;font-size:11px;">
                 <div><b>🎥 Quay 1 ngày:</b><input type="text" id="as-pro-r-quay1" value="${Number(rates.quay1Day).toLocaleString('vi-VN')}" style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;margin-top:2px;box-sizing:border-box;" /></div>
@@ -11097,7 +11108,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
               </div>
             </div>
 
-            <!-- 5. Ô SỐ 5: NHẬT KÝ HOẠT ĐỘNG HỆ THỐNG (ACTIVITY LOG) -->
+            <!-- 5. Ô SỐ 5: NHẬT KÝ HOẠT ĐỘNG (ACTIVITY LOG) -->
             <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;display:flex;flex-direction:column;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
                 <div>
