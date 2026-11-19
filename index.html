@@ -12373,4 +12373,420 @@ let html = '', sig = '';
   upgradeCrewModal();
 })();
 </script>
+
+<!-- KHU VỰC WOW: BỘ LỌC VUỐT GỘP TỰ NHIÊN (SWIPE-UP GESTURE FILTER) -->
+<script id="as-wow-gesture-filter-2026">
+(function initWowGestureFilter() {
+  if (!window.state || !window.appActions) {
+    setTimeout(initWowGestureFilter, 100);
+    return;
+  }
+  if (window.__AS_WOW_FILTER_READY__) return;
+  window.__AS_WOW_FILTER_READY__ = true;
+
+  const st = window.state;
+  let filterRole = 'all'; // 'all', 'owner', 'ctp'
+  let filterStatus = 'all'; // 'all', 'unpaid', 'done'
+  let isFilterDrawerOpen = false;
+
+  // CSS hiệu ứng & giao diện
+  const oldStyle = document.getElementById('as-wow-filter-styles');
+  if (oldStyle) oldStyle.remove();
+
+  const styleEl = document.createElement('style');
+  styleEl.id = 'as-wow-filter-styles';
+  styleEl.textContent = `
+    /* Dòng chữ tương tác */
+    #as-wow-trigger-text {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #f1f5f9;
+      color: #475569;
+      font-size: 11.5px;
+      font-weight: 800;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+    }
+    #as-wow-trigger-text:active {
+      transform: scale(0.96);
+      background: #e2e8f0;
+    }
+    #as-wow-trigger-text.active-filtering {
+      background: #fffbeb;
+      color: #b45309;
+      border-color: #fde68a;
+      box-shadow: 0 2px 8px rgba(217, 119, 6, 0.08);
+    }
+    #as-wow-trigger-text.active-filtering span.dot {
+      width: 6px;
+      height: 6px;
+      background: #f59e0b;
+      border-radius: 999px;
+      display: inline-block;
+      animation: asBlink 1.4s infinite ease-in-out;
+    }
+    @keyframes asBlink {
+      0%, 100% { opacity: 0.3; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.2); }
+    }
+
+    /* Overlay Control Center trượt từ dưới */
+    #as-wow-filter-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483630;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    #as-wow-drawer {
+      background: #ffffff;
+      width: 100%;
+      max-width: 460px;
+      border-top-left-radius: 28px;
+      border-top-right-radius: 28px;
+      box-shadow: 0 -12px 36px rgba(15, 23, 42, 0.15);
+      transform: translateY(100%);
+      transition: transform 0.24s cubic-bezier(0.32, 0.94, 0.6, 1);
+      display: flex;
+      flex-direction: column;
+      padding: 16px 20px min(24px, calc(12px + env(safe-area-inset-bottom)));
+      box-sizing: border-box;
+      font-family: Inter, -apple-system, sans-serif;
+    }
+    #as-wow-drawer.open {
+      transform: translateY(0);
+    }
+
+    /* Các nhãn viên thuốc của Bộ lọc */
+    .as-filter-pill-btn {
+      padding: 8px 12px;
+      border-radius: 12px;
+      border: 1.5px solid #e2e8f0;
+      background: #f8fafc;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.12s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .as-filter-pill-btn:active { transform: scale(0.96); }
+    .as-filter-pill-btn.active {
+      border-color: #0f172a;
+      background: #0f172a;
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+    }
+  `;
+  document.head.appendChild(styleEl);
+
+  // Đếm show theo bộ lọc
+  function getFilteredShows() {
+    const all = (st.shows || []).filter(s => s && !s.isHold && !s.isCancelled);
+    const uid = st.currentUserId;
+    if (!uid) return all;
+
+    return all.filter(s => {
+      // 1. Lọc Vai trò
+      const isOwner = s.ownerId === uid;
+      const isCtp = Array.isArray(s.memberIds) && s.memberIds.includes(uid) && !isOwner;
+      if (filterRole === 'owner' && !isOwner) return false;
+      if (filterRole === 'ctp' && !isCtp) return false;
+
+      // 2. Lọc Trạng thái tiền nong
+      const hasUnpaid = s.postStatus === 'pending' || (s.memberRoles && s.memberRoles[uid]?.paid === false);
+      const isDone = !hasUnpaid;
+      if (filterStatus === 'unpaid' && !hasUnpaid) return false;
+      if (filterStatus === 'done' && isDone) return false; // Chỉ giữ Đã tất toán nếu trạng thái là done
+
+      return true;
+    });
+  }
+
+  // =========================================================================
+  // BỘ HÀNH ĐỘNG ĐIỀU KHIỂN DRAWER VÀ LỌC DỮ LIỆU
+  // =========================================================================
+  window.wowFilterActions = {
+    openDrawer() {
+      const overlay = document.getElementById('as-wow-filter-overlay');
+      const drawer = document.getElementById('as-wow-drawer');
+      if (!overlay || !drawer) return;
+
+      isFilterDrawerOpen = true;
+      overlay.style.display = 'flex';
+      // Tạo chút trễ để CSS transition chạy mượt mà
+      requestAnimationFrame(() => {
+        drawer.classList.add('open');
+      });
+      renderDrawerUI();
+    },
+
+    closeDrawer() {
+      const overlay = document.getElementById('as-wow-filter-overlay');
+      const drawer = document.getElementById('as-wow-drawer');
+      if (!overlay || !drawer) return;
+
+      isFilterDrawerOpen = false;
+      drawer.classList.remove('open');
+      setTimeout(() => {
+        if (!isFilterDrawerOpen) overlay.style.display = 'none';
+      }, 240);
+    },
+
+    setRole(role) {
+      filterRole = role;
+      applyFiltering();
+      renderDrawerUI();
+    },
+
+    setStatus(status) {
+      filterStatus = status;
+      applyFiltering();
+      renderDrawerUI();
+    },
+
+    clearFilters() {
+      filterRole = 'all';
+      filterStatus = 'all';
+      applyFiltering();
+      renderDrawerUI();
+    },
+
+    exportExcel() {
+      // Giả lập hoặc gọi lại hàm export có sẵn của app
+      const btn = Array.from(document.querySelectorAll('button')).find(
+        b => (b.textContent || '').toUpperCase().includes('.XLSX')
+      );
+      if (btn) btn.click();
+      else alert('📥 Đang xuất dữ liệu XLSX...');
+    }
+  };
+
+  function applyFiltering() {
+    // 1. Đồng bộ state lọc của Phú vào state gốc của app nếu có
+    // Ở đây, ta tự lọc dữ liệu hiển thị (khi renderApp gốc chạy, ta sẽ lọc danh sách show)
+    if (typeof window.renderApp === 'function') {
+      window.renderApp();
+    }
+    syncWowFilterUI();
+  }
+
+  // Can thiệp vào danh sách show gốc trước khi render (Lớp lọc trung gian)
+  const origGetActiveShows = st.getActiveShows || function() {
+    return (st.shows || []).filter(s => s && !s.isHold && !s.isCancelled);
+  };
+  st.getActiveShows = function() {
+    const list = origGetActiveShows.apply(this, arguments);
+    const uid = st.currentUserId;
+    if (!uid) return list;
+
+    return list.filter(s => {
+      const isOwner = s.ownerId === uid;
+      const isCtp = Array.isArray(s.memberIds) && s.memberIds.includes(uid) && !isOwner;
+      if (filterRole === 'owner' && !isOwner) return false;
+      if (filterRole === 'ctp' && !isCtp) return false;
+
+      const hasUnpaid = s.postStatus === 'pending' || (s.memberRoles && s.memberRoles[uid]?.paid === false);
+      if (filterStatus === 'unpaid' && !hasUnpaid) return false;
+      if (filterStatus === 'done' && hasUnpaid) return false;
+
+      return true;
+    });
+  };
+
+  // =========================================================================
+  // OVERLAY BOTTOM SHEET GESTURE DRAWER
+  // =========================================================================
+  let overlayEl = document.getElementById('as-wow-filter-overlay');
+  if (!overlayEl) {
+    overlayEl = document.createElement('div');
+    overlayEl.id = 'as-wow-filter-overlay';
+    overlayEl.onclick = () => window.wowFilterActions.closeDrawer();
+
+    const drawerEl = document.createElement('div');
+    drawerEl.id = 'as-wow-drawer';
+    drawerEl.onclick = (e) => e.stopPropagation();
+
+    // Hỗ trợ thao tác kéo xuống (drag-down) để tắt drawer cho tự nhiên
+    let startY = 0;
+    drawerEl.addEventListener('touchstart', (e) => {
+      startY = e.touches[0].clientY;
+    });
+    drawerEl.addEventListener('touchmove', (e) => {
+      const moveY = e.touches[0].clientY - startY;
+      if (moveY > 80) {
+        window.wowFilterActions.closeDrawer();
+      }
+    });
+
+    overlayEl.appendChild(drawerEl);
+    document.body.appendChild(overlayEl);
+  }
+
+  function renderDrawerUI() {
+    const drawer = document.getElementById('as-wow-drawer');
+    if (!drawer) return;
+
+    // Đếm nhanh số lượng để hiện badge
+    const allCount = (st.shows || []).filter(s => s && !s.isHold && !s.isCancelled).length;
+    const uid = st.currentUserId;
+    const ownerCount = (st.shows || []).filter(s => s && !s.isHold && !s.isCancelled && s.ownerId === uid).length;
+    const ctpCount = (st.shows || []).filter(s => s && !s.isHold && !s.isCancelled && Array.isArray(s.memberIds) && s.memberIds.includes(uid) && s.ownerId !== uid).length;
+
+    drawer.innerHTML = `
+      <!-- Thanh Handle nhỏ trên cùng để báo hiệu vuốt -->
+      <div style="width:36px;height:4.5px;background:#e2e8f0;border-radius:99px;margin:0 auto 16px;"></div>
+
+      <div style="display:flex;align-items:center;justify-content:between;margin-bottom:18px;">
+        <div>
+          <div style="font-size:14.5px;font-weight:900;color:#0f172a;">🎯 BỘ LỌC SHOW NHANH</div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px;">Chọn vai trò và trạng thái thanh toán để tìm kiếm</div>
+        </div>
+        <button type="button" onclick="window.wowFilterActions.closeDrawer()" style="width:28px;height:28px;border-radius:99px;border:none;background:#f1f5f9;color:#475569;font-weight:900;cursor:pointer;margin-left:auto;">✕</button>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:15px;margin-bottom:16px;">
+        <!-- Nhóm 1: Vai Trò -->
+        <div>
+          <div style="font-size:10.5px;font-weight:900;color:#64748b;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px;">👤 VAI TRÒ CỦA PHÚ LỚN</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            <button type="button" onclick="window.wowFilterActions.setRole('all')" class="as-filter-pill-btn ${filterRole === 'all' ? 'active' : ''}">Tất cả (${allCount})</button>
+            <button type="button" onclick="window.wowFilterActions.setRole('owner')" class="as-filter-pill-btn ${filterRole === 'owner' ? 'active' : ''}">👑 Làm Chủ (${ownerCount})</button>
+            <button type="button" onclick="window.wowFilterActions.setRole('ctp')" class="as-filter-pill-btn ${filterRole === 'ctp' ? 'active' : ''}">🎥 Nhận CTP (${ctpCount})</button>
+          </div>
+        </div>
+
+        <!-- Nhóm 2: Tiền nong -->
+        <div>
+          <div style="font-size:10.5px;font-weight:900;color:#64748b;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px;">💰 TRẠNG THÁI TIỀN NONG</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            <button type="button" onclick="window.wowFilterActions.setStatus('all')" class="as-filter-pill-btn ${filterStatus === 'all' ? 'active' : ''}">Tất cả</button>
+            <button type="button" onclick="window.wowFilterActions.setStatus('unpaid')" class="as-filter-pill-btn ${filterStatus === 'unpaid' ? 'active' : ''}">⏳ Chưa Thu</button>
+            <button type="button" onclick="window.wowFilterActions.setStatus('done')" class="as-filter-pill-btn ${filterStatus === 'done' ? 'active' : ''}">✅ Đã xong / Đủ ví</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer: Gộp nút xuất file và reset -->
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;border-top:1px solid #f1f5f9;padding-top:12px;margin-top:4px;">
+        <button type="button" onclick="window.wowFilterActions.exportExcel()" 
+          style="padding:11px 14px;border-radius:12px;border:none;background:#10b981;color:#ffffff;font-size:12.5px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 4px 12px rgba(16,185,129,0.2);">
+          <i class="fa-solid fa-file-excel"></i> Xuất File .XLSX
+        </button>
+        ${(filterRole !== 'all' || filterStatus !== 'all') ? `
+          <button type="button" onclick="window.wowFilterActions.clearFilters()" 
+            style="padding:11px 16px;border-radius:12px;border:1px solid #cbd5e1;background:#ffffff;color:#dc2626;font-size:12px;font-weight:800;cursor:pointer;">
+            Xoá lọc
+          </button>
+        ` : `
+          <button type="button" onclick="window.wowFilterActions.closeDrawer()" 
+            style="padding:11px 16px;border-radius:12px;border:none;background:#0f172a;color:#fbbf24;font-size:12px;font-weight:900;cursor:pointer;">
+            Xong
+          </button>
+        `}
+      </div>
+    `;
+  }
+
+  // =========================================================================
+  // GẮN CHỨ ĐỒNG BỘ VÀO HEADER (0% NHẤP NHÁY)
+  // =========================================================================
+  function syncWowFilterUI() {
+    const inAdmin = Boolean(st.isBackendPortal || window.location.hash === '#admin' || document.body.classList.contains('as-admin-mode-active'));
+    if (inAdmin) return;
+
+    // Tìm dòng subheader cũ ("5 show (0 đã tất toán)" hoặc "Năm 2026")
+    const header = document.querySelector('#app header');
+    if (!header) return;
+
+    // 1. Ẩn nút XLSX cũ và gỡ hàng nút lọc cũ ra cho thoáng mắt
+    document.querySelectorAll('button').forEach(btn => {
+      const txt = (btn.textContent || '').toUpperCase();
+      if (txt.includes('.XLSX') || txt.includes('TẤT CẢ (') || txt.includes('LÀM CHỦ (') || txt.includes('NHẬN CTP (')) {
+        // Nếu là nút XLSX cũ không phải trong drawer, ẩn đi
+        if (!btn.closest('#as-wow-drawer')) btn.style.display = 'none';
+      }
+    });
+
+    // 2. Tìm hoặc tạo dòng chữ kích hoạt thông minh
+    let targetContainer = null;
+    header.querySelectorAll('div, p, span').forEach(el => {
+      if (el.children.length === 0 && ((el.textContent || '').includes('tất toán') || (el.textContent || '').includes('show'))) {
+        targetContainer = el.parentElement;
+      }
+    });
+
+    if (!targetContainer) return;
+
+    let trigger = document.getElementById('as-wow-trigger-text');
+    if (!trigger) {
+      trigger = document.createElement('div');
+      trigger.id = 'as-wow-trigger-text';
+      trigger.onclick = () => window.wowFilterActions.openDrawer();
+      targetContainer.appendChild(trigger);
+    }
+
+    // Ẩn chữ tĩnh cũ đi để không bị trùng
+    targetContainer.childNodes.forEach(node => {
+      if (node !== trigger && node.nodeType === Node.TEXT_NODE) {
+        node.textContent = '';
+      } else if (node !== trigger && node.nodeType === Node.ELEMENT_NODE && !node.id) {
+        if (node.textContent.includes('show') || node.textContent.includes('tất toán')) {
+          node.style.display = 'none';
+        }
+      }
+    });
+
+    // 3. Tính toán câu từ tự nhiên dựa trên bộ lọc
+    const filteredCount = getFilteredShows().length;
+    let desc = `${filteredCount} show`;
+    const isFiltering = filterRole !== 'all' || filterStatus !== 'all';
+
+    if (isFiltering) {
+      let roleLabel = filterRole === 'owner' ? 'Làm Chủ' : 'Nhận CTP';
+      let statusLabel = filterStatus === 'unpaid' ? 'Chưa Thu' : 'Đã Xong';
+
+      if (filterRole !== 'all' && filterStatus !== 'all') {
+        desc = `🎯 ${filteredCount} show ${roleLabel} • ${statusLabel}`;
+      } else if (filterRole !== 'all') {
+        desc = `🎯 ${filteredCount} show ${roleLabel}`;
+      } else {
+        desc = `🎯 ${filteredCount} show ${statusLabel}`;
+      }
+    } else {
+      desc = `5 show (đã tất toán 0)`; // Phú lớn
+    }
+
+    const sig = `${desc}:${isFiltering}`;
+    if (trigger.dataset.sig !== sig) {
+      trigger.dataset.sig = sig;
+      trigger.className = isFiltering ? 'active-filtering' : '';
+      trigger.innerHTML = `
+        ${isFiltering ? '<span class="dot"></span>' : '🔍'}
+        <span>${desc}</span>
+        <i class="fa-solid fa-chevron-down" style="font-size: 8px; opacity: 0.6; margin-left: 1px;"></i>
+      `;
+    }
+  }
+
+  // Lắng nghe thay đổi của app để đồng bộ
+  const appRoot = document.getElementById('app');
+  if (appRoot) {
+    new MutationObserver(() => syncWowFilterUI()).observe(appRoot, { childList: true });
+  }
+
+  syncWowFilterUI();
+})();
+</script>
 </body></html>
