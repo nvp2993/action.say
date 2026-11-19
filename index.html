@@ -11170,8 +11170,8 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     setTimeout(enhanceNhanSuAndPinTabZeroFlicker, 80);
     return;
   }
-  if (window.__AS_NHANSU_PIN_ZERO_FLICKER__) return;
-  window.__AS_NHANSU_PIN_ZERO_FLICKER__ = true;
+  if (window.__AS_NHANSU_PIN_ZERO_FLICKER_V2__) return;
+  window.__AS_NHANSU_PIN_ZERO_FLICKER_V2__ = true;
 
   const st = window.state;
   let isApplyingPatch = false;
@@ -11198,54 +11198,58 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 
     isApplyingPatch = true;
     try {
-      // 1. Đổi tên tab "Cấp PIN" -> "🔑 NHÂN SỰ & PIN" ngay lập tức
-      const btns = shell.querySelectorAll('button');
-      btns.forEach(btn => {
+      // 1. Đổi tên tab "Cấp PIN" -> "🔑 NHÂN SỰ & PIN"
+      shell.querySelectorAll('button').forEach(btn => {
         const txt = (btn.textContent || '').trim();
         if (txt === '🔑 Cấp PIN' || txt === 'Cấp PIN') {
           btn.textContent = '🔑 NHÂN SỰ & PIN';
         }
       });
 
-      // 2. Nếu đang mở tab Nhân Sự & PIN -> Gắn bảng chỉnh Màu thẻ & Thứ tự cột cố định
-      if (!(shell.textContent || '').includes('MÃ PIN & HỌ TÊN')) return;
+      // 2. Kiểm tra không phân biệt chữ hoa/thường để nhận diện đúng màn hình PIN
+      const upperShellText = (shell.textContent || '').toUpperCase();
+      if (!upperShellText.includes('MÃ PIN') && !upperShellText.includes('HỌ TÊN')) return;
 
       // Đổi tiêu đề khối cho đồng bộ
       shell.querySelectorAll('div, h2, h3, span').forEach(el => {
-        if (el.children.length === 0 && (el.textContent || '').trim().startsWith('MÃ PIN & HỌ TÊN XUẤT VÉ')) {
-          el.textContent = 'NHÂN SỰ, MÃ PIN, MÀU THẺ & THỨ TỰ CỘT (MẶC ĐỊNH: 1234)';
+        if (el.children.length === 0) {
+          const t = (el.textContent || '').trim().toUpperCase();
+          if (t.startsWith('MÃ PIN & HỌ TÊN')) {
+            el.textContent = 'NHÂN SỰ, MÃ PIN, MÀU THẺ & THỨ TỰ CỘT (MẶC ĐỊNH: 1234)';
+          }
         }
       });
 
       const members = st.members || [];
-      const saveBtns = Array.from(shell.querySelectorAll('button')).filter(b => (b.textContent || '').trim() === 'Lưu');
+      const saveBtns = Array.from(shell.querySelectorAll('button')).filter(
+        b => (b.textContent || '').trim().toLowerCase() === 'lưu'
+      );
 
       saveBtns.forEach(saveBtn => {
         const topRow = saveBtn.parentElement;
-        if (!topRow || topRow.dataset.memberCustomInjected === '1') return;
+        if (!topRow || topRow.querySelector('.as-custom-mem-color')) return;
 
-        // Tìm thẻ cha chứa tên nhân sự
+        // Tìm thẻ cha chứa tên nhân sự (so sánh không phân biệt hoa/thường)
         let cardBox = topRow;
         let matchedMem = null;
         for (let depth = 0; depth < 3; depth++) {
           if (!cardBox) break;
-          const txt = (cardBox.textContent || '').trim();
-          matchedMem = members.find(m => m && m.name && txt.includes(m.name));
+          const cardTxtLower = (cardBox.textContent || '').toLowerCase();
+          matchedMem = members.find(m => m && m.name && cardTxtLower.includes(m.name.toLowerCase()));
           if (matchedMem) break;
           cardBox = cardBox.parentElement;
         }
         if (!matchedMem) return;
 
-        topRow.dataset.memberCustomInjected = '1';
-
-        // Ẩn chấm tròn tĩnh và thay bằng ô chọn màu trực tiếp
+        // Ẩn chấm tròn tĩnh và thay bằng ô chọn màu bấm được trực tiếp
         const dotEl = cardBox.querySelector('span[style*="background"], div[style*="background"]');
-        if (dotEl && dotEl.offsetWidth <= 16) {
+        if (dotEl && dotEl.offsetWidth <= 18) {
           dotEl.style.display = 'none';
         }
 
         const colorPicker = document.createElement('input');
         colorPicker.type = 'color';
+        colorPicker.className = 'as-custom-mem-color';
         colorPicker.value = matchedMem.bg || '#333333';
         colorPicker.title = `Đổi màu thẻ của ${matchedMem.name}`;
         colorPicker.style.cssText = 'width:22px;height:22px;border:1px solid #cbd5e1;border-radius:999px;padding:0;background:transparent;cursor:pointer;flex-shrink:0;margin-right:4px;';
@@ -11253,7 +11257,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
           window.adminProActions.updateMemberColor(matchedMem.id, this.value);
         };
 
-        // Chèn ô chọn màu ngay trước tên nhân sự hoặc đầu hàng
         const nameTarget = dotEl ? dotEl.parentElement : topRow;
         if (nameTarget) {
           nameTarget.insertBefore(colorPicker, nameTarget.firstChild);
@@ -11261,6 +11264,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 
         // Tạo cụm chỉnh Thứ tự cột [Cột: 1..13]
         const orderWrap = document.createElement('div');
+        orderWrap.className = 'as-custom-mem-order';
         orderWrap.style.cssText = 'display:inline-flex;align-items:center;gap:3px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:999px;padding:2px 7px;margin-right:4px;flex-shrink:0;';
         orderWrap.innerHTML = `<span style="font-size:10px;font-weight:800;color:#64748b;">Cột</span>`;
 
@@ -11276,7 +11280,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         };
         orderWrap.appendChild(orderInput);
 
-        // Chèn cụm Cột vào ngay trước ô nhập PIN hoặc nút Lưu
         const pinInput = topRow.querySelector('input:not([type="color"])');
         if (pinInput) {
           topRow.insertBefore(orderWrap, pinInput);
@@ -11289,31 +11292,23 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     }
   }
 
-  // Theo dõi trực tiếp thẻ #as-light-admin-shell để vá DOM tức thì trong cùng frame (0% nhấp nháy)
   function bindShellObserver() {
     const shell = document.getElementById('as-light-admin-shell');
     if (!shell) {
       setTimeout(bindShellObserver, 150);
       return;
     }
-    if (!shell.dataset.nhanSuPinObserved) {
-      shell.dataset.nhanSuPinObserved = '1';
-      const obs = new MutationObserver(() => {
-        applyNhanSuPinPatchNow();
-      });
-      obs.observe(shell, { childList: true, subtree: true });
+    if (!shell.dataset.nhanSuPinObservedV2) {
+      shell.dataset.nhanSuPinObservedV2 = '1';
+      new MutationObserver(() => applyNhanSuPinPatchNow()).observe(shell, { childList: true, subtree: true });
     }
     applyNhanSuPinPatchNow();
   }
 
-  // Theo dõi khi shell được tạo mới sau khi đăng nhập Admin
-  const bodyObs = new MutationObserver(() => {
+  new MutationObserver(() => {
     const shell = document.getElementById('as-light-admin-shell');
-    if (shell && !shell.dataset.nhanSuPinObserved) {
-      bindShellObserver();
-    }
-  });
-  bodyObs.observe(document.body, { childList: true });
+    if (shell && !shell.dataset.nhanSuPinObservedV2) bindShellObserver();
+  }).observe(document.body, { childList: true });
 
   bindShellObserver();
 })();
