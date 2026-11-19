@@ -2622,7 +2622,7 @@ function renderHeaderHtml() {
       return state.shows.find(s => s.id === showId) || (state.ctpCustomShows || []).find(s => s.id === showId);
     }
 
-    function getCombinedCtpShows() {
+function getCombinedCtpShows() {
       const regularShows = state.shows
         .filter(sh => {
           if (!sh.startDate) return false;
@@ -2630,14 +2630,15 @@ function renderHeaderHtml() {
           if (parseInt(yStr, 10) !== state.selectedYear) return false;
           if (parseInt(mStr, 10) !== state.ctpMonth) return false;
           if (!(sh.memberIds || []).includes(state.currentUserId)) return false;
+          if (sh.ownerId === state.currentUserId) return false; // Ẩn show mình làm chủ
           if (state.ctpOwnerId !== 'all' && sh.ownerId !== state.ctpOwnerId) return false;
           return true;
         })
         .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
 
-      // Các show tự note ngoài lịch luôn được xếp nối tiếp ở CUỐI danh sách theo thứ tự tạo
       const customShows = (state.ctpCustomShows || []).filter(sh => {
         if (sh.userId && sh.userId !== state.currentUserId) return false;
+        if (sh.ownerId === state.currentUserId) return false; // Ẩn show mình làm chủ
         if (!sh.startDate) return Number(sh.ctpMonth) === state.ctpMonth;
         const m = parseInt(sh.startDate.split('-')[1], 10);
         if (m !== state.ctpMonth) return false;
@@ -3165,10 +3166,10 @@ function renderHeaderHtml() {
             <div class="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100">
               <div class="flex items-center gap-1.5 flex-1 min-w-0">
                 <span class="text-[10px] font-bold text-slate-500 shrink-0">Chủ show:</span>
-                <select onchange="ctpActions.setOwner(this.value)" class="flex-1 min-w-0 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none truncate">
-                  <option value="all">Tất cả Chủ Show</option>
-                  ${state.members.map(m => `<option value="${m.id}" ${state.ctpOwnerId === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
-                </select>
+                  <select onchange="ctpActions.setOwner(this.value)" class="flex-1 min-w-0 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none truncate">
+                    <option value="all">Tất cả Chủ Show</option>
+                    ${state.members.filter(m => m.id !== state.currentUserId).map(m => `<option value="${m.id}" ${state.ctpOwnerId === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
+                  </select>
               </div>
               <div class="text-right bg-emerald-50 px-3 py-1 rounded-2xl border border-emerald-200 shrink-0">
                 <span class="text-[8.5px] text-emerald-700 font-bold uppercase block">Tổng T${state.ctpMonth}</span>
