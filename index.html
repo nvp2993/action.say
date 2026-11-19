@@ -12181,11 +12181,30 @@ let html = '', sig = '';
 // Khung Box Modal Danh sách nhân sự CCCD, SĐT
 <script id="as-enhance-crew-list-modal-2026">
 (function enhanceCrewListModalBentoUI() {
-  if (window.__AS_CREW_LIST_BENTO_V2__) return;
-  window.__AS_CREW_LIST_BENTO_V2__ = true;
+  if (window.__AS_CREW_LIST_BENTO_V3__) return;
+  window.__AS_CREW_LIST_BENTO_V3__ = true;
 
   function formatIsoDates(str = '') {
     return String(str).replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, '$3/$2/$1');
+  }
+
+  // Tự động tách dòng sạch sẽ cho từng người (1. ..., 2. ..., 3. ...)
+  function normalizeCrewLines(raw = '') {
+    return String(raw)
+      .replace(/\r\n/g, '\n')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\s+(?=\d+\.\s)/g, '\n')
+      .split('\n')
+      .map(l => l.trim())
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  function autoResizeTextarea(ta) {
+    if (!ta) return;
+    ta.style.height = 'auto';
+    const maxH = Math.max(220, Math.floor(window.innerHeight * 0.52));
+    ta.style.height = Math.min(ta.scrollHeight + 8, maxH) + 'px';
   }
 
   function copyToClipboard(text) {
@@ -12212,7 +12231,6 @@ let html = '', sig = '';
     );
     if (!copyBtn) return;
 
-    // Tìm khung card modal gốc chứa tiêu đề DANH SÁCH NHÂN SỰ
     let card = copyBtn.parentElement;
     while (card && card !== document.body) {
       const txt = (card.textContent || '').toUpperCase();
@@ -12222,10 +12240,9 @@ let html = '', sig = '';
       card = card.parentElement;
     }
     if (!card || card === document.body) return;
-    if (card.dataset.asCrewBentoV2 === '1') return;
-    card.dataset.asCrewBentoV2 = '1';
+    if (card.dataset.asCrewBentoV3 === '1') return;
+    card.dataset.asCrewBentoV3 = '1';
 
-    // 1. Trích xuất thông tin từ modal gốc (Phụ đề địa điểm/ngày, nội dung text, nút đóng)
     const closeBtnOrig = Array.from(card.querySelectorAll('button')).find(
       b => b !== copyBtn && (b.textContent.trim() === '✕' || b.textContent.trim() === '×' || b.innerHTML.includes('fa-xmark') || b.innerHTML.includes('fa-times'))
     );
@@ -12247,15 +12264,14 @@ let html = '', sig = '';
     });
 
     const rawText = textEl
-      ? (textEl.tagName === 'TEXTAREA' ? textEl.value : textEl.innerText)
-          .split('\n').map(l => l.trim()).filter(Boolean).join('\n')
+      ? normalizeCrewLines(textEl.tagName === 'TEXTAREA' ? textEl.value : textEl.innerText)
       : '';
 
-    // 2. Làm mới lại toàn bộ vỏ Card theo phong cách Bento/iOS đồng bộ với app
     card.style.cssText = [
       'background:#ffffff',
       'width:100%',
       'max-width:480px',
+      'max-height:88dvh',
       'border-radius:24px',
       'overflow:hidden',
       'box-shadow:0 24px 48px rgba(15,23,42,0.28)',
@@ -12266,10 +12282,8 @@ let html = '', sig = '';
       'flex-direction:column'
     ].join(';');
 
-    // Dựng lại nội dung sạch sẽ bên trong Card
     card.innerHTML = `
-      <!-- Header sáng, thoáng đồng bộ -->
-      <div style="padding:16px 18px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#ffffff;">
+      <div style="padding:15px 18px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#ffffff;flex-shrink:0;">
         <div style="min-width:0;">
           <div style="font-size:15px;font-weight:900;color:#0f172a;display:flex;align-items:center;gap:6px;">
             <span>📋</span>
@@ -12287,11 +12301,10 @@ let html = '', sig = '';
         </button>
       </div>
 
-      <!-- Thân modal: Khung text đơn giản sửa trực tiếp -->
-      <div style="padding:16px 18px;background:#ffffff;display:flex;flex-direction:column;gap:8px;">
+      <div style="padding:14px 18px;background:#ffffff;display:flex;flex-direction:column;gap:8px;overflow-y:auto;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
           <span style="font-size:11.5px;font-weight:700;color:#64748b;">
-            ✏️ Chạm trực tiếp vào khung để chỉnh sửa trước khi gửi khách
+            ✏️ Chạm trực tiếp để chỉnh sửa trước khi gửi khách
           </span>
           <button type="button" id="as-crew-reset-btn"
             style="background:none;border:none;color:#2563eb;font-size:11.5px;font-weight:800;cursor:pointer;padding:2px 4px;flex-shrink:0;">
@@ -12299,11 +12312,10 @@ let html = '', sig = '';
           </button>
         </div>
         <textarea id="as-crew-editable-ta" spellcheck="false"
-          style="width:100%;box-sizing:border-box;padding:14px;border-radius:16px;border:1.5px solid #e2e8f0;background:#f8fafc;color:#0f172a;font-family:Inter,-apple-system,sans-serif;font-size:13px;line-height:1.75;font-weight:600;resize:vertical;outline:none;min-height:140px;transition:all 0.15s ease;"></textarea>
+          style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:16px;border:1.5px solid #e2e8f0;background:#f8fafc;color:#0f172a;font-family:Inter,-apple-system,sans-serif;font-size:12.5px;line-height:1.75;font-weight:600;resize:none;outline:none;overflow-y:auto;transition:border-color 0.15s ease, background 0.15s ease;"></textarea>
       </div>
 
-      <!-- Chân modal: Nút Copy đồng bộ -->
-      <div style="padding:12px 18px 16px;background:#ffffff;border-top:1px solid #f1f5f9;">
+      <div style="padding:12px 18px 16px;background:#ffffff;border-top:1px solid #f1f5f9;flex-shrink:0;">
         <button type="button" id="as-crew-copy-btn"
           style="width:100%;padding:12px 16px;border-radius:14px;border:none;background:#0f172a;color:#ffffff;font-size:13px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 6px 16px rgba(15,23,42,0.18);transition:all 0.15s ease;">
           <i class="fa-regular fa-copy"></i>
@@ -12318,8 +12330,9 @@ let html = '', sig = '';
     const newCloseBtn = card.querySelector('#as-crew-close-btn');
 
     ta.value = rawText;
-    ta.rows = Math.min(12, Math.max(4, rawText.split('\n').length + 1));
+    requestAnimationFrame(() => autoResizeTextarea(ta));
 
+    ta.oninput = () => autoResizeTextarea(ta);
     ta.onfocus = () => {
       ta.style.borderColor = '#0f172a';
       ta.style.background = '#ffffff';
@@ -12333,16 +12346,13 @@ let html = '', sig = '';
 
     resetBtn.onclick = () => {
       ta.value = rawText;
+      autoResizeTextarea(ta);
       ta.focus();
     };
 
     newCloseBtn.onclick = () => {
-      if (closeBtnOrig) {
-        closeBtnOrig.click();
-      } else {
-        // Đóng fallback bằng cách bấm vào lớp nền backdrop
-        card.parentElement?.click();
-      }
+      if (closeBtnOrig) closeBtnOrig.click();
+      else card.parentElement?.click();
     };
 
     newCopyBtn.onclick = async () => {
