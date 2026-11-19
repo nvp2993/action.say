@@ -4,7 +4,7 @@
         if (localStorage.getItem('as_keep_login_uid_2026')) {
           document.documentElement.classList.add('as-has-saved-session');
         }
-      } catch (e) {}
+      } catch (e) {}Thêm nhân sự
     </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -5352,52 +5352,6 @@ ${(() => {
             </div>
           </div>
         `;
-      }
-
-      // WOW 4: Poster Call-Sheet
-      if (state.callSheetShowId) {
-        const sh = state.shows.find(s => s.id === state.callSheetShowId);
-        if (sh) {
-          out += `
-            <div onclick="appActions.closeCallSheetModal()" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
-              <div onclick="event.stopPropagation()" class="w-full max-w-sm space-y-3">
-                <div id="callsheet-capture-box" class="bg-[#09090b] text-white border border-amber-400/40 rounded-3xl p-5 space-y-4 shadow-2xl">
-                  <div class="flex justify-between items-center border-b border-white/10 pb-3">
-                    <div>
-                      <div class="text-[9px] font-black tracking-widest text-amber-400 uppercase">ACTION MEDIA x SAY STUDIOS</div>
-                      <h3 class="text-lg font-black text-white uppercase mt-0.5">PRODUCTION CALL-SHEET</h3>
-                    </div>
-                    <span class="px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 font-black text-xs">${formatDayMonth(sh.startDate)}</span>
-                  </div>
-                  <div class="space-y-1 text-xs">
-                    <div class="text-zinc-400 text-[10px] uppercase font-bold">Địa điểm / Sự kiện</div>
-                    <div class="text-base font-black text-white">📍 ${escapeHtml(sh.location)} ${sh.partner ? '(' + escapeHtml(sh.partner) + ')' : ''}</div>
-                    <div class="text-zinc-300 text-[11px]">👑 Chủ show điều phối: <b class="text-amber-300">${escapeHtml(getMember(sh.ownerId).name)}</b></div>
-                  </div>
-                  <div class="space-y-1.5">
-                    <div class="text-zinc-400 text-[10px] uppercase font-bold">Danh sách Ekip tác nghiệp (${(sh.memberIds || []).length} người)</div>
-                    ${(sh.memberIds || []).map(mid => {
-                      const m = getMember(mid);
-                      const r = Array.isArray(sh.roles?.[mid]) ? sh.roles[mid].join(' + ') : (sh.roles?.[mid] || 'Ekip Sản Xuất');
-                      return `
-                        <div class="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/10 text-xs">
-                          <span class="font-black text-white">${escapeHtml(m.name)}</span>
-                          <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-[10px]">${escapeHtml(r)}</span>
-                        </div>
-                      `;
-                    }).join('')}
-                  </div>
-                  ${sh.note ? `<div class="p-2.5 rounded-xl bg-amber-400/10 border border-amber-400/30 text-[11px] text-amber-200">📝 Ghi chú: ${escapeHtml(sh.note)}</div>` : ''}
-                  <div class="text-[9px] text-center text-zinc-500 pt-1">Vui lòng kiểm tra pin, thẻ nhớ & có mặt đúng giờ Call-Time!</div>
-                </div>
-                <div class="grid grid-cols-2 gap-2">
-                  <button onclick="appActions.captureCallSheetImage()" class="py-2.5 rounded-full bg-amber-400 text-slate-950 font-black text-xs">📸 Lưu / Gửi Call-Sheet</button>
-                  <button onclick="appActions.closeCallSheetModal()" class="py-2.5 rounded-full bg-white/15 text-white font-bold text-xs">Đóng</button>
-                </div>
-              </div>
-            </div>
-          `;
-        }
       }
 
       // WOW 34: Khung Polaroid Check-in Đoàn
