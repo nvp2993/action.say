@@ -11212,9 +11212,30 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     if (!backdrop || backdrop.style.display === 'none') return;
     if (backdrop.querySelector('#as-member-style-modal-section')) return;
 
-    // Tìm vùng cuộn nội dung bên trong cửa sổ Cài Đặt
     const scrollBody = backdrop.querySelector('div[style*="overflow-y:auto"]');
     if (!scrollBody) return;
+
+    // Tìm khung Màu địa điểm (cũ là 7) và khung Thùng rác (cũ là 8) để đánh số lại thành 8 và 9
+    const directCards = Array.from(scrollBody.children);
+    let locationColorCard = null;
+
+    directCards.forEach(card => {
+      const txt = card.textContent || '';
+      if (txt.includes('QUẢN LÝ MÀU TÔ ĐỊA ĐIỂM') || txt.includes('QUẢN LÝ TÔ MÀU ĐỊA ĐIỂM')) {
+        locationColorCard = card;
+        card.querySelectorAll('div').forEach(el => {
+          if (el.children.length === 0 && el.textContent.includes('7. QUẢN LÝ')) {
+            el.textContent = '🎨 8. QUẢN LÝ TÔ MÀU ĐỊA ĐIỂM TRÊN BẢNG CÔNG TÁC';
+          }
+        });
+      } else if (txt.includes('THÙNG RÁC KHÔI PHỤC SHOW')) {
+        card.querySelectorAll('div').forEach(el => {
+          if (el.children.length === 0 && el.textContent.includes('8. THÙNG RÁC')) {
+            el.textContent = el.textContent.replace('8. THÙNG RÁC', '9. THÙNG RÁC');
+          }
+        });
+      }
+    });
 
     const membersSorted = [...(st.members || [])].sort((a, b) => (a.order || 99) - (b.order || 99));
 
@@ -11223,7 +11244,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     sec.style.cssText = 'background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:16px;margin-top:14px;';
     sec.innerHTML = `
       <div style="margin-bottom:10px;">
-        <div style="font-size:13px;font-weight:900;color:#0f172a;">🎨 9. MÀU THẺ & THỨ TỰ CỘT NHÂN SỰ (${membersSorted.length} NGƯỜI)</div>
+        <div style="font-size:13px;font-weight:900;color:#0f172a;">🎨 7. MÀU & THỨ TỰ NHÂN SỰ (${membersSorted.length} NGƯỜI)</div>
         <div style="font-size:11px;color:#64748b;margin-top:2px;">Đổi màu nền thẻ (Pill), màu chữ (Trắng/Đen) và thứ tự đứng cột trên Bảng Công Tác — tự động lưu ngay</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(265px,1fr));gap:8px;">
@@ -11255,7 +11276,13 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         }).join('')}
       </div>
     `;
-    scrollBody.appendChild(sec);
+
+    // Chèn mục 7 lên ngay phía trên mục 8 (Màu địa điểm)
+    if (locationColorCard) {
+      scrollBody.insertBefore(sec, locationColorCard);
+    } else {
+      scrollBody.appendChild(sec);
+    }
   }
 
   setInterval(mountMemberStyleCard, 350);
