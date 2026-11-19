@@ -12686,4 +12686,124 @@ let html = '', sig = '';
   syncTwoLineHeader();
 })();
 </script>
+
+      <!-- FIX DÒNG HÔM NAY SO KHỚP ĐÚNG NGÀY + THÁNG + NĂM HIỆN TẠI -->
+<script id="as-fix-today-banner-date-2026">
+(function fixTodayBannerDateMatching() {
+  if (window.__AS_TODAY_BANNER_FIX_READY__) return;
+  window.__AS_TODAY_BANNER_FIX_READY__ = true;
+
+  function pad2(n) {
+    return String(n).padStart(2, '0');
+  }
+
+  function getTodayParts() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    const d = now.getDate();
+    return {
+      y,
+      m,
+      d,
+      iso: `${y}-${pad2(m)}-${pad2(d)}`,
+      dmy: `${pad2(d)}/${pad2(m)}/${y}`
+    };
+  }
+
+  function parseDateLoose(val) {
+    if (!val) return null;
+    if (val instanceof Date && !isNaN(val)) {
+      return { y: val.getFullYear(), m: val.getMonth() + 1, d: val.getDate() };
+    }
+    const s = String(val).trim();
+    // YYYY-MM-DD
+    let m1 = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (m1) return { y: Number(m1[1]), m: Number(m1[2]), d: Number(m1[3]) };
+    // DD/MM/YYYY hoặc DD-MM-YYYY
+    let m2 = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (m2) return { y: Number(m2[3]), m: Number(m2[2]), d: Number(m2[1]) };
+    return null;
+  }
+
+  function toDayKey(p) {
+    return p ? p.y * 10000 + p.m * 100 + p.d : null;
+  }
+
+  function isShowOnToday(show, todayParts) {
+    if (!show || show.isCancelled || show.isHold) return false;
+    const tKey = toDayKey(todayParts);
+
+    const startP = parseDateLoose(show.startDate || show.date || show.fromDate || show.start);
+    const endP = parseDateLoose(show.endDate || show.toDate || show.end) || startP;
+
+    const sKey = toDayKey(startP);
+    const eKey = toDayKey(endP);
+
+    if (sKey && eKey) {
+      return tKey >= sKey && tKey <= eKey;
+    }
+    if (sKey) {
+      return tKey === sKey;
+    }
+    return false;
+  }
+
+  function getTodayShows() {
+    const st = window.state || {};
+    const list = Array.isArray(st.shows) ? st.shows : [];
+    const today = getTodayParts();
+    const uid = st.currentUserId;
+
+    return list.filter(s => {
+      if (!isShowOnToday(s, today)) return false;
+      if (!uid) return true;
+      const isOwner = s.ownerId === uid || s.createdBy === uid;
+      const inCrew = Array.isArray(s.memberIds) && s.memberIds.includes(uid);
+      const inRoles = s.memberRoles && Object.prototype.hasOwnProperty.call(s.memberRoles, uid);
+      return isOwner || inCrew || inRoles;
+    });
+  }
+
+  function syncTodayBanner() {
+    const today = getTodayParts();
+    const showsToday = getTodayShows();
+
+    // Tìm banner có nhãn HÔM NAY
+    const todayBadge = Array.from(document.querySelectorAll('#app span, #app div, #app button')).find(el => {
+      if (el.children.length > 2) return false;
+      return /\bHÔM\s*NAY\b/i.test((el.textContent || '').trim()) && (el.textContent || '').trim().length <= 20;
+    });
+    if (!todayBadge) return;
+
+    const bannerRow = todayBadge.closest('div[class*="rounded"], div[class*="flex"]') || todayBadge.parentElement;
+    if (!bannerRow) return;
+
+    const summaryText = showsToday.length > 0
+      ? `Bạn có ${showsToday.length} show tại 📍 ${showsToday[0].location || showsToday[0].title || showsToday[0].name || 'Show hôm nay'}`
+      : `Hôm nay (${today.dmy}) không có show — ⚡ Kiểm tra pin, thẻ nhớ & thiết bị sẵn sàng!`;
+
+    const sig = `${today.iso}:${showsToday.length}:${summaryText}`;
+    if (bannerRow.dataset.asTodayFixSig === sig) return;
+    bannerRow.dataset.asTodayFixSig = sig;
+
+    // Cập nhật phần chữ mô tả nằm sau badge HÔM NAY mà không phá badge HÔM NAY
+    const textTargets = Array.from(bannerRow.querySelectorAll('span, div, p')).filter(el => {
+      if (el === todayBadge || el.contains(todayBadge) || todayBadge.contains(el)) return false;
+      if (el.children.length > 0) return false;
+      const txt = (el.textContent || '').trim();
+      return txt.includes('Bạn có') || txt.includes('Kiểm tra pin') || txt.includes('không có show') || txt.includes('tại');
+    });
+
+    if (textTargets.length > 0) {
+      textTargets[0].textContent = summaryText;
+      textTargets.slice(1).forEach(el => { el.textContent = ''; });
+    }
+  }
+
+  const appRoot = document.getElementById('app') || document.body;
+  new MutationObserver(() => syncTodayBanner()).observe(appRoot, { childList: true, subtree: true });
+  syncTodayBanner();
+})();
+</script>
 </body></html>
