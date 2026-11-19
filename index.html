@@ -11165,37 +11165,104 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 </script>
 
 <script id="as-member-style-in-caidat-2026">
-(function injectMemberStyleIntoCaiDatModal() {
+(function fixAndInjectMemberStyleSafe() {
   if (!window.state || !window.adminProActions) {
-    setTimeout(injectMemberStyleIntoCaiDatModal, 150);
+    setTimeout(fixAndInjectMemberStyleSafe, 150);
     return;
   }
-  if (window.__AS_MEMBER_STYLE_IN_CAIDAT__) return;
-  window.__AS_MEMBER_STYLE_IN_CAIDAT__ = true;
+  if (window.__AS_MEMBER_STYLE_SAFE_V4__) return;
+  window.__AS_MEMBER_STYLE_SAFE_V4__ = true;
 
   const st = window.state;
+  const appId = typeof __app_id !== 'undefined' ? __app_id : 'action-say-media-2026';
+  let stylesMap = {};
 
-  // Khôi phục màu nền, màu chữ & thứ tự cột nhân sự đã lưu
   try {
-    const savedMem = JSON.parse(localStorage.getItem('as_members_backup_2026') || 'null');
-    if (Array.isArray(savedMem) && savedMem.length > 0 && Array.isArray(st.members)) {
-      st.members.forEach(m => {
-        const found = savedMem.find(x => x && x.id === m.id);
-        if (found) {
-          if (found.bg) m.bg = found.bg;
-          if (found.text) m.text = found.text;
-          if (found.order !== undefined) m.order = found.order;
+    stylesMap = JSON.parse(localStorage.getItem('as_member_styles_map_2026') || '{}');
+  } catch (e) {
+    stylesMap = {};
+  }
+
+  // =========================================================================
+  // 1. TỰ ĐỘNG KHÔI PHỤC 13 NHÂN SỰ NẾU TEAM_MEMBERS BỊ GHI LẺ 1 NGƯỜI
+  // =========================================================================
+  (async function repairTeamMembersIfBroken() {
+    try {
+      // Xóa backup local nếu bị lưu thiếu người (< 10 người)
+      const localMem = JSON.parse(localStorage.getItem('as_members_backup_2026') || 'null');
+      if (Array.isArray(localMem) && localMem.length > 0 && localMem.length < 10) {
+        localStorage.removeItem('as_members_backup_2026');
+      }
+
+      const { getApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
+      const { getFirestore, collection, getDocs, deleteDoc, doc, setDoc, onSnapshot } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+      const db = getFirestore(getApp());
+
+      const teamCol = collection(db, 'artifacts', appId, 'public', 'data', 'team_members');
+      const snap = await getDocs(teamCol);
+
+      // Nếu trên Firebase bị dính 1-9 bản ghi lẻ -> xóa sạch để app khôi phục đủ 13 anh em gốc
+      if (snap.size > 0 && snap.size < 10) {
+        await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+        if (!sessionStorage.getItem('as_repaired_team_members_once')) {
+          sessionStorage.setItem('as_repaired_team_members_once', '1');
+          window.location.reload();
+          return;
+        }
+      }
+
+      // Đồng bộ bảng màu & thứ tự nhân sự an toàn qua shows_master (KHÔNG chạm vào team_members)
+      const masterRef = doc(db, 'artifacts', appId, 'public', 'data', 'app_single_doc', 'shows_master');
+      onSnapshot(masterRef, (mSnap) => {
+        if (!mSnap.exists()) return;
+        const d = mSnap.data();
+        if (d?.memberStylesMap && typeof d.memberStylesMap === 'object') {
+          stylesMap = { ...stylesMap, ...d.memberStylesMap };
+          try { localStorage.setItem('as_member_styles_map_2026', JSON.stringify(stylesMap)); } catch (e) {}
+          applyStylesMapToMembers();
         }
       });
-    }
-  } catch (e) {}
 
-  // Thêm hàm đổi màu chữ (Trắng / Đen) cho thẻ nhân sự
-  window.adminProActions.updateMemberTextColor = function(memId, textHex) {
+      window.__pushMemberStylesSafe = async function() {
+        try {
+          await setDoc(masterRef, { memberStylesMap: stylesMap }, { merge: true });
+        } catch (e) {}
+      };
+    } catch (e) {}
+  })();
+
+  function applyStylesMapToMembers() {
+    if (!Array.isArray(st.members)) return;
+    let changed = false;
+    st.members.forEach(m => {
+      if (!m || !stylesMap[m.id]) return;
+      const cfg = stylesMap[m.id];
+      if (cfg.bg && m.bg !== cfg.bg) { m.bg = cfg.bg; changed = true; }
+      if (cfg.text && m.text !== cfg.text) { m.text = cfg.text; changed = true; }
+      if (cfg.order !== undefined && m.order !== cfg.order) { m.order = cfg.order; changed = true; }
+    });
+    if (changed && typeof window.renderApp === 'function') window.renderApp();
+  }
+
+  // Ghi đè 3 hàm đổi màu/thứ tự để TUYỆT ĐỐI không ghi vào team_members nữa
+  window.adminProActions.updateMemberColor = async function(memId, hexVal) {
+    const m = (st.members || []).find(x => x && x.id === memId);
+    if (!m) return;
+    m.bg = hexVal;
+    stylesMap[memId] = { ...(stylesMap[memId] || {}), bg: hexVal };
+    try { localStorage.setItem('as_member_styles_map_2026', JSON.stringify(stylesMap)); } catch (e) {}
+    if (typeof window.__pushMemberStylesSafe === 'function') await window.__pushMemberStylesSafe();
+    if (typeof window.renderApp === 'function') window.renderApp();
+    if (typeof window.__asNotify === 'function') window.__asNotify(`🎨 Đã đổi màu thẻ ${m.name}!`, 'success');
+  };
+
+  window.adminProActions.updateMemberTextColor = async function(memId, textHex) {
     const m = (st.members || []).find(x => x && x.id === memId);
     if (!m) return;
     m.text = textHex;
-    try { localStorage.setItem('as_members_backup_2026', JSON.stringify(st.members)); } catch (e) {}
+    stylesMap[memId] = { ...(stylesMap[memId] || {}), text: textHex };
+    try { localStorage.setItem('as_member_styles_map_2026', JSON.stringify(stylesMap)); } catch (e) {}
+    if (typeof window.__pushMemberStylesSafe === 'function') await window.__pushMemberStylesSafe();
     if (typeof window.renderApp === 'function') window.renderApp();
     if (typeof window.__asNotify === 'function') window.__asNotify(`✏️ Đã đổi màu chữ thẻ ${m.name}!`, 'success');
     const sec = document.getElementById('as-member-style-modal-section');
@@ -11203,11 +11270,24 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     mountMemberStyleCard();
   };
 
+  window.adminProActions.updateMemberOrder = async function(memId, orderVal) {
+    const m = (st.members || []).find(x => x && x.id === memId);
+    if (!m) return;
+    const ord = Number(orderVal) || 99;
+    m.order = ord;
+    stylesMap[memId] = { ...(stylesMap[memId] || {}), order: ord };
+    try { localStorage.setItem('as_member_styles_map_2026', JSON.stringify(stylesMap)); } catch (e) {}
+    if (typeof window.__pushMemberStylesSafe === 'function') await window.__pushMemberStylesSafe();
+    if (typeof window.renderApp === 'function') window.renderApp();
+    if (typeof window.__asNotify === 'function') window.__asNotify(`🔢 Đã cập nhật thứ tự cột của ${m.name}!`, 'success');
+  };
+
   function esc(str = '') {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   function mountMemberStyleCard() {
+    applyStylesMapToMembers();
     const backdrop = document.getElementById('as-caidat-modal-backdrop');
     if (!backdrop || backdrop.style.display === 'none') return;
     if (backdrop.querySelector('#as-member-style-modal-section')) return;
@@ -11215,7 +11295,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     const scrollBody = backdrop.querySelector('div[style*="overflow-y:auto"]');
     if (!scrollBody) return;
 
-    // Tìm khung Màu địa điểm (cũ là 7) và khung Thùng rác (cũ là 8) để đánh số lại thành 8 và 9
     const directCards = Array.from(scrollBody.children);
     let locationColorCard = null;
 
@@ -11245,7 +11324,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     sec.innerHTML = `
       <div style="margin-bottom:10px;">
         <div style="font-size:13px;font-weight:900;color:#0f172a;">🎨 7. MÀU & THỨ TỰ NHÂN SỰ (${membersSorted.length} NGƯỜI)</div>
-        <div style="font-size:11px;color:#64748b;margin-top:2px;">Đổi màu nền thẻ (Pill), màu chữ (Trắng/Đen) và thứ tự đứng cột trên Bảng Công Tác — tự động lưu ngay</div>
+        <div style="font-size:11px;color:#64748b;margin-top:2px;">Đổi màu nền thẻ (Pill), màu chữ (Trắng/Đen) và thứ tự đứng cột trên Bảng Công Tác — tự động lưu an toàn</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(265px,1fr));gap:8px;">
         ${membersSorted.map((m, idx) => {
@@ -11277,7 +11356,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       </div>
     `;
 
-    // Chèn mục 7 lên ngay phía trên mục 8 (Màu địa điểm)
     if (locationColorCard) {
       scrollBody.insertBefore(sec, locationColorCard);
     } else {
@@ -11286,6 +11364,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   }
 
   setInterval(mountMemberStyleCard, 350);
+  applyStylesMapToMembers();
 })();
 </script>
 </body></html>
