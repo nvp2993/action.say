@@ -12178,16 +12178,17 @@ let html = '', sig = '';
 })();
 </script>
 
-      <script id="as-enhance-crew-list-modal-2026">
-(function enhanceCrewListModalPlainTextEdit() {
-  if (window.__AS_CREW_LIST_EDITABLE_READY__) return;
-  window.__AS_CREW_LIST_EDITABLE_READY__ = true;
+// Khung Box Modal Danh sách nhân sự CCCD, SĐT
+<script id="as-enhance-crew-list-modal-2026">
+(function enhanceCrewListModalBentoUI() {
+  if (window.__AS_CREW_LIST_BENTO_V2__) return;
+  window.__AS_CREW_LIST_BENTO_V2__ = true;
 
-  function formatIsoDatesInText(text = '') {
-    return String(text).replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, '$3/$2/$1');
+  function formatIsoDates(str = '') {
+    return String(str).replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, '$3/$2/$1');
   }
 
-  function copyTextToClipboard(text) {
+  function copyToClipboard(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
     }
@@ -12206,135 +12207,159 @@ let html = '', sig = '';
   }
 
   function upgradeCrewModal() {
-    // Tìm nút "COPY DANH SÁCH" đang hiển thị trên màn hình
     const copyBtn = Array.from(document.querySelectorAll('button')).find(
       b => (b.textContent || '').toUpperCase().includes('COPY DANH SÁCH')
     );
     if (!copyBtn) return;
 
-    // Leo lên tìm khung modal chứa tiêu đề "DANH SÁCH NHÂN SỰ"
-    let modalBox = copyBtn.parentElement;
-    while (modalBox && modalBox !== document.body) {
-      if ((modalBox.textContent || '').toUpperCase().includes('DANH SÁCH NHÂN SỰ')) {
+    // Tìm khung card modal gốc chứa tiêu đề DANH SÁCH NHÂN SỰ
+    let card = copyBtn.parentElement;
+    while (card && card !== document.body) {
+      const txt = (card.textContent || '').toUpperCase();
+      if (txt.includes('DANH SÁCH NHÂN SỰ') && (card.className.includes('rounded') || getComputedStyle(card).borderRadius !== '0px')) {
         break;
       }
-      modalBox = modalBox.parentElement;
+      card = card.parentElement;
     }
-    if (!modalBox || modalBox === document.body) return;
-    if (modalBox.dataset.asCrewUpgraded === '1') return;
-    modalBox.dataset.asCrewUpgraded = '1';
+    if (!card || card === document.body) return;
+    if (card.dataset.asCrewBentoV2 === '1') return;
+    card.dataset.asCrewBentoV2 = '1';
 
-    // 1. Đổi định dạng ngày YYYY-MM-DD -> DD/MM/YYYY ở dòng phụ đề
-    modalBox.querySelectorAll('div, p, span').forEach(el => {
-      if (el.children.length === 0 && /\b\d{4}-\d{2}-\d{2}\b/.test(el.textContent || '')) {
-        el.textContent = formatIsoDatesInText(el.textContent);
+    // 1. Trích xuất thông tin từ modal gốc (Phụ đề địa điểm/ngày, nội dung text, nút đóng)
+    const closeBtnOrig = Array.from(card.querySelectorAll('button')).find(
+      b => b !== copyBtn && (b.textContent.trim() === '✕' || b.textContent.trim() === '×' || b.innerHTML.includes('fa-xmark') || b.innerHTML.includes('fa-times'))
+    );
+
+    let subTitle = '';
+    card.querySelectorAll('div, p, span').forEach(el => {
+      if (el.children.length === 0) {
+        const t = (el.textContent || '').trim();
+        if (/\b\d{4}-\d{2}-\d{2}\b/.test(t) || /\b\d{2}\/\d{2}\/\d{4}\b/.test(t)) {
+          subTitle = formatIsoDates(t);
+        }
       }
     });
 
-    // 2. Tìm vùng chứa danh sách chữ hiện tại (thường là <pre>, <textarea>, hoặc <div> chứa "1. ")
-    const textBox = Array.from(modalBox.querySelectorAll('pre, textarea, div')).find(el => {
-      if (el === modalBox || el.contains(copyBtn)) return false;
-      const t = (el.innerText || el.value || '').trim();
+    const textEl = Array.from(card.querySelectorAll('pre, textarea, div')).find(el => {
+      if (el === card || el.contains(copyBtn)) return false;
+      const t = (el.tagName === 'TEXTAREA' ? el.value : el.innerText || '').trim();
       return (t.includes('CCCD:') || t.includes('1. ')) && el.querySelectorAll('button').length === 0;
     });
 
-    if (!textBox) return;
+    const rawText = textEl
+      ? (textEl.tagName === 'TEXTAREA' ? textEl.value : textEl.innerText)
+          .split('\n').map(l => l.trim()).filter(Boolean).join('\n')
+      : '';
 
-    const rawText = (textBox.tagName === 'TEXTAREA' ? textBox.value : textBox.innerText)
-      .split('\n')
-      .map(line => line.trim())
-      .filter(Boolean)
-      .join('\n');
-
-    // 3. Thay bằng khung Textarea gọn đẹp, sửa trực tiếp
-    const editorWrap = document.createElement('div');
-    editorWrap.style.cssText = 'display:flex;flex-direction:column;gap:8px;width:100%;';
-
-    const topHint = document.createElement('div');
-    topHint.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 2px;';
-    topHint.innerHTML = `
-      <span style="font-size:11.5px;font-weight:700;color:#64748b;">
-        ✏️ Chạm trực tiếp để sửa nhanh trước khi copy
-      </span>
-      <button type="button" id="as-crew-reset-btn"
-        style="background:none;border:none;color:#2563eb;font-size:11.5px;font-weight:800;cursor:pointer;padding:2px 4px;">
-        ↺ Khôi phục gốc
-      </button>
-    `;
-
-    const textarea = document.createElement('textarea');
-    textarea.id = 'as-crew-editable-textarea';
-    textarea.value = rawText;
-    textarea.spellcheck = false;
-    textarea.rows = Math.min(12, Math.max(4, rawText.split('\n').length + 1));
-    textarea.style.cssText = [
+    // 2. Làm mới lại toàn bộ vỏ Card theo phong cách Bento/iOS đồng bộ với app
+    card.style.cssText = [
+      'background:#ffffff',
       'width:100%',
-      'box-sizing:border-box',
-      'padding:14px 16px',
-      'border-radius:16px',
-      'border:1.5px solid #cbd5e1',
-      'background:#f8fafc',
+      'max-width:480px',
+      'border-radius:24px',
+      'overflow:hidden',
+      'box-shadow:0 24px 48px rgba(15,23,42,0.28)',
+      'border:1px solid #e2e8f0',
+      'font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif',
       'color:#0f172a',
-      'font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace',
-      'font-size:13px',
-      'line-height:1.7',
-      'font-weight:600',
-      'resize:vertical',
-      'outline:none',
-      'transition:border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease'
+      'display:flex',
+      'flex-direction:column'
     ].join(';');
 
-    textarea.addEventListener('focus', () => {
-      textarea.style.borderColor = '#0f172a';
-      textarea.style.background = '#ffffff';
-      textarea.style.boxShadow = '0 0 0 3px rgba(15,23,42,0.08)';
-    });
-    textarea.addEventListener('blur', () => {
-      textarea.style.borderColor = '#cbd5e1';
-      textarea.style.background = '#f8fafc';
-      textarea.style.boxShadow = 'none';
-    });
+    // Dựng lại nội dung sạch sẽ bên trong Card
+    card.innerHTML = `
+      <!-- Header sáng, thoáng đồng bộ -->
+      <div style="padding:16px 18px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#ffffff;">
+        <div style="min-width:0;">
+          <div style="font-size:15px;font-weight:900;color:#0f172a;display:flex;align-items:center;gap:6px;">
+            <span>📋</span>
+            <span>DANH SÁCH NHÂN SỰ</span>
+          </div>
+          ${subTitle ? `
+            <div style="display:inline-flex;align-items:center;gap:5px;margin-top:5px;padding:3px 9px;border-radius:999px;background:#f1f5f9;color:#475569;font-size:11.5px;font-weight:800;">
+              <span>📍</span><span>${subTitle}</span>
+            </div>
+          ` : ''}
+        </div>
+        <button type="button" id="as-crew-close-btn"
+          style="width:32px;height:32px;border-radius:999px;border:none;background:#f1f5f9;color:#475569;font-size:14px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ✕
+        </button>
+      </div>
 
-    editorWrap.appendChild(topHint);
-    editorWrap.appendChild(textarea);
+      <!-- Thân modal: Khung text đơn giản sửa trực tiếp -->
+      <div style="padding:16px 18px;background:#ffffff;display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span style="font-size:11.5px;font-weight:700;color:#64748b;">
+            ✏️ Chạm trực tiếp vào khung để chỉnh sửa trước khi gửi khách
+          </span>
+          <button type="button" id="as-crew-reset-btn"
+            style="background:none;border:none;color:#2563eb;font-size:11.5px;font-weight:800;cursor:pointer;padding:2px 4px;flex-shrink:0;">
+            ↺ Khôi phục
+          </button>
+        </div>
+        <textarea id="as-crew-editable-ta" spellcheck="false"
+          style="width:100%;box-sizing:border-box;padding:14px;border-radius:16px;border:1.5px solid #e2e8f0;background:#f8fafc;color:#0f172a;font-family:Inter,-apple-system,sans-serif;font-size:13px;line-height:1.75;font-weight:600;resize:vertical;outline:none;min-height:140px;transition:all 0.15s ease;"></textarea>
+      </div>
 
-    // Chèn thay thế khung chữ cũ
-    textBox.replaceWith(editorWrap);
+      <!-- Chân modal: Nút Copy đồng bộ -->
+      <div style="padding:12px 18px 16px;background:#ffffff;border-top:1px solid #f1f5f9;">
+        <button type="button" id="as-crew-copy-btn"
+          style="width:100%;padding:12px 16px;border-radius:14px;border:none;background:#0f172a;color:#ffffff;font-size:13px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 6px 16px rgba(15,23,42,0.18);transition:all 0.15s ease;">
+          <i class="fa-regular fa-copy"></i>
+          <span>COPY DANH SÁCH</span>
+        </button>
+      </div>
+    `;
 
-    topHint.querySelector('#as-crew-reset-btn').onclick = () => {
-      textarea.value = rawText;
-      textarea.focus();
+    const ta = card.querySelector('#as-crew-editable-ta');
+    const resetBtn = card.querySelector('#as-crew-reset-btn');
+    const newCopyBtn = card.querySelector('#as-crew-copy-btn');
+    const newCloseBtn = card.querySelector('#as-crew-close-btn');
+
+    ta.value = rawText;
+    ta.rows = Math.min(12, Math.max(4, rawText.split('\n').length + 1));
+
+    ta.onfocus = () => {
+      ta.style.borderColor = '#0f172a';
+      ta.style.background = '#ffffff';
+      ta.style.boxShadow = '0 0 0 3px rgba(15,23,42,0.06)';
+    };
+    ta.onblur = () => {
+      ta.style.borderColor = '#e2e8f0';
+      ta.style.background = '#f8fafc';
+      ta.style.boxShadow = 'none';
     };
 
-    // 4. Nâng cấp nút COPY DANH SÁCH để copy đúng nội dung đã chỉnh sửa
-    const newCopyBtn = copyBtn.cloneNode(true);
-    newCopyBtn.style.cssText += ';transition:all 0.15s ease;border-radius:14px;font-weight:900;letter-spacing:0.3px;';
-    copyBtn.replaceWith(newCopyBtn);
+    resetBtn.onclick = () => {
+      ta.value = rawText;
+      ta.focus();
+    };
 
-    const origBtnHTML = newCopyBtn.innerHTML;
-    newCopyBtn.onclick = async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const finalContent = textarea.value.trim();
-      await copyTextToClipboard(finalContent);
+    newCloseBtn.onclick = () => {
+      if (closeBtnOrig) {
+        closeBtnOrig.click();
+      } else {
+        // Đóng fallback bằng cách bấm vào lớp nền backdrop
+        card.parentElement?.click();
+      }
+    };
 
+    newCopyBtn.onclick = async () => {
+      await copyToClipboard(ta.value.trim());
       newCopyBtn.style.background = '#059669';
-      newCopyBtn.style.color = '#ffffff';
-      newCopyBtn.innerHTML = '✅ ĐÃ COPY DANH SÁCH!';
+      newCopyBtn.innerHTML = '<i class="fa-solid fa-check"></i><span>ĐÃ COPY DANH SÁCH!</span>';
       if (typeof window.__asNotify === 'function') {
         window.__asNotify('✅ Đã copy danh sách nhân sự!', 'success');
       }
       setTimeout(() => {
-        newCopyBtn.style.background = '';
-        newCopyBtn.style.color = '';
-        newCopyBtn.innerHTML = origBtnHTML;
+        newCopyBtn.style.background = '#0f172a';
+        newCopyBtn.innerHTML = '<i class="fa-regular fa-copy"></i><span>COPY DANH SÁCH</span>';
       }, 1800);
     };
   }
 
-  // Theo dõi khi modal mở lên để nâng cấp tức thì
-  const observer = new MutationObserver(() => upgradeCrewModal());
-  observer.observe(document.body, { childList: true, subtree: true });
+  new MutationObserver(() => upgradeCrewModal()).observe(document.body, { childList: true, subtree: true });
   upgradeCrewModal();
 })();
 </script>
