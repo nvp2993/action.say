@@ -12530,11 +12530,11 @@ let html = '', sig = '';
 })();
 </script>
 
-      <!-- TÁCH TIÊU ĐỀ HEADER THÀNH 2 DÒNG (TRÊN: LỊCH SHOW | DƯỚI: NĂM) CHO IPHONE -->
+<!-- TÁCH TIÊU ĐỀ 2 DÒNG (LỊCH SHOW Ở TRÊN | 2026 + LOCAL/CLOUD NHỎ NGANG HÀNG Ở DƯỚI) -->
 <script id="as-header-two-line-title-2026">
-(function initTwoLineHeaderTitle() {
-  if (window.__AS_TWO_LINE_HEADER_READY__) return;
-  window.__AS_TWO_LINE_HEADER_READY__ = true;
+(function initTwoLineHeaderWithCompactSyncBadge() {
+  if (window.__AS_TWO_LINE_HEADER_V2__) return;
+  window.__AS_TWO_LINE_HEADER_V2__ = true;
 
   const oldStyle = document.getElementById('as-two-line-header-styles');
   if (oldStyle) oldStyle.remove();
@@ -12556,13 +12556,48 @@ let html = '', sig = '';
       color: #64748b;
       white-space: nowrap;
     }
+    #as-two-line-brand-title .as-title-bottom-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 2px;
+      white-space: nowrap;
+    }
     #as-two-line-brand-title .as-title-year {
       font-size: 13.5px;
       font-weight: 900;
       color: #0f172a;
-      margin-top: 2px;
-      white-space: nowrap;
       letter-spacing: -0.3px;
+    }
+    #as-compact-sync-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 9.5px;
+      font-weight: 800;
+      line-height: 1;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    #as-compact-sync-pill.is-cloud {
+      background: #ecfdf5;
+      color: #059669;
+      border-color: #a7f3d0;
+    }
+    #as-compact-sync-pill.is-local {
+      background: #f1f5f9;
+      color: #64748b;
+      border-color: #e2e8f0;
+    }
+    #as-compact-sync-pill .as-sync-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 999px;
+      background: currentColor;
+      display: inline-block;
     }
   `;
   document.head.appendChild(styleEl);
@@ -12574,13 +12609,38 @@ let html = '', sig = '';
     return m ? m[1] : '2026';
   }
 
+  function detectSyncStatus(header) {
+    const st = window.state || {};
+    const badgeEl = Array.from(header.querySelectorAll('span, div, button, a')).find(el => {
+      if (el.id === 'as-two-line-brand-title' || el.closest('#as-two-line-brand-title')) return false;
+      if (el.children.length > 1) return false;
+      const t = (el.textContent || '').trim();
+      return /^(•?\s*)?(Cloud|Local|Offline|Sync)$/i.test(t) || /\b(Cloud|Local)\b/i.test(t);
+    });
+
+    if (badgeEl) {
+      const txt = (badgeEl.textContent || '').trim();
+      const isCloud = /cloud|sync/i.test(txt) && !/local|offline/i.test(txt);
+      // Ẩn badge cũ ở thanh trên để dời xuống cạnh năm 2026
+      if (badgeEl.parentElement && badgeEl.parentElement.children.length === 1 && badgeEl.parentElement !== header) {
+        badgeEl.parentElement.style.display = 'none';
+      } else {
+        badgeEl.style.display = 'none';
+      }
+      return { isCloud, label: isCloud ? 'Cloud' : 'Local' };
+    }
+
+    const isCloudFallback = Boolean(st.isCloudConnected || st.cloudReady || st.firebaseReady);
+    return { isCloud: isCloudFallback, label: isCloudFallback ? 'Cloud' : 'Local' };
+  }
+
   function syncTwoLineHeader() {
     const header = document.querySelector('#app header');
     if (!header) return;
 
     const yearStr = getActiveYear();
+    const syncInfo = detectSyncStatus(header);
 
-    // Tìm phần tử chứa chữ "LỊCH SHOW" ở khu vực logo/header
     const titleCandidate = Array.from(header.querySelectorAll('h1, h2, span, div, a')).find(el => {
       if (el.id === 'as-two-line-brand-title' || el.closest('#as-two-line-brand-title')) return false;
       if (el.children.length > 0) return false;
@@ -12588,21 +12648,26 @@ let html = '', sig = '';
       return /^LỊCH\s*SHOW/i.test(t) && t.length <= 24;
     });
 
-    if (!titleCandidate) return;
-
     let wrap = document.getElementById('as-two-line-brand-title');
-    if (!wrap) {
+    if (!wrap && titleCandidate) {
       wrap = document.createElement('div');
       wrap.id = 'as-two-line-brand-title';
       titleCandidate.replaceWith(wrap);
     }
+    if (!wrap) return;
 
-    const sig = `${yearStr}`;
+    const sig = `${yearStr}:${syncInfo.label}`;
     if (wrap.dataset.sig !== sig) {
       wrap.dataset.sig = sig;
       wrap.innerHTML = `
         <span class="as-title-top">LỊCH SHOW</span>
-        <span class="as-title-year">${yearStr}</span>
+        <span class="as-title-bottom-row">
+          <span class="as-title-year">${yearStr}</span>
+          <span id="as-compact-sync-pill" class="${syncInfo.isCloud ? 'is-cloud' : 'is-local'}">
+            <span class="as-sync-dot"></span>
+            <span>${syncInfo.label}</span>
+          </span>
+        </span>
       `;
     }
   }
