@@ -11368,57 +11368,52 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 })();
 </script>
 
-      <script id="as-hold-and-smart-replace-2026">
-(function initHoldAndSmartReplaceSuite() {
+   <script id="as-hold-bell-workflow-2026">
+(function initHoldBellAndOwnerNotifyWorkflow() {
   if (!window.state || !window.appActions) {
-    setTimeout(initHoldAndSmartReplaceSuite, 100);
+    setTimeout(initHoldBellAndOwnerNotifyWorkflow, 100);
     return;
   }
-  if (window.__AS_HOLD_SMART_REPLACE_READY__) return;
-  window.__AS_HOLD_SMART_REPLACE_READY__ = true;
+  if (window.__AS_HOLD_BELL_WORKFLOW_READY__) return;
+  window.__AS_HOLD_BELL_WORKFLOW_READY__ = true;
 
   const st = window.state;
+  let isBellDrawerOpen = false;
+  let isQuickHoldOpen = false;
+  let quickHoldDraft = { startDate: '', endDate: '', ownerId: '', note: '' };
+  let promotingHoldId = null;
 
-  // =========================================================================
-  // 1. CSS PHÂN BIỆT THẺ "⏳ GIỮ LỊCH (HOLD)" TRÊN LỊCH SHOW & BẢNG CÔNG TÁC
-  // =========================================================================
-  const styleEl = document.createElement('style');
-  styleEl.id = 'as-hold-badge-styles';
-  styleEl.textContent = `
-    .as-is-hold-card {
-      border: 1.5px dashed #d97706 !important;
-      background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%) !important;
-      color: #92400e !important;
-      opacity: 0.92;
-    }
-    .as-is-hold-cell {
-      border: 1.5px dashed #f59e0b !important;
-      background: #fffbeb !important;
-      color: #b45309 !important;
-    }
-    .as-hold-toggle-box {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 10px 13px;
-      margin-bottom: 12px;
-      border-radius: 14px;
-      border: 1.5px solid #cbd5e1;
-      background: #f8fafc;
-      transition: all 0.15s ease;
-    }
-    .as-hold-toggle-box.active {
-      border-color: #f59e0b;
-      background: #fffbeb;
-      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.14);
-    }
-  `;
-  document.head.appendChild(styleEl);
+  function esc(str = '') {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
 
-  // =========================================================================
-  // 2. HÀM KIỂM TRA TRÙNG NGÀY & TỰ ĐỘNG DỌN DẸP THẺ GIỮ LỊCH (AUTO-REPLACE)
-  // =========================================================================
+  function formatDDMM(iso = '') {
+    const p = String(iso).split('-');
+    return p.length === 3 ? `${p[2]}/${p[1]}` : iso;
+  }
+
+  function formatDDMMYYYY(iso = '') {
+    const p = String(iso).split('-');
+    return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso;
+  }
+
+  function getTodayISO() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function getMemberName(id) {
+    const m = (st.members || []).find(x => x && x.id === id);
+    return m ? m.name : 'Thành viên';
+  }
+
   function isDateOverlap(s1, e1, s2, e2) {
     const startA = s1 || '';
     const endA = (e1 && e1 >= s1) ? e1 : s1;
@@ -11428,7 +11423,90 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     return startA <= endB && startB <= endA;
   }
 
-  // Khi lưu một Show CHÍNH THỨC -> tự động tìm & xóa các thẻ "⏳ Giữ lịch" trùng ngày của các nhân sự có mặt trong ekip
+  // =========================================================================
+  // 1. CSS CHO CHUÔNG HEADER, BANNER NHẮC CHỦ SHOW & KHUNG GIỮ LỊCH MINI
+  // =========================================================================
+  const oldStyle = document.getElementById('as-hold-badge-styles');
+  if (oldStyle) oldStyle.remove();
+
+  const styleEl = document.createElement('style');
+  styleEl.id = 'as-hold-badge-styles';
+  styleEl.textContent = `
+    .as-is-hold-card {
+      border: 1.5px dashed #d97706 !important;
+      background: repeating-linear-gradient(
+        -45deg,
+        #fffbeb,
+        #fffbeb 8px,
+        #fef3c7 8px,
+        #fef3c7 16px
+      ) !important;
+      color: #92400e !important;
+    }
+    .as-is-hold-cell {
+      border: 1.5px dashed #f59e0b !important;
+      background: repeating-linear-gradient(
+        -45deg,
+        #fffbeb,
+        #fffbeb 6px,
+        #fef3c7 6px,
+        #fef3c7 12px
+      ) !important;
+      color: #b45309 !important;
+    }
+    #as-header-bell-btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      background: #ffffff;
+      color: #0f172a;
+      cursor: pointer;
+      flex-shrink: 0;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+      transition: transform 0.12s ease, background 0.15s ease;
+    }
+    #as-header-bell-btn:active { transform: scale(0.94); }
+    #as-header-bell-btn.has-alert {
+      border-color: #fda4af;
+      background: #fff1f2;
+      color: #e11d48;
+    }
+    #as-header-bell-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: #e11d48;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 900;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(225, 29, 72, 0.4);
+      border: 1.5px solid #ffffff;
+    }
+    @keyframes asSlideUpSheet {
+      from { transform: translateY(24px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .as-sheet-anim {
+      animation: asSlideUpSheet 0.18s ease-out;
+    }
+  `;
+  document.head.appendChild(styleEl);
+
+  // =========================================================================
+  // 2. TỰ ĐỘNG DỌN THẺ GIỮ LỊCH NẾU CHỦ SHOW TẠO SHOW MỚI TRÙNG NGÀY
+  // =========================================================================
   function autoReplaceOverlappingHolds(officialShow) {
     if (!officialShow || officialShow.isHold || officialShow.isCancelled) return 0;
     const officialMembers = Array.isArray(officialShow.memberIds) ? officialShow.memberIds : [];
@@ -11442,7 +11520,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         remainingShows.push(sh);
         return;
       }
-
       if (!isDateOverlap(officialShow.startDate, officialShow.endDate, sh.startDate, sh.endDate)) {
         remainingShows.push(sh);
         return;
@@ -11452,12 +11529,10 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       const untouchedMembers = holdMembers.filter(mid => !officialMembers.includes(mid));
 
       if (untouchedMembers.length === 0) {
-        // Toàn bộ người giữ lịch ở thẻ tạm này đã có mặt trong show chính thức -> Xóa hẳn thẻ giữ lịch tạm
         removedCount++;
         if (!Array.isArray(st.localDeletedShowIds)) st.localDeletedShowIds = [];
         if (!st.localDeletedShowIds.includes(sh.id)) st.localDeletedShowIds.push(sh.id);
       } else if (untouchedMembers.length < holdMembers.length) {
-        // Chỉ gỡ tên những người đã vào show chính thức, giữ lại cho người chưa có lịch
         removedCount++;
         sh.memberIds = untouchedMembers;
         sh.updatedAt = Date.now();
@@ -11480,148 +11555,58 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     return removedCount;
   }
 
-  // =========================================================================
-  // 3. MỞ RỘNG FORM NỔ SHOW: BẬT/TẮT CHẾ ĐỘ "⏳ GIỮ LỊCH / NOTE NHANH"
-  // =========================================================================
-  window.holdActions = {
-    toggleHoldMode(checked) {
-      if (!st.formModal) return;
-      st.formModal.isHold = Boolean(checked);
-
-      // Khi bật Giữ Lịch, tự động tích sẵn người đang đăng nhập nếu chưa chọn ai
-      if (st.formModal.isHold) {
-        if (!Array.isArray(st.formModal.memberIds) || st.formModal.memberIds.length === 0) {
-          if (st.currentUserId) st.formModal.memberIds = [st.currentUserId];
-        }
-        // Xóa chữ mẫu nếu đang trống để nhập nhanh
-        if (!st.formModal.location) st.formModal.location = '';
-      }
-      if (typeof window.renderApp === 'function') window.renderApp();
-      setTimeout(enhanceOpenShowModalDOM, 20);
-    },
-
-    promoteHoldToOfficial(showId) {
-      const sh = (st.shows || []).find(s => s && s.id === showId);
-      if (!sh) return;
-      sh.isHold = false;
-      sh.location = String(sh.location || '').replace(/^⏳\s*GIỮ LỊCH:\s*/i, '').trim();
-      sh.updatedAt = Date.now();
-      if (!st.localShowEditsMap) st.localShowEditsMap = {};
-      st.localShowEditsMap[sh.id] = sh;
-
-      // Mở form sửa để Phú điền nốt địa điểm chi tiết, đối tác, vai trò
-      if (typeof window.appActions.openEditModal === 'function') {
-        window.appActions.openEditModal(showId);
-        setTimeout(() => {
-          if (st.formModal) st.formModal.isHold = false;
-          enhanceOpenShowModalDOM();
-          if (typeof window.__asNotify === 'function') {
-            window.__asNotify('✅ Đã chuyển sang Show Chính Thức! Mời bạn bổ sung chi tiết.', 'success');
-          }
-        }, 40);
-      }
-    },
-
-    quickHoldOnDate(dateStr, memberId) {
-      if (typeof window.appActions.openAddModal === 'function') {
-        window.appActions.openAddModal(dateStr);
-        setTimeout(() => {
-          if (st.formModal) {
-            st.formModal.isHold = true;
-            st.formModal.startDate = dateStr;
-            st.formModal.endDate = dateStr;
-            st.formModal.memberIds = memberId ? [memberId] : (st.currentUserId ? [st.currentUserId] : []);
-          }
-          if (typeof window.renderApp === 'function') window.renderApp();
-          setTimeout(enhanceOpenShowModalDOM, 30);
-        }, 30);
-      }
-    }
-  };
-
-  // Bọc openAddModal và openEditModal để khởi tạo cờ isHold chuẩn
-  const origOpenAdd = window.appActions.openAddModal;
-  window.appActions.openAddModal = function() {
-    const res = origOpenAdd.apply(this, arguments);
-    if (st.formModal && st.formModal.isHold === undefined) {
-      st.formModal.isHold = false;
-    }
-    setTimeout(enhanceOpenShowModalDOM, 25);
-    return res;
-  };
-
-  const origOpenEdit = window.appActions.openEditModal;
-  window.appActions.openEditModal = function(showId) {
-    const sh = (st.shows || []).find(s => s && s.id === showId);
-    const res = origOpenEdit.apply(this, arguments);
-    if (st.formModal && sh) {
-      st.formModal.isHold = Boolean(sh.isHold);
-      if (st.formModal.isHold) {
-        st.formModal.location = String(st.formModal.location || '').replace(/^⏳\s*GIỮ LỊCH:\s*/i, '').trim();
-      }
-    }
-    setTimeout(enhanceOpenShowModalDOM, 25);
-    return res;
-  };
-
-  // Bọc saveShowForm để hỗ trợ lưu nhanh chế độ Giữ Lịch & kích hoạt Auto-Replace
+  // Bọc saveShowForm: khi Chủ Show bấm Lưu từ luồng "Điền tiếp & Chốt Show" -> biến hình ngay tại chỗ (cùng 1 ID)
   const prevSaveShowForm = window.appActions.saveShowForm;
   window.appActions.saveShowForm = async function() {
     const f = st.formModal;
     if (!f) return prevSaveShowForm.apply(this, arguments);
 
-    const isHoldMode = Boolean(f.isHold);
-
-    if (isHoldMode) {
-      // Cho phép lưu cực nhanh: Nếu chưa nhập ghi chú thì tự đặt mặc định
-      const rawNote = String(f.location || '').trim() || 'Giữ lịch cá nhân';
-      f.location = rawNote.startsWith('⏳') ? rawNote : `⏳ GIỮ LỊCH: ${rawNote}`;
-      if (!f.partner) f.partner = 'Chờ chốt / Note nhanh';
-      if (!Array.isArray(f.memberIds) || f.memberIds.length === 0) {
-        if (st.currentUserId) f.memberIds = [st.currentUserId];
-      }
-    } else {
-      // Nếu là show chính thức thì gỡ tiền tố ⏳ GIỮ LỊCH nếu có
+    const isPromoting = Boolean(promotingHoldId && f.id === promotingHoldId);
+    if (isPromoting) {
       f.location = String(f.location || '').replace(/^⏳\s*GIỮ LỊCH:\s*/i, '').trim();
     }
 
     const targetId = f.id;
     const res = await prevSaveShowForm.apply(this, arguments);
 
-    // Gắn cờ isHold vào bản ghi vừa lưu trên st.shows
     if (!st.formModal) {
       let savedShow = targetId
         ? (st.shows || []).find(s => s && s.id === targetId)
         : (st.shows || [])[(st.shows || []).length - 1];
 
       if (savedShow) {
-        savedShow.isHold = isHoldMode;
-        if (isHoldMode) {
-          savedShow.color = '#fef3c7';
-        } else {
-          // Là show chính thức -> Tự động quét & dọn dẹp các thẻ Giữ Lịch trùng ngày của ekip
+        if (isPromoting || (savedShow.isHold && !String(savedShow.location || '').startsWith('⏳'))) {
+          savedShow.isHold = false;
+          delete savedShow.holdOwnerId;
+          delete savedShow.holdById;
+          delete savedShow.holdNote;
+          savedShow.updatedAt = Date.now();
+          promotingHoldId = null;
+          if (typeof window.__asNotify === 'function') {
+            window.__asNotify('✅ Đã chốt thành Show chính thức!', 'success');
+          }
+        } else if (!savedShow.isHold) {
           const cleaned = autoReplaceOverlappingHolds(savedShow);
           if (cleaned > 0 && typeof window.__asNotify === 'function') {
-            window.__asNotify(`✨ Đã tự động gỡ ${cleaned} ghi chú Giữ Lịch tạm trùng ngày!`, 'success');
+            window.__asNotify(`✨ Đã tự động gỡ ${cleaned} lịch tạm giữ trùng ngày!`, 'success');
           }
         }
         try { localStorage.setItem('as_shows_backup_2026', JSON.stringify(st.shows)); } catch (e) {}
         if (typeof window.syncShowsToSingleDoc === 'function') await window.syncShowsToSingleDoc();
         if (typeof window.renderApp === 'function') window.renderApp();
+        syncBellAndBannerUI();
       }
     }
     return res;
   };
 
-  // =========================================================================
-  // 4. LOẠI BỎ THẺ "⏳ GIỮ LỊCH" KHỎI BẢNG TÍNH CTP & THỐNG KÊ KPI
-  // =========================================================================
+  // Chặn tính tiền CTP cho các thẻ đang ở trạng thái Giữ Lịch
   if (window.ctpActions && typeof window.ctpActions.toggleTask === 'function') {
     const origToggleTask = window.ctpActions.toggleTask;
     window.ctpActions.toggleTask = function(showId, taskKey) {
       const sh = (st.shows || []).find(s => s && s.id === showId);
       if (sh && sh.isHold) {
-        alert('⏳ Show này đang ở trạng thái GIỮ LỊCH (chưa chốt chính thức) nên chưa thể tính tiền CTP!');
+        alert('⏳ Lịch này đang ở trạng thái Giữ lịch (chưa chốt chính thức) nên chưa tính CTP!');
         return;
       }
       return origToggleTask.apply(this, arguments);
@@ -11629,114 +11614,450 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   }
 
   // =========================================================================
-  // 5. VẼ THANH CÔNG CỤ "⏳ CHẾ ĐỘ GIỮ LỊCH" TRONG FORM & TÔ VIỀN NÉT ĐỨT TRÊN LỊCH
+  // 3. CÁC HÀNH ĐỘNG CỦA CHUÔNG & KHUNG GIỮ LỊCH MINI
   // =========================================================================
-  function enhanceOpenShowModalDOM() {
-    if (!st.formModal) return;
+  function getActiveHolds() {
+    return (st.shows || [])
+      .filter(s => s && s.isHold && !s.isCancelled)
+      .sort((a, b) => String(a.startDate || '').localeCompare(String(b.startDate || '')));
+  }
 
-    // Tìm modal form đang mở (chứa input địa điểm / ngày bắt đầu)
-    const locInput = document.querySelector('input[placeholder*="Hồ Tràm"], input[placeholder*="Địa điểm"], input[oninput*="location"]');
-    if (!locInput) return;
+  function getHoldsAssignedToMe() {
+    const uid = st.currentUserId;
+    if (!uid) return [];
+    return getActiveHolds().filter(s => (s.holdOwnerId || s.ownerId) === uid);
+  }
 
-    const formContainer = locInput.closest('div[class*="space-y"], form, div[class*="overflow-y"]') || locInput.parentElement?.parentElement;
-    if (!formContainer) return;
+  function getHoldsCreatedByMe() {
+    const uid = st.currentUserId;
+    if (!uid) return [];
+    return getActiveHolds().filter(s => (s.holdById || s.createdBy) === uid && (s.holdOwnerId || s.ownerId) !== uid);
+  }
 
-    const isHold = Boolean(st.formModal.isHold);
-    let toggleBox = document.getElementById('as-hold-mode-toggle-box');
+  window.holdBellActions = {
+    openBellDrawer() {
+      isBellDrawerOpen = true;
+      isQuickHoldOpen = false;
+      renderOverlayUI();
+    },
 
-    if (!toggleBox) {
-      toggleBox = document.createElement('div');
-      toggleBox.id = 'as-hold-mode-toggle-box';
-      formContainer.insertBefore(toggleBox, formContainer.firstChild);
+    closeAll() {
+      isBellDrawerOpen = false;
+      isQuickHoldOpen = false;
+      renderOverlayUI();
+    },
+
+    openQuickHoldSheet(prefillDate = '') {
+      if (st.readonlyMaintenanceMode && !st.isAdminMode) {
+        alert('🛡️ Hệ thống đang tạm khóa bảo trì!');
+        return;
+      }
+      const d = prefillDate || getTodayISO();
+      quickHoldDraft = {
+        startDate: d,
+        endDate: d,
+        ownerId: st.currentUserId || (st.members?.[0]?.id || ''),
+        note: ''
+      };
+      isBellDrawerOpen = false;
+      isQuickHoldOpen = true;
+      renderOverlayUI();
+      setTimeout(() => document.getElementById('as-qh-note-inp')?.focus(), 80);
+    },
+
+    async saveQuickHold() {
+      const startDate = document.getElementById('as-qh-start')?.value || quickHoldDraft.startDate;
+      const endDateRaw = document.getElementById('as-qh-end')?.value || startDate;
+      const endDate = endDateRaw >= startDate ? endDateRaw : startDate;
+      const ownerId = document.getElementById('as-qh-owner')?.value || st.currentUserId;
+      const note = (document.getElementById('as-qh-note-inp')?.value || '').trim();
+
+      if (!startDate) return alert('Vui lòng chọn ngày giữ lịch!');
+      if (!note) {
+        alert('Vui lòng nhập ghi chú ngắn (VD: Đi tỉnh 4 người / Chờ Agency X chốt)!');
+        document.getElementById('as-qh-note-inp')?.focus();
+        return;
+      }
+
+      const actorId = st.currentUserId || ownerId;
+      const ownerName = getMemberName(ownerId);
+      const isSelfOwner = ownerId === actorId;
+
+      const newHold = {
+        id: 'hold_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        location: `⏳ GIỮ LỊCH: ${note}`,
+        partner: isSelfOwner ? 'Chờ khách chốt' : `Chờ ${ownerName} lên lịch`,
+        startDate,
+        endDate,
+        memberIds: actorId ? [actorId] : [],
+        memberRoles: {},
+        ownerId: ownerId,
+        createdBy: actorId,
+        color: '#fef3c7',
+        postStatus: 'pending',
+        isHold: true,
+        holdById: actorId,
+        holdOwnerId: ownerId,
+        holdNote: note,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+
+      if (!Array.isArray(st.shows)) st.shows = [];
+      st.shows.push(newHold);
+      if (!st.localShowEditsMap) st.localShowEditsMap = {};
+      st.localShowEditsMap[newHold.id] = newHold;
+
+      try {
+        localStorage.setItem('as_shows_backup_2026', JSON.stringify(st.shows));
+        localStorage.setItem('as_local_show_edits_2026', JSON.stringify(st.localShowEditsMap));
+      } catch (e) {}
+
+      isQuickHoldOpen = false;
+      renderOverlayUI();
+
+      if (typeof window.syncShowsToSingleDoc === 'function') await window.syncShowsToSingleDoc();
+      if (typeof window.renderApp === 'function') window.renderApp();
+      syncBellAndBannerUI();
+
+      if (typeof window.__asNotify === 'function') {
+        window.__asNotify(
+          isSelfOwner
+            ? `⏳ Đã giữ lịch ngày ${formatDDMM(startDate)}!`
+            : `🔔 Đã giữ lịch ngày ${formatDDMM(startDate)} & gửi nhắc cho ${ownerName}!`,
+          'success'
+        );
+      }
+    },
+
+    promoteHoldToOfficial(showId) {
+      const sh = (st.shows || []).find(s => s && s.id === showId);
+      if (!sh) return;
+
+      isBellDrawerOpen = false;
+      isQuickHoldOpen = false;
+      renderOverlayUI();
+
+      promotingHoldId = showId;
+      if (typeof window.appActions.openEditModal === 'function') {
+        window.appActions.openEditModal(showId);
+        setTimeout(() => {
+          if (st.formModal) {
+            st.formModal.location = String(sh.holdNote || sh.location || '').replace(/^⏳\s*GIỮ LỊCH:\s*/i, '').trim();
+            if (st.formModal.partner && (st.formModal.partner.startsWith('Chờ ') || st.formModal.partner === 'Chờ chốt / Note nhanh')) {
+              st.formModal.partner = '';
+            }
+            if (sh.holdOwnerId) {
+              st.formModal.ownerId = sh.holdOwnerId;
+            }
+          }
+          if (typeof window.renderApp === 'function') window.renderApp();
+          if (typeof window.__asNotify === 'function') {
+            window.__asNotify('⚡ Điền tiếp Địa điểm, Đối tác & Ekip rồi bấm Lưu để chốt Show!', 'success');
+          }
+        }, 40);
+      }
+    },
+
+    async removeHold(showId) {
+      const sh = (st.shows || []).find(s => s && s.id === showId);
+      if (!sh) return;
+      if (!confirm(`Gỡ bỏ ghi chú giữ lịch "${sh.holdNote || sh.location}"?`)) return;
+
+      st.shows = (st.shows || []).filter(s => s && s.id !== showId);
+      if (!Array.isArray(st.localDeletedShowIds)) st.localDeletedShowIds = [];
+      if (!st.localDeletedShowIds.includes(showId)) st.localDeletedShowIds.push(showId);
+
+      try {
+        localStorage.setItem('as_shows_backup_2026', JSON.stringify(st.shows));
+        localStorage.setItem('as_local_deleted_shows_2026', JSON.stringify(st.localDeletedShowIds));
+      } catch (e) {}
+
+      if (typeof window.syncShowsToSingleDoc === 'function') await window.syncShowsToSingleDoc();
+      if (typeof window.renderApp === 'function') window.renderApp();
+      renderOverlayUI();
+      syncBellAndBannerUI();
+
+      if (typeof window.__asNotify === 'function') {
+        window.__asNotify('🗑️ Đã gỡ ghi chú giữ lịch!', 'success');
+      }
+    }
+  };
+
+  // =========================================================================
+  // 4. OVERLAY CHO NGĂN KÉO CHUÔNG & KHUNG MINI GIỮ LỊCH (BOTTOM SHEET)
+  // =========================================================================
+  const overlayEl = document.createElement('div');
+  overlayEl.id = 'as-hold-bell-overlay';
+  overlayEl.style.cssText = 'position:fixed;inset:0;z-index:2147483640;background:rgba(15,23,42,0.52);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:none;align-items:flex-end;justify-content:center;padding:12px;box-sizing:border-box;font-family:Inter,-apple-system,sans-serif;';
+  overlayEl.onclick = () => window.holdBellActions.closeAll();
+  document.body.appendChild(overlayEl);
+
+  function renderOverlayUI() {
+    if (!isBellDrawerOpen && !isQuickHoldOpen) {
+      overlayEl.style.display = 'none';
+      return;
+    }
+    overlayEl.style.display = 'flex';
+
+    // A. KHUNG MINI GIỮ LỊCH / NHẮC CHỦ SHOW (3 DÒNG GỌN NHẸ)
+    if (isQuickHoldOpen) {
+      const membersSorted = [...(st.members || [])].sort((a, b) => (a.order || 99) - (b.order || 99));
+      overlayEl.innerHTML = `
+        <div onclick="event.stopPropagation()" class="as-sheet-anim" style="background:#ffffff;width:100%;max-width:440px;border-radius:24px;padding:18px;box-shadow:0 24px 48px rgba(15,23,42,0.35);border:1px solid #e2e8f0;margin-bottom:max(8px, env(safe-area-inset-bottom, 8px));">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <div>
+              <div style="font-size:14px;font-weight:900;color:#0f172a;">📌 GIỮ LỊCH / NHẮC CHỦ SHOW</div>
+              <div style="font-size:11px;color:#64748b;margin-top:2px;">Khóa trùng lịch tức thì — không tính CTP, không đúp show</div>
+            </div>
+            <button type="button" onclick="window.holdBellActions.closeAll()" style="width:30px;height:30px;border-radius:999px;border:none;background:#f1f5f9;color:#475569;font-weight:900;cursor:pointer;">✕</button>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:11px;">
+            <!-- Dòng 1: Ngày -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <div>
+                <label style="display:block;font-size:11px;font-weight:800;color:#334155;margin-bottom:4px;">Từ ngày:</label>
+                <input type="date" id="as-qh-start" value="${esc(quickHoldDraft.startDate)}"
+                  onchange="const e=document.getElementById('as-qh-end'); if(e && (!e.value || e.value < this.value)) e.value=this.value;"
+                  style="width:100%;padding:9px 10px;border:1.5px solid #cbd5e1;border-radius:12px;font-size:12.5px;font-weight:800;color:#0f172a;box-sizing:border-box;" />
+              </div>
+              <div>
+                <label style="display:block;font-size:11px;font-weight:800;color:#334155;margin-bottom:4px;">Đến ngày:</label>
+                <input type="date" id="as-qh-end" value="${esc(quickHoldDraft.endDate)}"
+                  style="width:100%;padding:9px 10px;border:1.5px solid #cbd5e1;border-radius:12px;font-size:12.5px;font-weight:800;color:#0f172a;box-sizing:border-box;" />
+              </div>
+            </div>
+
+            <!-- Dòng 2: Chủ show phụ trách -->
+            <div>
+              <label style="display:block;font-size:11px;font-weight:800;color:#334155;margin-bottom:4px;">📌 Chủ show phụ trách (nhận thông báo điền tiếp):</label>
+              <select id="as-qh-owner" style="width:100%;padding:9px 11px;border:1.5px solid #cbd5e1;border-radius:12px;font-size:12.5px;font-weight:800;color:#0f172a;background:#fff;box-sizing:border-box;">
+                ${membersSorted.map(m => `
+                  <option value="${esc(m.id)}" ${m.id === quickHoldDraft.ownerId ? 'selected' : ''}>
+                    ${esc(m.name)}${m.id === st.currentUserId ? ' (Chính mình — chờ khách chốt)' : ''}
+                  </option>
+                `).join('')}
+              </select>
+            </div>
+
+            <!-- Dòng 3: Ghi chú ngắn -->
+            <div>
+              <label style="display:block;font-size:11px;font-weight:800;color:#334155;margin-bottom:4px;">📝 Ghi chú nhanh:</label>
+              <input type="text" id="as-qh-note-inp" value="${esc(quickHoldDraft.note)}"
+                placeholder="VD: Đi tỉnh 4 người / Chờ Agency X chốt..."
+                onkeydown="if(event.key==='Enter') window.holdBellActions.saveQuickHold();"
+                style="width:100%;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:12px;font-size:12.5px;font-weight:700;color:#0f172a;box-sizing:border-box;" />
+            </div>
+
+            <button type="button" onclick="window.holdBellActions.saveQuickHold()"
+              style="width:100%;margin-top:4px;padding:12px;border-radius:14px;border:none;background:#0f172a;color:#fbbf24;font-size:13px;font-weight:900;cursor:pointer;box-shadow:0 8px 18px rgba(15,23,42,0.25);">
+              ⏳ LƯU GIỮ LỊCH NGAY
+            </button>
+          </div>
+        </div>
+      `;
+      return;
     }
 
-    toggleBox.className = `as-hold-toggle-box ${isHold ? 'active' : ''}`;
-    toggleBox.innerHTML = `
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:12px;font-weight:900;color:${isHold ? '#b45309' : '#0f172a'};display:flex;align-items:center;gap:6px;">
-          <span>⏳ CHẾ ĐỘ GIỮ LỊCH / NOTE NHANH (HOLD)</span>
+    // B. NGĂN KÉO CHUÔNG THÔNG BÁO (SHOW CHỜ XỬ LÝ + NÚT TẠO GIỮ LỊCH MỚI)
+    const assignedToMe = getHoldsAssignedToMe();
+    const createdByMe = getHoldsCreatedByMe();
+
+    overlayEl.innerHTML = `
+      <div onclick="event.stopPropagation()" class="as-sheet-anim" style="background:#f8fafc;width:100%;max-width:460px;max-height:82dvh;border-radius:24px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 48px rgba(15,23,42,0.35);border:1px solid #e2e8f0;margin-bottom:max(8px, env(safe-area-inset-bottom, 8px));">
+        <div style="background:#ffffff;padding:14px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:14px;font-weight:900;color:#0f172a;">🔔 GIỮ LỊCH & NHẮC CHỦ SHOW</div>
+            <div style="font-size:11px;color:#64748b;">Cập nhật show nháp thành show chính thức chỉ 1 chạm</div>
+          </div>
+          <button type="button" onclick="window.holdBellActions.closeAll()" style="width:30px;height:30px;border-radius:999px;border:none;background:#f1f5f9;color:#475569;font-weight:900;cursor:pointer;">✕</button>
         </div>
-        <div style="font-size:10.5px;color:${isHold ? '#92400e' : '#64748b'};margin-top:2px;line-height:1.35;">
-          ${isHold
-            ? 'Đang bật: Chỉ cần nhập <b>Ngày + Ghi chú ngắn</b>. Tự động ẩn khi Chủ show lên lịch chính thức!'
-            : 'Bật khi khách chưa chốt hoặc giữ ngày kèo riêng (không tính CTP, không đúp lịch)'}
+
+        <div style="padding:14px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;">
+          <button type="button" onclick="window.holdBellActions.openQuickHoldSheet()"
+            style="width:100%;padding:11px 14px;border-radius:14px;border:none;background:#0f172a;color:#fbbf24;font-size:12.5px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;">
+            <span>+ GIỮ LỊCH / NHẮC CHỦ SHOW MỚI</span>
+          </button>
+
+          <!-- Phần 1: Show chờ mình xử lý (mình là Chủ Show) -->
+          <div>
+            <div style="font-size:11px;font-weight:900;color:#b45309;text-transform:uppercase;margin-bottom:6px;">
+              ⏳ CHỜ BẠN CẬP NHẬT / CHỐT SHOW (${assignedToMe.length})
+            </div>
+            ${assignedToMe.length === 0 ? `
+              <div style="background:#fff;border:1px dashed #cbd5e1;border-radius:14px;padding:12px;font-size:11.5px;color:#94a3b8;text-align:center;">
+                Không có lịch giữ chỗ nào đang chờ bạn xử lý.
+              </div>
+            ` : assignedToMe.map(sh => {
+              const byName = getMemberName(sh.holdById || sh.createdBy);
+              const isSelf = (sh.holdById || sh.createdBy) === st.currentUserId;
+              const dateRange = sh.endDate && sh.endDate !== sh.startDate
+                ? `${formatDDMM(sh.startDate)} – ${formatDDMMYYYY(sh.endDate)}`
+                : formatDDMMYYYY(sh.startDate);
+              return `
+                <div style="background:#fff;border:1.5px solid #fde68a;border-radius:16px;padding:12px;margin-bottom:8px;box-shadow:0 2px 8px rgba(217,119,6,0.08);">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px;">
+                    <span style="font-size:11px;font-weight:900;color:#b45309;background:#fffbeb;padding:2px 8px;border-radius:999px;border:1px solid #fcd34d;">📅 ${esc(dateRange)}</span>
+                    <button type="button" onclick="window.holdBellActions.removeHold('${sh.id}')" style="background:none;border:none;color:#94a3b8;font-size:11px;font-weight:800;cursor:pointer;">Gỡ ✕</button>
+                  </div>
+                  <div style="font-size:12.5px;font-weight:900;color:#0f172a;margin:4px 0;">
+                    ${esc(sh.holdNote || String(sh.location || '').replace(/^⏳\s*GIỮ LỊCH:\s*/i, ''))}
+                  </div>
+                  <div style="font-size:11px;color:#64748b;margin-bottom:9px;">
+                    ${isSelf ? 'Bạn tự đặt gạch giữ lịch (chờ khách chốt)' : `<b>${esc(byName)}</b> đã giữ ngày này cho show của bạn`}
+                  </div>
+                  <button type="button" onclick="window.holdBellActions.promoteHoldToOfficial('${sh.id}')"
+                    style="width:100%;padding:8px 12px;border-radius:10px;border:none;background:#059669;color:#fff;font-size:11.5px;font-weight:900;cursor:pointer;">
+                    ⚡ Điền tiếp & Chốt Show chính thức →
+                  </button>
+                </div>
+              `;
+            }).join('')}
+          </div>
+
+          <!-- Phần 2: Lịch mình đã giữ & đang chờ Chủ Show khác lên lịch -->
+          ${createdByMe.length > 0 ? `
+            <div>
+              <div style="font-size:11px;font-weight:900;color:#475569;text-transform:uppercase;margin-bottom:6px;">
+                📌 ĐÃ GIỮ NGÀY — CHỜ CHỦ SHOW LÊN LỊCH (${createdByMe.length})
+              </div>
+              ${createdByMe.map(sh => {
+                const ownerName = getMemberName(sh.holdOwnerId || sh.ownerId);
+                const dateRange = sh.endDate && sh.endDate !== sh.startDate
+                  ? `${formatDDMM(sh.startDate)} – ${formatDDMMYYYY(sh.endDate)}`
+                  : formatDDMMYYYY(sh.startDate);
+                return `
+                  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                    <div style="min-width:0;">
+                      <div style="font-size:12px;font-weight:900;color:#0f172a;">📅 ${esc(dateRange)} • ${esc(sh.holdNote || sh.location)}</div>
+                      <div style="font-size:11px;color:#64748b;margin-top:2px;">Đang nhắc <b>${esc(ownerName)}</b> cập nhật thông tin</div>
+                    </div>
+                    <button type="button" onclick="window.holdBellActions.removeHold('${sh.id}')" style="background:#f1f5f9;color:#64748b;border:none;padding:5px 9px;border-radius:8px;font-size:10.5px;font-weight:800;cursor:pointer;flex-shrink:0;">Gỡ</button>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          ` : ''}
         </div>
       </div>
-      <label style="position:relative;display:inline-flex;align-items:center;cursor:pointer;flex-shrink:0;">
-        <input type="checkbox" ${isHold ? 'checked' : ''} onchange="window.holdActions.toggleHoldMode(this.checked)" style="width:20px;height:20px;accent-color:#d97706;cursor:pointer;" />
-      </label>
     `;
+  }
 
-    // Khi đang bật Giữ Lịch: đổi placeholder ô Địa điểm thành Ghi chú giữ lịch & thêm nút Chốt Show nếu đang sửa
-    if (isHold) {
-      locInput.placeholder = 'VD: Giữ lịch Agency X / Kèo đi tỉnh - Đức lớn nhắn...';
-      if (st.formModal.mode === 'edit' && st.formModal.id && !document.getElementById('as-promote-hold-btn')) {
-        const promoBtn = document.createElement('button');
-        promoBtn.id = 'as-promote-hold-btn';
-        promoBtn.type = 'button';
-        promoBtn.style.cssText = 'width:100%;margin-top:8px;padding:9px 12px;border-radius:12px;border:none;background:#059669;color:#fff;font-size:12px;font-weight:900;cursor:pointer;box-shadow:0 4px 12px rgba(5,150,105,0.25);';
-        promoBtn.innerHTML = '✅ KHÁCH ĐÃ CHỐT ➔ CHUYỂN THÀNH SHOW CHÍNH THỨC';
-        promoBtn.onclick = () => window.holdActions.promoteHoldToOfficial(st.formModal.id);
-        toggleBox.appendChild(promoBtn);
+  // =========================================================================
+  // 5. GẮN ICON CHUÔNG 🔔 VÀO GÓC PHẢI HEADER + BANNER NHẮC RIÊNG CHO CHỦ SHOW
+  // =========================================================================
+  function syncBellAndBannerUI() {
+    const inAdmin = Boolean(st.isBackendPortal || window.location.hash === '#admin' || document.body.classList.contains('as-admin-mode-active'));
+    if (inAdmin) return;
+
+    const header = document.querySelector('#app header');
+    if (!header) return;
+
+    const pendingForMe = getHoldsAssignedToMe();
+    const pendingCount = pendingForMe.length;
+
+    // 5a. Gắn nút Chuông 🔔 vào hàng đầu tiên của Header (góc trên bên phải)
+    let bellBtn = document.getElementById('as-header-bell-btn');
+    if (!bellBtn) {
+      bellBtn = document.createElement('button');
+      bellBtn.id = 'as-header-bell-btn';
+      bellBtn.type = 'button';
+      bellBtn.title = 'Giữ lịch & Nhắc chủ show';
+      bellBtn.onclick = () => window.holdBellActions.openBellDrawer();
+
+      // Tìm hàng flex trên cùng trong header để neo vào góc phải cạnh avatar/tên
+      const topRow = header.querySelector('.flex.items-center.justify-between') || header.firstElementChild;
+      if (topRow && topRow.lastElementChild) {
+        const rightGroup = topRow.lastElementChild;
+        if (rightGroup.classList.contains('flex') || getComputedStyle(rightGroup).display.includes('flex')) {
+          rightGroup.insertBefore(bellBtn, rightGroup.firstChild);
+        } else {
+          topRow.appendChild(bellBtn);
+        }
+      } else {
+        header.appendChild(bellBtn);
       }
-    } else {
-      locInput.placeholder = 'VD: Hồ Tràm, Vũng Tàu, Golf Q2...';
-      const oldPromo = document.getElementById('as-promote-hold-btn');
-      if (oldPromo) oldPromo.remove();
+    }
+
+    const bellSig = String(pendingCount);
+    if (bellBtn.dataset.sig !== bellSig) {
+      bellBtn.dataset.sig = bellSig;
+      bellBtn.className = pendingCount > 0 ? 'has-alert' : '';
+      bellBtn.innerHTML = `
+        <i class="fa-solid fa-bell" style="font-size:14px;"></i>
+        ${pendingCount > 0 ? `<span id="as-header-bell-badge">${pendingCount}</span>` : ''}
+      `;
+    }
+
+    // 5b. Hiển thị thẻ nhắc nhỏ gọn ngay dưới Header (CHỈ hiện cho Chủ Show có lịch chờ điền)
+    let banner = document.getElementById('as-owner-hold-notify-banner');
+    if (pendingCount > 0) {
+      const first = pendingForMe[0];
+      const byName = getMemberName(first.holdById || first.createdBy);
+      const isSelf = (first.holdById || first.createdBy) === st.currentUserId;
+      const noteTxt = first.holdNote || String(first.location || '').replace(/^⏳\s*GIỮ LỊCH:\s*/i, '');
+      const bannerSig = `${first.id}:${pendingCount}:${noteTxt}`;
+
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'as-owner-hold-notify-banner';
+        banner.style.cssText = 'background:linear-gradient(90deg,#fffbeb,#fef3c7);border:1.5px solid #fcd34d;color:#92400e;border-radius:12px;padding:7px 10px;margin-top:6px;font-size:11.5px;font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;';
+        header.appendChild(banner);
+      }
+      if (banner.dataset.sig !== bannerSig) {
+        banner.dataset.sig = bannerSig;
+        banner.innerHTML = `
+          <div style="flex:1;min-width:180px;line-height:1.35;">
+            <span>⏳ </span>
+            ${isSelf
+              ? `Bạn đang giữ ngày <b>${formatDDMM(first.startDate)}</b> (${esc(noteTxt)})`
+              : `<b>${esc(byName)}</b> giữ ngày <b>${formatDDMM(first.startDate)}</b> cho show của bạn (${esc(noteTxt)})`}
+            ${pendingCount > 1 ? `<span style="color:#b45309;font-weight:900;"> (+${pendingCount - 1} lịch khác)</span>` : ''}
+          </div>
+          <button type="button" onclick="window.holdBellActions.promoteHoldToOfficial('${first.id}')"
+            style="background:#059669;color:#fff;border:none;padding:5px 10px;border-radius:9px;font-size:11px;font-weight:900;cursor:pointer;flex-shrink:0;">
+            ⚡ Điền tiếp & Chốt Show →
+          </button>
+        `;
+      }
+    } else if (banner) {
+      banner.remove();
+    }
+
+    // 5c. Tô nền sọc chéo viền nét đứt cho các thẻ đang Giữ Lịch trên Lịch Show & Bảng Công Tác
+    const holdShows = getActiveHolds();
+    if (holdShows.length > 0) {
+      document.querySelectorAll('#app [onclick*="openEditModal"], #app [onclick*="openShowDetail"], #app td, #app div[class*="rounded"]').forEach(el => {
+        if (el.dataset.holdStyled === '1') return;
+        if ((el.textContent || '').includes('⏳ GIỮ LỊCH:')) {
+          el.dataset.holdStyled = '1';
+          if (el.tagName === 'TD') {
+            el.classList.add('as-is-hold-cell');
+          } else if (el.offsetHeight > 18 && el.offsetHeight < 260) {
+            el.classList.add('as-is-hold-card');
+          }
+        }
+      });
     }
   }
 
-  // Tô viền nét đứt cho các thẻ chứa chữ "⏳ GIỮ LỊCH" trên Lịch Show và Bảng Công Tác
-  function highlightHoldCardsInDom() {
-    if (st.formModal) enhanceOpenShowModalDOM();
-
-    const holdShows = (st.shows || []).filter(s => s && s.isHold && !s.isCancelled);
-    if (holdShows.length === 0) return;
-
-    // Quét các thẻ show trên Lịch Show & Bảng Công Tác
-    document.querySelectorAll('#app [onclick*="openEditModal"], #app [onclick*="openShowDetail"], #app td, #app div[class*="rounded"]').forEach(el => {
-      if (el.dataset.holdStyled === '1') return;
-      const txt = el.textContent || '';
-      if (txt.includes('⏳ GIỮ LỊCH:')) {
-        el.dataset.holdStyled = '1';
-        if (el.tagName === 'TD') {
-          el.classList.add('as-is-hold-cell');
-        } else if (el.offsetHeight > 18 && el.offsetHeight < 260) {
-          el.classList.add('as-is-hold-card');
-        }
-      }
-    });
-  }
-
-  // Hỗ trợ Double-Click vào ô trống trên Bảng Công Tác để mở nhanh Giữ Lịch 3 giây
+  // Hỗ trợ Double-Click vào ô trống trên Bảng Công Tác để mở thẳng khung Giữ Lịch mini
   document.addEventListener('dblclick', (e) => {
     if (st.activeTab !== 'matrix') return;
     const td = e.target.closest('td');
-    if (!td) return;
-    const tr = td.closest('tr');
-    if (!tr) return;
+    const tr = td?.closest('tr');
+    if (!td || !tr) return;
 
-    // Tìm ngày từ cột đầu tiên của hàng (DD/MM)
-    const firstCellTxt = (tr.cells[0]?.textContent || '').trim();
-    const mDate = firstCellTxt.match(/(\d{1,2})\/(\d{1,2})/);
+    const mDate = (tr.cells[0]?.textContent || '').trim().match(/(\d{1,2})\/(\d{1,2})/);
     if (!mDate) return;
 
-    const dd = String(mDate[1]).padStart(2, '0');
-    const mm = String(mDate[2]).padStart(2, '0');
-    const yyyy = st.selectedYear || 2026;
-    const isoDate = `${yyyy}-${mm}-${dd}`;
-
-    // Tìm nhân sự tương ứng với cột td đang bấm đúp
-    const colIdx = td.cellIndex;
-    const table = td.closest('table');
-    const thText = (table?.querySelectorAll('thead th')[colIdx]?.textContent || '').trim();
-    const membersSorted = [...(st.members || [])].sort((a, b) => (a.order || 99) - (b.order || 99));
-    const matchedMem = membersSorted.find(m => m && (thText.includes(m.shortLabel) || thText.includes(m.name)));
-
-    window.holdActions.quickHoldOnDate(isoDate, matchedMem ? matchedMem.id : st.currentUserId);
+    const isoDate = `${st.selectedYear || 2026}-${String(mDate[2]).padStart(2, '0')}-${String(mDate[1]).padStart(2, '0')}`;
+    window.holdBellActions.openQuickHoldSheet(isoDate);
   });
 
-  setInterval(highlightHoldCardsInDom, 350);
+  setInterval(syncBellAndBannerUI, 350);
+  syncBellAndBannerUI();
 })();
 </script>
 </body></html>
