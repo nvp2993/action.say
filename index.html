@@ -12532,9 +12532,9 @@ let html = '', sig = '';
 
 <!-- TÁCH TIÊU ĐỀ 2 DÒNG (LỊCH SHOW Ở TRÊN | 2026 + LOCAL/CLOUD NHỎ NGANG HÀNG Ở DƯỚI) -->
 <script id="as-header-two-line-title-2026">
-(function initTwoLineHeaderWithCompactSyncBadge() {
-  if (window.__AS_TWO_LINE_HEADER_V2__) return;
-  window.__AS_TWO_LINE_HEADER_V2__ = true;
+(function initTwoLineHeaderWithCompactSyncBadgeV3() {
+  if (window.__AS_TWO_LINE_HEADER_V3__) return;
+  window.__AS_TWO_LINE_HEADER_V3__ = true;
 
   const oldStyle = document.getElementById('as-two-line-header-styles');
   if (oldStyle) oldStyle.remove();
@@ -12548,6 +12548,7 @@ let html = '', sig = '';
       justify-content: center;
       line-height: 1.05;
       min-width: 0;
+      flex-shrink: 0;
     }
     #as-two-line-brand-title .as-title-top {
       font-size: 11px;
@@ -12611,22 +12612,20 @@ let html = '', sig = '';
 
   function detectSyncStatus(header) {
     const st = window.state || {};
-    const badgeEl = Array.from(header.querySelectorAll('span, div, button, a')).find(el => {
-      if (el.id === 'as-two-line-brand-title' || el.closest('#as-two-line-brand-title')) return false;
-      if (el.children.length > 1) return false;
+    const candidates = Array.from(header.querySelectorAll('span, div, button, a')).filter(el => {
+      if (el.id === 'as-two-line-brand-title' || el.id === 'as-compact-sync-pill') return false;
+      if (el.closest('#as-two-line-brand-title')) return false;
+      if (el.children.length > 2) return false;
       const t = (el.textContent || '').trim();
-      return /^(•?\s*)?(Cloud|Local|Offline|Sync)$/i.test(t) || /\b(Cloud|Local)\b/i.test(t);
+      return /^(•?\s*)?(Cloud|Local|Offline|Sync)$/i.test(t);
     });
 
-    if (badgeEl) {
+    if (candidates.length > 0) {
+      const badgeEl = candidates[0];
       const txt = (badgeEl.textContent || '').trim();
       const isCloud = /cloud|sync/i.test(txt) && !/local|offline/i.test(txt);
-      // Ẩn badge cũ ở thanh trên để dời xuống cạnh năm 2026
-      if (badgeEl.parentElement && badgeEl.parentElement.children.length === 1 && badgeEl.parentElement !== header) {
-        badgeEl.parentElement.style.display = 'none';
-      } else {
-        badgeEl.style.display = 'none';
-      }
+      // Chỉ ẩn đúng badge cũ, không động vào parentElement để tránh làm mất các nút khác
+      candidates.forEach(c => { c.style.display = 'none'; });
       return { isCloud, label: isCloud ? 'Cloud' : 'Local' };
     }
 
@@ -12640,23 +12639,30 @@ let html = '', sig = '';
 
     const yearStr = getActiveYear();
     const syncInfo = detectSyncStatus(header);
-
-    const titleCandidate = Array.from(header.querySelectorAll('h1, h2, span, div, a')).find(el => {
-      if (el.id === 'as-two-line-brand-title' || el.closest('#as-two-line-brand-title')) return false;
-      if (el.children.length > 0) return false;
-      const t = (el.textContent || '').trim();
-      return /^LỊCH\s*SHOW/i.test(t) && t.length <= 24;
-    });
+    const sig = `${yearStr}:${syncInfo.label}`;
 
     let wrap = document.getElementById('as-two-line-brand-title');
-    if (!wrap && titleCandidate) {
+
+    // Nếu wrap đã tồn tại mà bị renderApp gỡ khỏi header thì gắn lại ngay
+    if (wrap && !header.contains(wrap)) {
+      wrap.remove();
+      wrap = null;
+    }
+
+    if (!wrap) {
+      const titleCandidate = Array.from(header.querySelectorAll('h1, h2, span, div, a')).find(el => {
+        if (el.id === 'as-two-line-brand-title' || el.closest('#as-two-line-brand-title')) return false;
+        if (el.children.length > 0) return false;
+        const t = (el.textContent || '').trim();
+        return /^LỊCH\s*SHOW/i.test(t) && t.length <= 28;
+      });
+      if (!titleCandidate) return;
+
       wrap = document.createElement('div');
       wrap.id = 'as-two-line-brand-title';
       titleCandidate.replaceWith(wrap);
     }
-    if (!wrap) return;
 
-    const sig = `${yearStr}:${syncInfo.label}`;
     if (wrap.dataset.sig !== sig) {
       wrap.dataset.sig = sig;
       wrap.innerHTML = `
