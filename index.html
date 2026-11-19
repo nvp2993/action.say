@@ -3069,23 +3069,25 @@ async captureBillImage() {
             scale: 2,
             backgroundColor: '#ffffff',
             useCORS: true,
-            onclone: (clonedDoc) => {
+             onclone: (clonedDoc) => {
               const area = clonedDoc.getElementById('ctp-bill-capture-area');
               if (!area) return;
-              // Gỡ truncate & nới line-height để html2canvas không cắt mất dấu chữ tiếng Việt
-              area.querySelectorAll('.truncate, p, div, span').forEach((el) => {
-                if (el.classList.contains('truncate')) {
-                  el.classList.remove('truncate');
-                  el.style.overflow = 'visible';
-                  el.style.whiteSpace = 'normal';
-                }
-                if (el.textContent && el.textContent.includes('Chủ TK')) {
-                  el.style.overflow = 'visible';
-                  el.style.lineHeight = '1.65';
-                  el.style.paddingTop = '2px';
-                  el.style.paddingBottom = '2px';
-                }
-              });
+              const qrHeading = Array.from(area.querySelectorAll('*')).find(
+                el => el.children.length === 0 && (el.textContent || '').includes('VIETQR')
+              );
+              const qrBox = qrHeading ? (qrHeading.closest('.rounded-2xl, .rounded-3xl') || qrHeading.parentElement?.parentElement) : area;
+              if (qrBox) {
+                qrBox.style.setProperty('overflow', 'visible', 'important');
+                qrBox.querySelectorAll('*').forEach((el) => {
+                  if (el.tagName === 'IMG') return;
+                  el.classList.remove('truncate', 'overflow-hidden', 'whitespace-nowrap', 'leading-none', 'leading-tight');
+                  el.style.setProperty('overflow', 'visible', 'important');
+                  el.style.setProperty('white-space', 'normal', 'important');
+                  el.style.setProperty('height', 'auto', 'important');
+                  el.style.setProperty('max-height', 'none', 'important');
+                  el.style.setProperty('line-height', '1.65', 'important');
+                });
+              }
             }
           });
           target.style.maxHeight = oldMaxH;
