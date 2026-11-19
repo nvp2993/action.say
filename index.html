@@ -11165,17 +11165,18 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 </script>
 
 <script id="as-enhance-nhan-su-pin-tab-2026">
-(function enhanceNhanSuAndPinTab() {
+(function enhanceNhanSuAndPinTabZeroFlicker() {
   if (!window.state || !window.adminProActions) {
-    setTimeout(enhanceNhanSuAndPinTab, 100);
+    setTimeout(enhanceNhanSuAndPinTabZeroFlicker, 80);
     return;
   }
-  if (window.__AS_NHANSU_PIN_ENHANCED__) return;
-  window.__AS_NHANSU_PIN_ENHANCED__ = true;
+  if (window.__AS_NHANSU_PIN_ZERO_FLICKER__) return;
+  window.__AS_NHANSU_PIN_ZERO_FLICKER__ = true;
 
   const st = window.state;
+  let isApplyingPatch = false;
 
-  // Khôi phục màu & thứ tự nhân sự đã lưu ở localStorage nếu có
+  // Khôi phục màu & thứ tự nhân sự từ localStorage
   try {
     const savedMem = JSON.parse(localStorage.getItem('as_members_backup_2026') || 'null');
     if (Array.isArray(savedMem) && savedMem.length > 0 && Array.isArray(st.members)) {
@@ -11190,86 +11191,131 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     }
   } catch (e) {}
 
-  function patchNhanSuPinUI() {
+  function applyNhanSuPinPatchNow() {
+    if (isApplyingPatch) return;
     const shell = document.getElementById('as-light-admin-shell');
     if (!shell) return;
 
-    // 1. Đổi tên nút tab "🔑 Cấp PIN" -> "🔑 NHÂN SỰ & PIN"
-    shell.querySelectorAll('button').forEach(btn => {
-      const txt = (btn.textContent || '').trim();
-      if (txt === '🔑 Cấp PIN' || txt === 'Cấp PIN') {
-        btn.textContent = '🔑 NHÂN SỰ & PIN';
-      }
-    });
+    isApplyingPatch = true;
+    try {
+      // 1. Đổi tên tab "Cấp PIN" -> "🔑 NHÂN SỰ & PIN" ngay lập tức
+      const btns = shell.querySelectorAll('button');
+      btns.forEach(btn => {
+        const txt = (btn.textContent || '').trim();
+        if (txt === '🔑 Cấp PIN' || txt === 'Cấp PIN') {
+          btn.textContent = '🔑 NHÂN SỰ & PIN';
+        }
+      });
 
-    // 2. Kiểm tra đang ở màn hình "MÃ PIN & HỌ TÊN XUẤT VÉ" chưa
-    if (!(shell.textContent || '').includes('MÃ PIN & HỌ TÊN XUẤT VÉ')) return;
+      // 2. Nếu đang mở tab Nhân Sự & PIN -> Gắn bảng chỉnh Màu thẻ & Thứ tự cột cố định
+      if (!(shell.textContent || '').includes('MÃ PIN & HỌ TÊN')) return;
 
-    // Đổi tiêu đề khối cho đồng bộ
-    shell.querySelectorAll('*').forEach(el => {
-      if (el.children.length === 0 && (el.textContent || '').trim().startsWith('MÃ PIN & HỌ TÊN XUẤT VÉ')) {
-        el.textContent = 'NHÂN SỰ, MÃ PIN, MÀU THẺ & THỨ TỰ CỘT (MẶC ĐỊNH: 1234)';
-      }
-    });
+      // Đổi tiêu đề khối cho đồng bộ
+      shell.querySelectorAll('div, h2, h3, span').forEach(el => {
+        if (el.children.length === 0 && (el.textContent || '').trim().startsWith('MÃ PIN & HỌ TÊN XUẤT VÉ')) {
+          el.textContent = 'NHÂN SỰ, MÃ PIN, MÀU THẺ & THỨ TỰ CỘT (MẶC ĐỊNH: 1234)';
+        }
+      });
 
-    // 3. Gắn trực tiếp nút chọn Màu thẻ + ô Thứ tự cột vào ngay từng thẻ nhân sự có sẵn
-    const members = st.members || [];
-    const saveBtns = Array.from(shell.querySelectorAll('button')).filter(b => (b.textContent || '').trim() === 'Lưu');
+      const members = st.members || [];
+      const saveBtns = Array.from(shell.querySelectorAll('button')).filter(b => (b.textContent || '').trim() === 'Lưu');
 
-    saveBtns.forEach(saveBtn => {
-      const topRow = saveBtn.parentElement;
-      if (!topRow || topRow.dataset.memberCustomInjected === '1') return;
+      saveBtns.forEach(saveBtn => {
+        const topRow = saveBtn.parentElement;
+        if (!topRow || topRow.dataset.memberCustomInjected === '1') return;
 
-      const cardBox = topRow.parentElement;
-      const cardText = (cardBox?.textContent || '').trim();
-      const matchedMem = members.find(m => m && m.name && cardText.includes(m.name));
-      if (!matchedMem) return;
+        // Tìm thẻ cha chứa tên nhân sự
+        let cardBox = topRow;
+        let matchedMem = null;
+        for (let depth = 0; depth < 3; depth++) {
+          if (!cardBox) break;
+          const txt = (cardBox.textContent || '').trim();
+          matchedMem = members.find(m => m && m.name && txt.includes(m.name));
+          if (matchedMem) break;
+          cardBox = cardBox.parentElement;
+        }
+        if (!matchedMem) return;
 
-      topRow.dataset.memberCustomInjected = '1';
+        topRow.dataset.memberCustomInjected = '1';
 
-      // Đổi chấm tròn màu tĩnh bên trái tên thành ô chọn màu bấm được trực tiếp
-      const dotEl = topRow.querySelector('span[style*="background"], div[style*="background"]');
-      if (dotEl) dotEl.style.display = 'none';
+        // Ẩn chấm tròn tĩnh và thay bằng ô chọn màu trực tiếp
+        const dotEl = cardBox.querySelector('span[style*="background"], div[style*="background"]');
+        if (dotEl && dotEl.offsetWidth <= 16) {
+          dotEl.style.display = 'none';
+        }
 
-      const colorPicker = document.createElement('input');
-      colorPicker.type = 'color';
-      colorPicker.value = matchedMem.bg || '#333333';
-      colorPicker.title = `Đổi màu thẻ của ${matchedMem.name}`;
-      colorPicker.style.cssText = 'width:22px;height:22px;border:none;border-radius:999px;padding:0;background:transparent;cursor:pointer;flex-shrink:0;overflow:hidden;';
-      colorPicker.onchange = function() {
-        window.adminProActions.updateMemberColor(matchedMem.id, this.value);
-      };
-      topRow.insertBefore(colorPicker, topRow.firstChild);
+        const colorPicker = document.createElement('input');
+        colorPicker.type = 'color';
+        colorPicker.value = matchedMem.bg || '#333333';
+        colorPicker.title = `Đổi màu thẻ của ${matchedMem.name}`;
+        colorPicker.style.cssText = 'width:22px;height:22px;border:1px solid #cbd5e1;border-radius:999px;padding:0;background:transparent;cursor:pointer;flex-shrink:0;margin-right:4px;';
+        colorPicker.onchange = function() {
+          window.adminProActions.updateMemberColor(matchedMem.id, this.value);
+        };
 
-      // Thêm ô chỉnh Thứ tự cột (Cột: 1..13) ngay bên cạnh ô PIN
-      const orderWrap = document.createElement('div');
-      orderWrap.style.cssText = 'display:inline-flex;align-items:center;gap:3px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:999px;padding:2px 7px;margin-right:4px;flex-shrink:0;';
-      orderWrap.innerHTML = `<span style="font-size:10px;font-weight:800;color:#64748b;">Cột</span>`;
+        // Chèn ô chọn màu ngay trước tên nhân sự hoặc đầu hàng
+        const nameTarget = dotEl ? dotEl.parentElement : topRow;
+        if (nameTarget) {
+          nameTarget.insertBefore(colorPicker, nameTarget.firstChild);
+        }
 
-      const orderInput = document.createElement('input');
-      orderInput.type = 'number';
-      orderInput.min = '1';
-      orderInput.max = '50';
-      orderInput.value = matchedMem.order !== undefined ? matchedMem.order : 1;
-      orderInput.title = 'Thứ tự cột trên Bảng Công Tác';
-      orderInput.style.cssText = 'width:32px;border:none;background:transparent;text-align:center;font-size:11px;font-weight:900;color:#0f172a;outline:none;';
-      orderInput.onchange = function() {
-        window.adminProActions.updateMemberOrder(matchedMem.id, this.value);
-      };
-      orderWrap.appendChild(orderInput);
+        // Tạo cụm chỉnh Thứ tự cột [Cột: 1..13]
+        const orderWrap = document.createElement('div');
+        orderWrap.style.cssText = 'display:inline-flex;align-items:center;gap:3px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:999px;padding:2px 7px;margin-right:4px;flex-shrink:0;';
+        orderWrap.innerHTML = `<span style="font-size:10px;font-weight:800;color:#64748b;">Cột</span>`;
 
-      // Chèn ô Cột vào trước ô nhập PIN
-      const pinInput = topRow.querySelector('input[type="text"], input[type="number"], input:not([type="color"])');
-      if (pinInput) {
-        topRow.insertBefore(orderWrap, pinInput);
-      } else {
-        topRow.insertBefore(orderWrap, saveBtn);
-      }
-    });
+        const orderInput = document.createElement('input');
+        orderInput.type = 'number';
+        orderInput.min = '1';
+        orderInput.max = '50';
+        orderInput.value = matchedMem.order !== undefined ? matchedMem.order : 1;
+        orderInput.title = 'Thứ tự cột trên Bảng Công Tác';
+        orderInput.style.cssText = 'width:32px;border:none;background:transparent;text-align:center;font-size:11px;font-weight:900;color:#0f172a;outline:none;';
+        orderInput.onchange = function() {
+          window.adminProActions.updateMemberOrder(matchedMem.id, this.value);
+        };
+        orderWrap.appendChild(orderInput);
+
+        // Chèn cụm Cột vào ngay trước ô nhập PIN hoặc nút Lưu
+        const pinInput = topRow.querySelector('input:not([type="color"])');
+        if (pinInput) {
+          topRow.insertBefore(orderWrap, pinInput);
+        } else {
+          topRow.insertBefore(orderWrap, saveBtn);
+        }
+      });
+    } finally {
+      isApplyingPatch = false;
+    }
   }
 
-  setInterval(patchNhanSuPinUI, 300);
-  patchNhanSuPinUI();
+  // Theo dõi trực tiếp thẻ #as-light-admin-shell để vá DOM tức thì trong cùng frame (0% nhấp nháy)
+  function bindShellObserver() {
+    const shell = document.getElementById('as-light-admin-shell');
+    if (!shell) {
+      setTimeout(bindShellObserver, 150);
+      return;
+    }
+    if (!shell.dataset.nhanSuPinObserved) {
+      shell.dataset.nhanSuPinObserved = '1';
+      const obs = new MutationObserver(() => {
+        applyNhanSuPinPatchNow();
+      });
+      obs.observe(shell, { childList: true, subtree: true });
+    }
+    applyNhanSuPinPatchNow();
+  }
+
+  // Theo dõi khi shell được tạo mới sau khi đăng nhập Admin
+  const bodyObs = new MutationObserver(() => {
+    const shell = document.getElementById('as-light-admin-shell');
+    if (shell && !shell.dataset.nhanSuPinObserved) {
+      bindShellObserver();
+    }
+  });
+  bodyObs.observe(document.body, { childList: true });
+
+  bindShellObserver();
 })();
 </script>
 </body></html>
