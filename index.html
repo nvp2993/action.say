@@ -12529,4 +12529,89 @@ let html = '', sig = '';
   syncSegmentedFilter();
 })();
 </script>
+
+      <!-- TÁCH TIÊU ĐỀ HEADER THÀNH 2 DÒNG (TRÊN: LỊCH SHOW | DƯỚI: NĂM) CHO IPHONE -->
+<script id="as-header-two-line-title-2026">
+(function initTwoLineHeaderTitle() {
+  if (window.__AS_TWO_LINE_HEADER_READY__) return;
+  window.__AS_TWO_LINE_HEADER_READY__ = true;
+
+  const oldStyle = document.getElementById('as-two-line-header-styles');
+  if (oldStyle) oldStyle.remove();
+
+  const styleEl = document.createElement('style');
+  styleEl.id = 'as-two-line-header-styles';
+  styleEl.textContent = `
+    #as-two-line-brand-title {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      line-height: 1.05;
+      min-width: 0;
+    }
+    #as-two-line-brand-title .as-title-top {
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: -0.2px;
+      color: #0f172a;
+      white-space: nowrap;
+    }
+    #as-two-line-brand-title .as-title-year {
+      font-size: 10.5px;
+      font-weight: 800;
+      color: #64748b;
+      margin-top: 2px;
+      white-space: nowrap;
+    }
+  `;
+  document.head.appendChild(styleEl);
+
+  function getActiveYear() {
+    const st = window.state;
+    if (st && st.selectedYear) return String(st.selectedYear);
+    const m = (document.body.innerText || '').match(/\b(202[5-9]|203\d)\b/);
+    return m ? m[1] : '2026';
+  }
+
+  function syncTwoLineHeader() {
+    const header = document.querySelector('#app header');
+    if (!header) return;
+
+    const yearStr = getActiveYear();
+
+    // Tìm phần tử chứa chữ "LỊCH SHOW" ở khu vực logo/header
+    const titleCandidate = Array.from(header.querySelectorAll('h1, h2, span, div, a')).find(el => {
+      if (el.id === 'as-two-line-brand-title' || el.closest('#as-two-line-brand-title')) return false;
+      if (el.children.length > 0) return false;
+      const t = (el.textContent || '').trim();
+      return /^LỊCH\s*SHOW/i.test(t) && t.length <= 24;
+    });
+
+    if (!titleCandidate) return;
+
+    let wrap = document.getElementById('as-two-line-brand-title');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = 'as-two-line-brand-title';
+      titleCandidate.replaceWith(wrap);
+    }
+
+    const sig = `${yearStr}`;
+    if (wrap.dataset.sig !== sig) {
+      wrap.dataset.sig = sig;
+      wrap.innerHTML = `
+        <span class="as-title-top">LỊCH SHOW</span>
+        <span class="as-title-year">${yearStr}</span>
+      `;
+    }
+  }
+
+  const appRoot = document.getElementById('app');
+  if (appRoot) {
+    new MutationObserver(() => syncTwoLineHeader()).observe(appRoot, { childList: true });
+  }
+
+  syncTwoLineHeader();
+})();
+</script>
 </body></html>
