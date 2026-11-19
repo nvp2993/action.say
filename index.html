@@ -3494,27 +3494,7 @@ async captureBillImage() {
             <textarea id="ctp-bill-textarea" class="sr-only" readonly>${escapeHtml(bm.text)}</textarea>
 
             <!-- Cụm nút hành động gọn đẹp cho điện thoại -->
-            
-            ${(() => {
-              const prof = state.memberProfiles?.[state.currentUserId] || {};
-              if (!prof.bankAcc || bm.total <= 0) return '';
-              const qrUrl = `https://img.vietqr.io/image/${prof.bankBin || '970436'}-${prof.bankAcc}-compact2.png?amount=${bm.total}&addInfo=${encodeURIComponent('CTP T' + bm.month + ' ' + bm.memberName)}`;
-              return `
-                <div class="flex items-center justify-between gap-3 p-2.5 rounded-2xl bg-slate-50 border border-slate-200">
-                  <div class="text-[10.5px] space-y-0.5">
-                    <div class="font-black text-slate-900 uppercase">💳 Quét mã VietQR Thanh Toán Nhanh</div>
-                    <div class="text-slate-600">Chủ TK: <b>${escapeHtml(prof.fullName || bm.memberName)}</b> • STK: <b class="font-mono">${escapeHtml(prof.bankAcc)}</b></div>
-                    <div class="text-emerald-700 font-bold">Số tiền tự điền: ${bm.total.toLocaleString('vi-VN')}đ</div>
-                  </div>
-                  <img src="${qrUrl}" alt="VietQR" class="w-16 h-16 rounded-xl border border-slate-200 bg-white shrink-0" />
-                </div>
-              `;
-            })()}
             <div data-html2canvas-ignore="true" class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2 pt-0.5 shrink-0">
-              <button onclick="ctpActions.captureBillImage()" class="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black py-2.5 px-2 rounded-full uppercase tracking-tight flex items-center justify-center gap-1 text-[10px] sm:text-[11px] shadow-xs">
-                <i class="fa-solid fa-camera"></i>
-                <span>Chụp Ảnh</span>
-              </button>
               <button onclick="ctpActions.copyBillText()" class="bg-emerald-600 text-white font-black py-2.5 px-2 rounded-full uppercase tracking-tight flex items-center justify-center gap-1 text-[10px] sm:text-[11px]">
                 <i class="fa-regular fa-copy"></i>
                 <span>Copy Zalo</span>
