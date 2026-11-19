@@ -8049,13 +8049,18 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       const members = extractMembersFromShowField(sourceForMembers);
       if (!members.length) return;
 
-      // Tìm địa điểm sau dấu 📍 hoặc dòng tiêu đề
+      // Tìm địa điểm sau dấu 📍, nếu không có thì lấy dòng đầu không chứa tên người
       let loc = '';
-      const pinMatch = txt.match(/📍\s*([^•\n\r]+?)(?=\s+(?:Quay|Chụp|Dựng|Flycam|Đèn|Đức|Phú|Thái|Kiên|Đăng|Khoa|Kỳ|Dũng|Thức|Lộc|Nhật|$))/i);
+      const pinMatch = txt.match(/📍\s*([^•\n\r]+)/);
       if (pinMatch && pinMatch[1]) {
-        loc = normalizeName(pinMatch[1]);
+        loc = normalizeName(pinMatch[1].split(/\s+(?:Quay|Chụp|Dựng|Flycam|Đèn|Đức|Phú|Thái|Kiên|Đăng|Khoa|Kỳ|Dũng|Thức|Lộc|Nhật)\b/i)[0] || pinMatch[1]).trim();
       }
-      if (loc && loc.length < 45) {
+      if (!loc) {
+        const fallbackLine = lines.find(l => !l.includes(':') && extractMembersFromShowField(l).length === 0 && !/^\d{1,2}[/-]\d{1,2}/.test(l));
+        if (fallbackLine) loc = normalizeName(fallbackLine).trim();
+      }
+
+      if (loc && loc.length < 60) {
         const sig = iso + '|' + iso + '|' + loc.toLowerCase() + '|' + members.join(',');
         if (!window.__AS_EXACT_SHOW_LIST__.some(x => x.sig === sig)) {
           window.__AS_EXACT_SHOW_LIST__.push({
