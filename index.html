@@ -11367,4 +11367,376 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   applyStylesMapToMembers();
 })();
 </script>
+
+      <script id="as-hold-and-smart-replace-2026">
+(function initHoldAndSmartReplaceSuite() {
+  if (!window.state || !window.appActions) {
+    setTimeout(initHoldAndSmartReplaceSuite, 100);
+    return;
+  }
+  if (window.__AS_HOLD_SMART_REPLACE_READY__) return;
+  window.__AS_HOLD_SMART_REPLACE_READY__ = true;
+
+  const st = window.state;
+
+  // =========================================================================
+  // 1. CSS PHÂN BIỆT THẺ "⏳ GIỮ LỊCH (HOLD)" TRÊN LỊCH SHOW & BẢNG CÔNG TÁC
+  // =========================================================================
+  const styleEl = document.createElement('style');
+  styleEl.id = 'as-hold-badge-styles';
+  styleEl.textContent = `
+    .as-is-hold-card {
+      border: 1.5px dashed #d97706 !important;
+      background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%) !important;
+      color: #92400e !important;
+      opacity: 0.92;
+    }
+    .as-is-hold-cell {
+      border: 1.5px dashed #f59e0b !important;
+      background: #fffbeb !important;
+      color: #b45309 !important;
+    }
+    .as-hold-toggle-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 13px;
+      margin-bottom: 12px;
+      border-radius: 14px;
+      border: 1.5px solid #cbd5e1;
+      background: #f8fafc;
+      transition: all 0.15s ease;
+    }
+    .as-hold-toggle-box.active {
+      border-color: #f59e0b;
+      background: #fffbeb;
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.14);
+    }
+  `;
+  document.head.appendChild(styleEl);
+
+  // =========================================================================
+  // 2. HÀM KIỂM TRA TRÙNG NGÀY & TỰ ĐỘNG DỌN DẸP THẺ GIỮ LỊCH (AUTO-REPLACE)
+  // =========================================================================
+  function isDateOverlap(s1, e1, s2, e2) {
+    const startA = s1 || '';
+    const endA = (e1 && e1 >= s1) ? e1 : s1;
+    const startB = s2 || '';
+    const endB = (e2 && e2 >= s2) ? e2 : s2;
+    if (!startA || !startB) return false;
+    return startA <= endB && startB <= endA;
+  }
+
+  // Khi lưu một Show CHÍNH THỨC -> tự động tìm & xóa các thẻ "⏳ Giữ lịch" trùng ngày của các nhân sự có mặt trong ekip
+  function autoReplaceOverlappingHolds(officialShow) {
+    if (!officialShow || officialShow.isHold || officialShow.isCancelled) return 0;
+    const officialMembers = Array.isArray(officialShow.memberIds) ? officialShow.memberIds : [];
+    if (officialMembers.length === 0) return 0;
+
+    let removedCount = 0;
+    const remainingShows = [];
+
+    (st.shows || []).forEach(sh => {
+      if (!sh || sh.id === officialShow.id || !sh.isHold || sh.isCancelled) {
+        remainingShows.push(sh);
+        return;
+      }
+
+      if (!isDateOverlap(officialShow.startDate, officialShow.endDate, sh.startDate, sh.endDate)) {
+        remainingShows.push(sh);
+        return;
+      }
+
+      const holdMembers = Array.isArray(sh.memberIds) ? sh.memberIds : [];
+      const untouchedMembers = holdMembers.filter(mid => !officialMembers.includes(mid));
+
+      if (untouchedMembers.length === 0) {
+        // Toàn bộ người giữ lịch ở thẻ tạm này đã có mặt trong show chính thức -> Xóa hẳn thẻ giữ lịch tạm
+        removedCount++;
+        if (!Array.isArray(st.localDeletedShowIds)) st.localDeletedShowIds = [];
+        if (!st.localDeletedShowIds.includes(sh.id)) st.localDeletedShowIds.push(sh.id);
+      } else if (untouchedMembers.length < holdMembers.length) {
+        // Chỉ gỡ tên những người đã vào show chính thức, giữ lại cho người chưa có lịch
+        removedCount++;
+        sh.memberIds = untouchedMembers;
+        sh.updatedAt = Date.now();
+        if (!st.localShowEditsMap) st.localShowEditsMap = {};
+        st.localShowEditsMap[sh.id] = sh;
+        remainingShows.push(sh);
+      } else {
+        remainingShows.push(sh);
+      }
+    });
+
+    if (removedCount > 0) {
+      st.shows = remainingShows;
+      try {
+        localStorage.setItem('as_shows_backup_2026', JSON.stringify(st.shows));
+        localStorage.setItem('as_local_deleted_shows_2026', JSON.stringify(st.localDeletedShowIds || []));
+        localStorage.setItem('as_local_show_edits_2026', JSON.stringify(st.localShowEditsMap || {}));
+      } catch (e) {}
+    }
+    return removedCount;
+  }
+
+  // =========================================================================
+  // 3. MỞ RỘNG FORM NỔ SHOW: BẬT/TẮT CHẾ ĐỘ "⏳ GIỮ LỊCH / NOTE NHANH"
+  // =========================================================================
+  window.holdActions = {
+    toggleHoldMode(checked) {
+      if (!st.formModal) return;
+      st.formModal.isHold = Boolean(checked);
+
+      // Khi bật Giữ Lịch, tự động tích sẵn người đang đăng nhập nếu chưa chọn ai
+      if (st.formModal.isHold) {
+        if (!Array.isArray(st.formModal.memberIds) || st.formModal.memberIds.length === 0) {
+          if (st.currentUserId) st.formModal.memberIds = [st.currentUserId];
+        }
+        // Xóa chữ mẫu nếu đang trống để nhập nhanh
+        if (!st.formModal.location) st.formModal.location = '';
+      }
+      if (typeof window.renderApp === 'function') window.renderApp();
+      setTimeout(enhanceOpenShowModalDOM, 20);
+    },
+
+    promoteHoldToOfficial(showId) {
+      const sh = (st.shows || []).find(s => s && s.id === showId);
+      if (!sh) return;
+      sh.isHold = false;
+      sh.location = String(sh.location || '').replace(/^⏳\s*GIỮ LỊCH:\s*/i, '').trim();
+      sh.updatedAt = Date.now();
+      if (!st.localShowEditsMap) st.localShowEditsMap = {};
+      st.localShowEditsMap[sh.id] = sh;
+
+      // Mở form sửa để Phú điền nốt địa điểm chi tiết, đối tác, vai trò
+      if (typeof window.appActions.openEditModal === 'function') {
+        window.appActions.openEditModal(showId);
+        setTimeout(() => {
+          if (st.formModal) st.formModal.isHold = false;
+          enhanceOpenShowModalDOM();
+          if (typeof window.__asNotify === 'function') {
+            window.__asNotify('✅ Đã chuyển sang Show Chính Thức! Mời bạn bổ sung chi tiết.', 'success');
+          }
+        }, 40);
+      }
+    },
+
+    quickHoldOnDate(dateStr, memberId) {
+      if (typeof window.appActions.openAddModal === 'function') {
+        window.appActions.openAddModal(dateStr);
+        setTimeout(() => {
+          if (st.formModal) {
+            st.formModal.isHold = true;
+            st.formModal.startDate = dateStr;
+            st.formModal.endDate = dateStr;
+            st.formModal.memberIds = memberId ? [memberId] : (st.currentUserId ? [st.currentUserId] : []);
+          }
+          if (typeof window.renderApp === 'function') window.renderApp();
+          setTimeout(enhanceOpenShowModalDOM, 30);
+        }, 30);
+      }
+    }
+  };
+
+  // Bọc openAddModal và openEditModal để khởi tạo cờ isHold chuẩn
+  const origOpenAdd = window.appActions.openAddModal;
+  window.appActions.openAddModal = function() {
+    const res = origOpenAdd.apply(this, arguments);
+    if (st.formModal && st.formModal.isHold === undefined) {
+      st.formModal.isHold = false;
+    }
+    setTimeout(enhanceOpenShowModalDOM, 25);
+    return res;
+  };
+
+  const origOpenEdit = window.appActions.openEditModal;
+  window.appActions.openEditModal = function(showId) {
+    const sh = (st.shows || []).find(s => s && s.id === showId);
+    const res = origOpenEdit.apply(this, arguments);
+    if (st.formModal && sh) {
+      st.formModal.isHold = Boolean(sh.isHold);
+      if (st.formModal.isHold) {
+        st.formModal.location = String(st.formModal.location || '').replace(/^⏳\s*GIỮ LỊCH:\s*/i, '').trim();
+      }
+    }
+    setTimeout(enhanceOpenShowModalDOM, 25);
+    return res;
+  };
+
+  // Bọc saveShowForm để hỗ trợ lưu nhanh chế độ Giữ Lịch & kích hoạt Auto-Replace
+  const prevSaveShowForm = window.appActions.saveShowForm;
+  window.appActions.saveShowForm = async function() {
+    const f = st.formModal;
+    if (!f) return prevSaveShowForm.apply(this, arguments);
+
+    const isHoldMode = Boolean(f.isHold);
+
+    if (isHoldMode) {
+      // Cho phép lưu cực nhanh: Nếu chưa nhập ghi chú thì tự đặt mặc định
+      const rawNote = String(f.location || '').trim() || 'Giữ lịch cá nhân';
+      f.location = rawNote.startsWith('⏳') ? rawNote : `⏳ GIỮ LỊCH: ${rawNote}`;
+      if (!f.partner) f.partner = 'Chờ chốt / Note nhanh';
+      if (!Array.isArray(f.memberIds) || f.memberIds.length === 0) {
+        if (st.currentUserId) f.memberIds = [st.currentUserId];
+      }
+    } else {
+      // Nếu là show chính thức thì gỡ tiền tố ⏳ GIỮ LỊCH nếu có
+      f.location = String(f.location || '').replace(/^⏳\s*GIỮ LỊCH:\s*/i, '').trim();
+    }
+
+    const targetId = f.id;
+    const res = await prevSaveShowForm.apply(this, arguments);
+
+    // Gắn cờ isHold vào bản ghi vừa lưu trên st.shows
+    if (!st.formModal) {
+      let savedShow = targetId
+        ? (st.shows || []).find(s => s && s.id === targetId)
+        : (st.shows || [])[(st.shows || []).length - 1];
+
+      if (savedShow) {
+        savedShow.isHold = isHoldMode;
+        if (isHoldMode) {
+          savedShow.color = '#fef3c7';
+        } else {
+          // Là show chính thức -> Tự động quét & dọn dẹp các thẻ Giữ Lịch trùng ngày của ekip
+          const cleaned = autoReplaceOverlappingHolds(savedShow);
+          if (cleaned > 0 && typeof window.__asNotify === 'function') {
+            window.__asNotify(`✨ Đã tự động gỡ ${cleaned} ghi chú Giữ Lịch tạm trùng ngày!`, 'success');
+          }
+        }
+        try { localStorage.setItem('as_shows_backup_2026', JSON.stringify(st.shows)); } catch (e) {}
+        if (typeof window.syncShowsToSingleDoc === 'function') await window.syncShowsToSingleDoc();
+        if (typeof window.renderApp === 'function') window.renderApp();
+      }
+    }
+    return res;
+  };
+
+  // =========================================================================
+  // 4. LOẠI BỎ THẺ "⏳ GIỮ LỊCH" KHỎI BẢNG TÍNH CTP & THỐNG KÊ KPI
+  // =========================================================================
+  if (window.ctpActions && typeof window.ctpActions.toggleTask === 'function') {
+    const origToggleTask = window.ctpActions.toggleTask;
+    window.ctpActions.toggleTask = function(showId, taskKey) {
+      const sh = (st.shows || []).find(s => s && s.id === showId);
+      if (sh && sh.isHold) {
+        alert('⏳ Show này đang ở trạng thái GIỮ LỊCH (chưa chốt chính thức) nên chưa thể tính tiền CTP!');
+        return;
+      }
+      return origToggleTask.apply(this, arguments);
+    };
+  }
+
+  // =========================================================================
+  // 5. VẼ THANH CÔNG CỤ "⏳ CHẾ ĐỘ GIỮ LỊCH" TRONG FORM & TÔ VIỀN NÉT ĐỨT TRÊN LỊCH
+  // =========================================================================
+  function enhanceOpenShowModalDOM() {
+    if (!st.formModal) return;
+
+    // Tìm modal form đang mở (chứa input địa điểm / ngày bắt đầu)
+    const locInput = document.querySelector('input[placeholder*="Hồ Tràm"], input[placeholder*="Địa điểm"], input[oninput*="location"]');
+    if (!locInput) return;
+
+    const formContainer = locInput.closest('div[class*="space-y"], form, div[class*="overflow-y"]') || locInput.parentElement?.parentElement;
+    if (!formContainer) return;
+
+    const isHold = Boolean(st.formModal.isHold);
+    let toggleBox = document.getElementById('as-hold-mode-toggle-box');
+
+    if (!toggleBox) {
+      toggleBox = document.createElement('div');
+      toggleBox.id = 'as-hold-mode-toggle-box';
+      formContainer.insertBefore(toggleBox, formContainer.firstChild);
+    }
+
+    toggleBox.className = `as-hold-toggle-box ${isHold ? 'active' : ''}`;
+    toggleBox.innerHTML = `
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:900;color:${isHold ? '#b45309' : '#0f172a'};display:flex;align-items:center;gap:6px;">
+          <span>⏳ CHẾ ĐỘ GIỮ LỊCH / NOTE NHANH (HOLD)</span>
+        </div>
+        <div style="font-size:10.5px;color:${isHold ? '#92400e' : '#64748b'};margin-top:2px;line-height:1.35;">
+          ${isHold
+            ? 'Đang bật: Chỉ cần nhập <b>Ngày + Ghi chú ngắn</b>. Tự động ẩn khi Chủ show lên lịch chính thức!'
+            : 'Bật khi khách chưa chốt hoặc giữ ngày kèo riêng (không tính CTP, không đúp lịch)'}
+        </div>
+      </div>
+      <label style="position:relative;display:inline-flex;align-items:center;cursor:pointer;flex-shrink:0;">
+        <input type="checkbox" ${isHold ? 'checked' : ''} onchange="window.holdActions.toggleHoldMode(this.checked)" style="width:20px;height:20px;accent-color:#d97706;cursor:pointer;" />
+      </label>
+    `;
+
+    // Khi đang bật Giữ Lịch: đổi placeholder ô Địa điểm thành Ghi chú giữ lịch & thêm nút Chốt Show nếu đang sửa
+    if (isHold) {
+      locInput.placeholder = 'VD: Giữ lịch Agency X / Kèo đi tỉnh - Đức lớn nhắn...';
+      if (st.formModal.mode === 'edit' && st.formModal.id && !document.getElementById('as-promote-hold-btn')) {
+        const promoBtn = document.createElement('button');
+        promoBtn.id = 'as-promote-hold-btn';
+        promoBtn.type = 'button';
+        promoBtn.style.cssText = 'width:100%;margin-top:8px;padding:9px 12px;border-radius:12px;border:none;background:#059669;color:#fff;font-size:12px;font-weight:900;cursor:pointer;box-shadow:0 4px 12px rgba(5,150,105,0.25);';
+        promoBtn.innerHTML = '✅ KHÁCH ĐÃ CHỐT ➔ CHUYỂN THÀNH SHOW CHÍNH THỨC';
+        promoBtn.onclick = () => window.holdActions.promoteHoldToOfficial(st.formModal.id);
+        toggleBox.appendChild(promoBtn);
+      }
+    } else {
+      locInput.placeholder = 'VD: Hồ Tràm, Vũng Tàu, Golf Q2...';
+      const oldPromo = document.getElementById('as-promote-hold-btn');
+      if (oldPromo) oldPromo.remove();
+    }
+  }
+
+  // Tô viền nét đứt cho các thẻ chứa chữ "⏳ GIỮ LỊCH" trên Lịch Show và Bảng Công Tác
+  function highlightHoldCardsInDom() {
+    if (st.formModal) enhanceOpenShowModalDOM();
+
+    const holdShows = (st.shows || []).filter(s => s && s.isHold && !s.isCancelled);
+    if (holdShows.length === 0) return;
+
+    // Quét các thẻ show trên Lịch Show & Bảng Công Tác
+    document.querySelectorAll('#app [onclick*="openEditModal"], #app [onclick*="openShowDetail"], #app td, #app div[class*="rounded"]').forEach(el => {
+      if (el.dataset.holdStyled === '1') return;
+      const txt = el.textContent || '';
+      if (txt.includes('⏳ GIỮ LỊCH:')) {
+        el.dataset.holdStyled = '1';
+        if (el.tagName === 'TD') {
+          el.classList.add('as-is-hold-cell');
+        } else if (el.offsetHeight > 18 && el.offsetHeight < 260) {
+          el.classList.add('as-is-hold-card');
+        }
+      }
+    });
+  }
+
+  // Hỗ trợ Double-Click vào ô trống trên Bảng Công Tác để mở nhanh Giữ Lịch 3 giây
+  document.addEventListener('dblclick', (e) => {
+    if (st.activeTab !== 'matrix') return;
+    const td = e.target.closest('td');
+    if (!td) return;
+    const tr = td.closest('tr');
+    if (!tr) return;
+
+    // Tìm ngày từ cột đầu tiên của hàng (DD/MM)
+    const firstCellTxt = (tr.cells[0]?.textContent || '').trim();
+    const mDate = firstCellTxt.match(/(\d{1,2})\/(\d{1,2})/);
+    if (!mDate) return;
+
+    const dd = String(mDate[1]).padStart(2, '0');
+    const mm = String(mDate[2]).padStart(2, '0');
+    const yyyy = st.selectedYear || 2026;
+    const isoDate = `${yyyy}-${mm}-${dd}`;
+
+    // Tìm nhân sự tương ứng với cột td đang bấm đúp
+    const colIdx = td.cellIndex;
+    const table = td.closest('table');
+    const thText = (table?.querySelectorAll('thead th')[colIdx]?.textContent || '').trim();
+    const membersSorted = [...(st.members || [])].sort((a, b) => (a.order || 99) - (b.order || 99));
+    const matchedMem = membersSorted.find(m => m && (thText.includes(m.shortLabel) || thText.includes(m.name)));
+
+    window.holdActions.quickHoldOnDate(isoDate, matchedMem ? matchedMem.id : st.currentUserId);
+  });
+
+  setInterval(highlightHoldCardsInDom, 350);
+})();
+</script>
 </body></html>
