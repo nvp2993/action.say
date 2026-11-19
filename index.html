@@ -3817,6 +3817,63 @@ function getCombinedCtpShows() {
     }
 
     window.ownerActions = {
+          <div class="space-y-2">
+                          <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">🎥 Dự Kiến Chi CTP Anh Em Tham Gia (${(sh.memberIds || []).length} người):</span>
+                            <span class="text-[10px] font-bold text-slate-400">Chạm thẻ nhiệm vụ để cộng tiền</span>
+                          </div>
+
+                          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            ${(sh.memberIds || []).map(mid => {
+                              const roleTag = sh.roles?.[mid] || '';
+                              const isSelf = mid === state.currentUserId;
+                              const memTasks = rec.crewTasks?.[mid] || {};
+                              const hasTasks = Object.keys(memTasks).length > 0;
+                              const memCost = hasTasks
+                                ? Object.values(memTasks).reduce((acc, v) => acc + (Number(v) || 0), 0)
+                                : (rec.crewCosts?.[mid] !== undefined ? Number(rec.crewCosts[mid]) : 0);
+
+                              const ownerTaskList = [
+                                { key: 'quay', label: `Quay (${days === 1 ? '1.5tr' : days + 'n x 1.2tr'})` },
+                                { key: 'dung', label: 'Dựng (1tr)' },
+                                { key: 'chup', label: `Chụp (${days === 1 ? '1.5tr' : days + 'n x 1.2tr'})` },
+                                { key: 'lamhinh', label: 'Làm hình (300k)' },
+                                { key: 'flycam', label: 'Flycam (1tr)' },
+                                { key: 'gimbal', label: 'Gimbal (200k)' }
+                              ];
+
+                              return `
+                                <div class="p-2.5 rounded-2xl border ${isSelf ? 'bg-amber-50/40 border-amber-200' : 'bg-slate-50/70 border-slate-200'} space-y-2">
+                                  <div class="flex items-center justify-between gap-2">
+                                    <div class="flex items-center gap-1 flex-wrap min-w-0">
+                                      ${renderPillHtml(mid, 'xs', '', '', roleTag)}
+                                      ${isSelf ? `<span class="text-[9px] font-bold text-amber-700">(Chủ show)</span>` : ''}
+                                    </div>
+                                    <span id="owner-crew-total-${sh.id}-${mid}" class="font-mono font-black text-xs text-slate-900 shrink-0">${memCost.toLocaleString('vi-VN')}đ</span>
+                                  </div>
+
+                                  <div class="flex flex-wrap gap-1 items-start">
+                                    ${ownerTaskList.map(t => {
+                                      const isChecked = memTasks[t.key] !== undefined;
+                                      const curVal = isChecked ? memTasks[t.key] : 0;
+                                      return `
+                                        <div class="inline-flex flex-col items-start">
+                                          <button type="button" onclick="ownerActions.toggleCrewTask('${sh.id}', '${mid}', '${t.key}')" class="px-2 py-1 rounded-full text-[9.5px] font-extrabold border transition-all flex items-center gap-1 ${isChecked ? 'bg-slate-900 text-white border-slate-900 shadow-2xs' : 'bg-white text-slate-600 border-slate-200'}">
+                                            <span>${t.label}</span>
+                                            <i class="fa-solid ${isChecked ? 'fa-check text-[8px]' : 'fa-plus text-[7.5px] opacity-60'}"></i>
+                                          </button>
+                                          ${isChecked ? `
+                                            <input type="tel" inputmode="numeric" pattern="[0-9.]*" value="${curVal ? Number(curVal).toLocaleString('vi-VN') : ''}" oninput="ownerActions.handleCrewTaskPriceInput('${sh.id}', '${mid}', '${t.key}', this)" class="mt-1 w-22 px-2 py-0.5 bg-white border border-slate-300 rounded-lg text-[10px] font-mono font-black text-right text-slate-900 focus:outline-none focus:border-slate-900" />
+                                          ` : ''}
+                                        </div>
+                                      `;
+                                    }).join('')}
+                                  </div>
+                                </div>
+                              `;
+                            }).join('')}
+                          </div>
+                        </div>
       toggleExpandShow(showId) {
         state.ownerExpandedShowId = (state.ownerExpandedShowId === showId) ? null : showId;
         renderApp();
