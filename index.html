@@ -12374,125 +12374,61 @@ let html = '', sig = '';
 })();
 </script>
 
-<!-- BỘ LỌC VUỐT GỘP TỰ NHIÊN (BẢN FIX ĐỒNG BỘ NÚT GỐC 100%) -->
-<script id="as-wow-gesture-filter-2026">
-(function initWowGestureFilterV2() {
-  if (!window.state) {
-    setTimeout(initWowGestureFilterV2, 100);
-    return;
-  }
-  if (window.__AS_WOW_FILTER_V2__) return;
-  window.__AS_WOW_FILTER_V2__ = true;
+<!-- THANH PHÂN ĐOẠN I-OS 1 HÀNG (ALL | CHỦ | CTP | CHƯA THU | ĐÃ XONG) + ĐẨY .XLSX LÊN TRÊN -->
+<script id="as-ios-segmented-filter-2026">
+(function initIosSegmentedFilter() {
+  if (window.__AS_IOS_SEG_FILTER_READY__) return;
+  window.__AS_IOS_SEG_FILTER_READY__ = true;
 
-  let isFilterDrawerOpen = false;
-
-  const oldStyle = document.getElementById('as-wow-filter-styles');
+  const oldStyle = document.getElementById('as-ios-seg-filter-styles');
   if (oldStyle) oldStyle.remove();
 
   const styleEl = document.createElement('style');
-  styleEl.id = 'as-wow-filter-styles';
+  styleEl.id = 'as-ios-seg-filter-styles';
   styleEl.textContent = `
-    #as-wow-trigger-text {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 4px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: #f1f5f9;
-      color: #334155;
-      font-size: 11.5px;
-      font-weight: 800;
-      cursor: pointer;
-      user-select: none;
-      border: 1px solid #e2e8f0;
-      transition: all 0.15s ease;
-    }
-    #as-wow-trigger-text:active { transform: scale(0.96); }
-    #as-wow-trigger-text.active-filtering {
-      background: #fffbeb;
-      color: #b45309;
-      border-color: #fcd34d;
-    }
-    #as-wow-trigger-text .dot {
-      width: 6px;
-      height: 6px;
-      background: #f59e0b;
-      border-radius: 999px;
-      display: inline-block;
-    }
-    #as-wow-filter-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 2147483630;
-      background: rgba(15, 23, 42, 0.48);
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      display: none;
-      align-items: flex-end;
-      justify-content: center;
-    }
-    #as-wow-drawer {
-      background: #ffffff;
-      width: 100%;
-      max-width: 460px;
-      border-top-left-radius: 26px;
-      border-top-right-radius: 26px;
-      box-shadow: 0 -12px 36px rgba(15, 23, 42, 0.2);
-      transform: translateY(100%);
-      transition: transform 0.22s cubic-bezier(0.32, 0.94, 0.6, 1);
+    #as-ios-seg-bar {
       display: flex;
-      flex-direction: column;
-      padding: 14px 18px max(20px, env(safe-area-inset-bottom, 20px));
+      align-items: stretch;
+      width: 100%;
+      padding: 3px;
+      margin: 6px 0 10px;
+      border-radius: 13px;
+      background: #e2e8f0;
       box-sizing: border-box;
-      font-family: Inter, -apple-system, sans-serif;
+      gap: 2px;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    #as-wow-drawer.open { transform: translateY(0); }
-    .as-filter-pill-btn {
-      padding: 9px 13px;
-      border-radius: 12px;
-      border: 1.5px solid #e2e8f0;
-      background: #f8fafc;
-      color: #334155;
-      font-size: 12px;
+    .as-ios-seg-item {
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 7px 4px;
+      border: none;
+      border-radius: 10px;
+      background: transparent;
+      color: #475569;
+      font-size: 11px;
       font-weight: 800;
+      line-height: 1.15;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
       cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      transition: all 0.12s ease;
+      transition: all 0.14s ease;
     }
-    .as-filter-pill-btn:active { transform: scale(0.96); }
-    .as-filter-pill-btn.active {
-      border-color: #0f172a;
-      background: #0f172a;
-      color: #ffffff;
-      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+    .as-ios-seg-item.active {
+      background: #ffffff;
+      color: #0f172a;
+      font-weight: 900;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+    }
+    .as-ios-seg-item:active {
+      transform: scale(0.97);
     }
   `;
   document.head.appendChild(styleEl);
 
-  // Tìm danh sách các nút lọc gốc trong #app (không tính nút trong drawer mới)
-  function getNativeControls() {
-    const allBtns = Array.from(document.querySelectorAll('#app button')).filter(
-      b => !b.closest('#as-wow-drawer')
-    );
-
-    const findBtn = (kw) => allBtns.find(b => (b.textContent || '').toUpperCase().includes(kw));
-
-    const filters = [
-      { key: 'all', labelFallback: 'Tất cả', btn: findBtn('TẤT CẢ (') || findBtn('TẤT CẢ') },
-      { key: 'owner', labelFallback: '👑 Làm Chủ', btn: findBtn('LÀM CHỦ') },
-      { key: 'ctp', labelFallback: '🎥 Nhận CTP', btn: findBtn('NHẬN CTP') },
-      { key: 'unpaid', labelFallback: '⏳ Chưa Thu', btn: findBtn('CHƯA THU') },
-      { key: 'done', labelFallback: '✅ Đã thanh lý', btn: findBtn('ĐÃ THANH LÝ') }
-    ].filter(x => Boolean(x.btn));
-
-    const xlsxBtn = findBtn('.XLSX');
-    return { filters, xlsxBtn };
-  }
-
-  function isNativeBtnActive(btn) {
+  function isNativeActive(btn) {
     if (!btn) return false;
     const cls = (btn.className || '').toLowerCase();
     return (
@@ -12505,172 +12441,92 @@ let html = '', sig = '';
     );
   }
 
-  // Tạo Overlay Bottom Sheet
-  let overlayEl = document.getElementById('as-wow-filter-overlay');
-  if (overlayEl) overlayEl.remove();
-
-  overlayEl = document.createElement('div');
-  overlayEl.id = 'as-wow-filter-overlay';
-  overlayEl.onclick = () => window.wowFilterActions.closeDrawer();
-
-  const drawerEl = document.createElement('div');
-  drawerEl.id = 'as-wow-drawer';
-  drawerEl.onclick = (e) => e.stopPropagation();
-
-  let touchStartY = 0;
-  drawerEl.addEventListener('touchstart', (e) => { touchStartY = e.touches[0].clientY; }, { passive: true });
-  drawerEl.addEventListener('touchmove', (e) => {
-    if (e.touches[0].clientY - touchStartY > 70) window.wowFilterActions.closeDrawer();
-  }, { passive: true });
-
-  overlayEl.appendChild(drawerEl);
-  document.body.appendChild(overlayEl);
-
-  window.wowFilterActions = {
-    openDrawer() {
-      isFilterDrawerOpen = true;
-      renderDrawerUI();
-      overlayEl.style.display = 'flex';
-      requestAnimationFrame(() => drawerEl.classList.add('open'));
-    },
-    closeDrawer() {
-      isFilterDrawerOpen = false;
-      drawerEl.classList.remove('open');
-      setTimeout(() => {
-        if (!isFilterDrawerOpen) overlayEl.style.display = 'none';
-      }, 220);
-    },
-    pickFilter(key) {
-      const { filters } = getNativeControls();
-      const target = filters.find(f => f.key === key);
-      if (target && target.btn) {
-        target.btn.click();
-      }
-      this.closeDrawer();
-      setTimeout(syncWowFilterUI, 40);
-    },
-    exportExcel() {
-      const { xlsxBtn } = getNativeControls();
-      this.closeDrawer();
-      if (xlsxBtn) xlsxBtn.click();
-    }
-  };
-
-  function renderDrawerUI() {
-    const { filters, xlsxBtn } = getNativeControls();
-    const roleItems = filters.filter(f => ['all', 'owner', 'ctp'].includes(f.key));
-    const statusItems = filters.filter(f => ['unpaid', 'done'].includes(f.key));
-
-    drawerEl.innerHTML = `
-      <div style="width:38px;height:4.5px;background:#e2e8f0;border-radius:99px;margin:0 auto 14px;"></div>
-
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-        <div>
-          <div style="font-size:14.5px;font-weight:900;color:#0f172a;">🎯 BỘ LỌC CÔNG NỢ</div>
-          <div style="font-size:11px;color:#64748b;margin-top:2px;">Chọn nhanh vai trò hoặc trạng thái thanh toán</div>
-        </div>
-        <button type="button" onclick="window.wowFilterActions.closeDrawer()"
-          style="width:30px;height:30px;border-radius:999px;border:none;background:#f1f5f9;color:#475569;font-weight:900;cursor:pointer;">✕</button>
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:16px;">
-        ${roleItems.length > 0 ? `
-          <div>
-            <div style="font-size:10.5px;font-weight:900;color:#64748b;text-transform:uppercase;margin-bottom:7px;">👤 THEO VAI TRÒ</div>
-            <div style="display:flex;flex-wrap:wrap;gap:7px;">
-              ${roleItems.map(item => `
-                <button type="button" onclick="window.wowFilterActions.pickFilter('${item.key}')"
-                  class="as-filter-pill-btn ${isNativeBtnActive(item.btn) ? 'active' : ''}">
-                  ${item.btn.textContent.trim()}
-                </button>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
-
-        ${statusItems.length > 0 ? `
-          <div>
-            <div style="font-size:10.5px;font-weight:900;color:#64748b;text-transform:uppercase;margin-bottom:7px;">💰 THEO TRẠNG THÁI TIỀN</div>
-            <div style="display:flex;flex-wrap:wrap;gap:7px;">
-              ${statusItems.map(item => `
-                <button type="button" onclick="window.wowFilterActions.pickFilter('${item.key}')"
-                  class="as-filter-pill-btn ${isNativeBtnActive(item.btn) ? 'active' : ''}">
-                  ${item.btn.textContent.trim()}
-                </button>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
-      </div>
-
-      <div style="display:grid;grid-template-columns:${xlsxBtn ? '1fr auto' : '1fr'};gap:8px;border-top:1px solid #f1f5f9;padding-top:12px;">
-        ${xlsxBtn ? `
-          <button type="button" onclick="window.wowFilterActions.exportExcel()"
-            style="padding:11px 14px;border-radius:12px;border:none;background:#10b981;color:#ffffff;font-size:12.5px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
-            <i class="fa-solid fa-file-excel"></i> Xuất File .XLSX
-          </button>
-        ` : ''}
-        <button type="button" onclick="window.wowFilterActions.closeDrawer()"
-          style="padding:11px 18px;border-radius:12px;border:none;background:#0f172a;color:#fbbf24;font-size:12.5px;font-weight:900;cursor:pointer;">
-          Đóng
-        </button>
-      </div>
-    `;
+  function extractCount(text = '') {
+    const m = String(text).match(/\((\d+)\)/);
+    return m ? ` (${m[1]})` : '';
   }
 
-  function syncWowFilterUI() {
-    const { filters, xlsxBtn } = getNativeControls();
-    // Chỉ chạy khi đang ở tab Công Nợ (có các nút lọc gốc)
-    if (filters.length < 2) return;
+  function syncSegmentedFilter() {
+    const allBtns = Array.from(document.querySelectorAll('#app button')).filter(
+      b => !b.closest('#as-ios-seg-bar')
+    );
+    const findBtn = (kw) => allBtns.find(b => (b.textContent || '').toUpperCase().includes(kw));
 
-    // 1. Ẩn sạch hàng nút lọc gốc (bao gồm cả Chưa Thu, Đã thanh lý và .XLSX)
-    const rowContainer = filters[0].btn.parentElement;
-    if (rowContainer && rowContainer !== document.body) {
-      rowContainer.style.display = 'none';
+    const bAll = findBtn('TẤT CẢ (') || findBtn('TẤT CẢ');
+    const bOwner = findBtn('LÀM CHỦ');
+    const bCtp = findBtn('NHẬN CTP');
+    const bUnpaid = findBtn('CHƯA THU');
+    const bDone = findBtn('ĐÃ THANH LÝ');
+    const bXlsx = findBtn('.XLSX');
+
+    const rawTabs = [
+      { key: 'all', label: `ALL${extractCount(bAll?.textContent)}`, btn: bAll },
+      { key: 'owner', label: `Chủ${extractCount(bOwner?.textContent)}`, btn: bOwner },
+      { key: 'ctp', label: `CTP${extractCount(bCtp?.textContent)}`, btn: bCtp },
+      { key: 'unpaid', label: `Chưa thu${extractCount(bUnpaid?.textContent)}`, btn: bUnpaid },
+      { key: 'done', label: `Đã xong${extractCount(bDone?.textContent)}`, btn: bDone }
+    ].filter(x => Boolean(x.btn));
+
+    if (rawTabs.length < 2) return;
+
+    // 1. Ẩn hàng nút lọc gốc (nhưng giữ nút gốc tồn tại để click đồng bộ)
+    const oldRow = rawTabs[0].btn.parentElement;
+    if (oldRow && oldRow !== document.body && !oldRow.id) {
+      oldRow.style.display = 'none';
     }
-    filters.forEach(f => { f.btn.style.display = 'none'; });
-    if (xlsxBtn) xlsxBtn.style.display = 'none';
+    rawTabs.forEach(t => { t.btn.style.display = 'none'; });
 
-    // 2. Tìm dòng "X show (Y đã tất toán)" ở toàn bộ #app
-    const subtitleEl = Array.from(document.querySelectorAll('#app div, #app p, #app span')).find(el => {
-      if (el.children.length > 0 || el.id === 'as-wow-trigger-text') return false;
-      const t = (el.textContent || '').toLowerCase();
-      return t.includes('show') && t.includes('tất toán');
-    });
-
-    if (!subtitleEl || !subtitleEl.parentElement) return;
-
-    // Xác định bộ lọc đang được chọn
-    const activeItem = filters.find(f => isNativeBtnActive(f.btn)) || filters[0];
-    const isFiltering = activeItem && activeItem.key !== 'all';
-    const activeText = activeItem ? activeItem.btn.textContent.trim() : 'Tất cả';
-
-    let trigger = document.getElementById('as-wow-trigger-text');
-    if (!trigger) {
-      trigger = document.createElement('div');
-      trigger.id = 'as-wow-trigger-text';
-      trigger.onclick = () => window.wowFilterActions.openDrawer();
-      subtitleEl.insertAdjacentElement('afterend', trigger);
+    // 2. Đưa nút .XLSX lên góc phải khu vực tiêu đề phía trên cho thoáng ngang
+    if (bXlsx) {
+      const yearLabel = Array.from(document.querySelectorAll('#app div, #app span')).find(
+        el => el.children.length === 0 && /^NĂM\s+\d{4}$/i.test((el.textContent || '').trim())
+      );
+      if (yearLabel && yearLabel.parentElement) {
+        const rightSlot = yearLabel.parentElement;
+        if (!rightSlot.contains(bXlsx)) {
+          bXlsx.style.display = 'inline-flex';
+          bXlsx.style.marginTop = '4px';
+          rightSlot.appendChild(bXlsx);
+        }
+      }
     }
 
-    const sig = `${activeText}:${isFiltering}`;
-    if (trigger.dataset.sig !== sig) {
-      trigger.dataset.sig = sig;
-      trigger.className = isFiltering ? 'active-filtering' : '';
-      trigger.innerHTML = `
-        ${isFiltering ? '<span class="dot"></span>' : '<span>🎛️</span>'}
-        <span>Bộ lọc: ${activeText}</span>
-        <i class="fa-solid fa-chevron-down" style="font-size:9px;opacity:0.7;"></i>
-      `;
+    // 3. Tạo hoặc đồng bộ thanh phân đoạn iOS 1 hàng ngay vị trí hàng lọc cũ
+    let segBar = document.getElementById('as-ios-seg-bar');
+    if (!segBar && oldRow && oldRow.parentElement) {
+      segBar = document.createElement('div');
+      segBar.id = 'as-ios-seg-bar';
+      oldRow.insertAdjacentElement('afterend', segBar);
+    }
+    if (!segBar) return;
+
+    const sig = rawTabs.map(t => `${t.key}:${t.label}:${isNativeActive(t.btn) ? 1 : 0}`).join('|');
+    if (segBar.dataset.sig !== sig) {
+      segBar.dataset.sig = sig;
+      segBar.innerHTML = '';
+
+      rawTabs.forEach((t, idx) => {
+        const itemBtn = document.createElement('button');
+        itemBtn.type = 'button';
+        itemBtn.className = `as-ios-seg-item${isNativeActive(t.btn) ? ' active' : ''}`;
+        itemBtn.textContent = t.label;
+        itemBtn.title = t.btn.textContent.trim();
+        itemBtn.dataset.idx = String(idx);
+        itemBtn.onclick = () => {
+          t.btn.click();
+          setTimeout(syncSegmentedFilter, 25);
+        };
+        segBar.appendChild(itemBtn);
+      });
     }
   }
 
   const appRoot = document.getElementById('app');
   if (appRoot) {
-    new MutationObserver(() => syncWowFilterUI()).observe(appRoot, { childList: true });
+    new MutationObserver(() => syncSegmentedFilter()).observe(appRoot, { childList: true });
   }
 
-  syncWowFilterUI();
+  syncSegmentedFilter();
 })();
 </script>
 </body></html>
