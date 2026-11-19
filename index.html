@@ -7792,7 +7792,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 
           if (locOrTitle && !/^(stress|bận|nghỉ|off|-)$/i.test(locOrTitle) && members.length > 0) {
             const sig = isoStart + '|' + isoEnd + '|' + locOrTitle.toLowerCase() + '|' + members.join(',');
-            if (!window.__AS_EXACT_SHOW_LIST__.some(x => x.sig === sig)) {
+            if (!window..some(x => x.sig === sig)) {
               window.__AS_EXACT_SHOW_LIST__.push({
                 sig,
                 isoStart,
@@ -8039,28 +8039,34 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
           if (!dateMatch) return;
           const iso = normalizeToIsoDate(dateMatch[1]);
           if (!iso) return;
+// Tách từng dòng hoặc từng khối nhỏ trong txt để tránh gom nhầm người của show khác
+      const lines = String(txt || '').split(/\n+/).map(l => l.trim()).filter(Boolean);
+      const memberLines = lines.filter(l => extractMembersFromShowField(l).length > 0);
+      const sourceForMembers = memberLines.length > 1
+        ? (memberLines.find(l => /mũi né|mui ne/i.test(normalizeName(l))) || lines.join('\n'))
+        : txt;
 
-          const members = extractMembersFromShowField(txt);
-          if (!members.length) return;
+      const members = extractMembersFromShowField(sourceForMembers);
+      if (!members.length) return;
 
-          // Tìm địa điểm sau dấu 📍 hoặc dòng tiêu đề
-          let loc = '';
-          const pinMatch = txt.match(/📍\s*([^•|\n\r]+?)(?=\s+(?:Quay|Chụp|Dựng|Flycam|Đèn|Đức|Phú|Thái|Kiên|Đăng|Khoa|Kỳ|Dũng|Thức|Lộc|Nhật|$))/i);
-          if (pinMatch && pinMatch[1]) {
-            loc = normalizeName(pinMatch[1]);
-          }
-          if (loc && loc.length < 45) {
-            const sig = iso + '|' + iso + '|' + loc.toLowerCase() + '|' + members.join(',');
-            if (!window.__AS_EXACT_SHOW_LIST__.some(x => x.sig === sig)) {
-              window.__AS_EXACT_SHOW_LIST__.push({
-                sig,
-                isoStart: iso,
-                isoEnd: iso,
-                location: loc,
-                members
-              });
-            }
-          }
+      // Tìm địa điểm sau dấu 📍 hoặc dòng tiêu đề
+      let loc = '';
+      const pinMatch = txt.match(/📍\s*([^•\n\r]+?)(?=\s+(?:Quay|Chụp|Dựng|Flycam|Đèn|Đức|Phú|Thái|Kiên|Đăng|Khoa|Kỳ|Dũng|Thức|Lộc|Nhật|$))/i);
+      if (pinMatch && pinMatch[1]) {
+        loc = normalizeName(pinMatch[1]);
+      }
+      if (loc && loc.length < 45) {
+        const sig = iso + '|' + iso + '|' + loc.toLowerCase() + '|' + members.join(',');
+        if (!window.__AS_EXACT_SHOW_LIST__.some(x => x.sig === sig)) {
+          window.__AS_EXACT_SHOW_LIST__.push({
+            sig,
+            isoStart: iso,
+            isoEnd: iso,
+            location: loc,
+            members
+          });
+        }
+      }
         });
       } catch (e) {}
     }
