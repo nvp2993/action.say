@@ -3054,7 +3054,7 @@ function getCombinedCtpShows() {
         state.ctpBillModal = null;
         renderApp();
       },
-      async captureBillImage() {
+async captureBillImage() {
         const bm = state.ctpBillModal;
         const target = document.getElementById('ctp-bill-capture-area');
         if (!bm || !target || typeof html2canvas === 'undefined') return;
@@ -3065,7 +3065,29 @@ function getCombinedCtpShows() {
         target.style.maxHeight = 'none';
         if (scrollEl) scrollEl.style.overflow = 'visible';
         try {
-          const canvas = await html2canvas(target, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+          const canvas = await html2canvas(target, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            useCORS: true,
+            onclone: (clonedDoc) => {
+              const area = clonedDoc.getElementById('ctp-bill-capture-area');
+              if (!area) return;
+              // Gỡ truncate & nới line-height để html2canvas không cắt mất dấu chữ tiếng Việt
+              area.querySelectorAll('.truncate, p, div, span').forEach((el) => {
+                if (el.classList.contains('truncate')) {
+                  el.classList.remove('truncate');
+                  el.style.overflow = 'visible';
+                  el.style.whiteSpace = 'normal';
+                }
+                if (el.textContent && el.textContent.includes('Chủ TK')) {
+                  el.style.overflow = 'visible';
+                  el.style.lineHeight = '1.65';
+                  el.style.paddingTop = '2px';
+                  el.style.paddingBottom = '2px';
+                }
+              });
+            }
+          });
           target.style.maxHeight = oldMaxH;
           if (scrollEl) scrollEl.style.overflow = oldOv;
           openCapturedImagePreview(
