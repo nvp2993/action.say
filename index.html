@@ -12079,7 +12079,12 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         header.appendChild(banner);
       }
 
-      let html = '', sig = '';
+let html = '', sig = '';
+      const moreCount = totalAlerts - 1;
+      const moreBtn = moreCount > 0
+        ? `<button type="button" onclick="window.holdBellActions.openBellDrawer()" style="background:#ffffff;color:#92400e;border:1.5px solid #f59e0b;padding:5px 9px;border-radius:9px;font-size:11px;font-weight:900;cursor:pointer;flex-shrink:0;">+${moreCount} lịch khác</button>`
+        : '';
+
       if (resolvedForMe.length > 0) {
         const r = resolvedForMe[0];
         sig = `res:${r.id}:${totalAlerts}`;
@@ -12088,7 +12093,8 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
           <div style="flex:1;min-width:170px;line-height:1.35;">
             ✅ <b>${esc(r.resolvedByName || getMemberName(r.ownerId))}</b> đã chốt Show ngày <b>${formatDDMM(r.startDate)}</b> (${esc(r.location)})
           </div>
-          <div style="display:flex;gap:6px;flex-shrink:0;">
+          <div style="display:flex;gap:6px;flex-shrink:0;align-items:center;">
+            ${moreBtn}
             <button type="button" onclick="window.holdBellActions.dismissResolvedNotice('${r.id}', true)" style="background:#059669;color:#fff;border:none;padding:5px 10px;border-radius:9px;font-size:11px;font-weight:900;cursor:pointer;">Xem Show</button>
             <button type="button" onclick="window.holdBellActions.dismissResolvedNotice('${r.id}', false)" style="background:#d1fae5;color:#065f46;border:none;padding:5px 8px;border-radius:9px;font-size:11px;font-weight:800;cursor:pointer;">✕</button>
           </div>
@@ -12106,9 +12112,12 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
               ? `Bạn đang giữ ngày <b>${formatDDMM(first.startDate)}</b> (${esc(noteTxt)})`
               : `<b>${esc(byName)}</b> giữ ngày <b>${formatDDMM(first.startDate)}</b> cho show của bạn (${esc(noteTxt)})`}
           </div>
-          <button type="button" onclick="window.holdBellActions.promoteHoldToOfficial('${first.id}')" style="background:#059669;color:#fff;border:none;padding:5px 10px;border-radius:9px;font-size:11px;font-weight:900;cursor:pointer;flex-shrink:0;">
-            ⚡ Điền tiếp & Chốt →
-          </button>
+          <div style="display:flex;gap:6px;flex-shrink:0;align-items:center;">
+            ${moreBtn}
+            <button type="button" onclick="window.holdBellActions.promoteHoldToOfficial('${first.id}')" style="background:#059669;color:#fff;border:none;padding:5px 10px;border-radius:9px;font-size:11px;font-weight:900;cursor:pointer;">
+              ⚡ Điền tiếp & Chốt →
+            </button>
+          </div>
         `;
       } else if (involvingMe.length > 0) {
         const inv = involvingMe[0];
@@ -12121,7 +12130,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
             📌 Bạn đang được giữ lịch ngày <b>${formatDDMM(inv.startDate)}</b> (${esc(noteTxt)}) — chờ <b>${esc(ownerName)}</b> lên show
           </div>
           <button type="button" onclick="window.holdBellActions.openBellDrawer()" style="background:#0f172a;color:#fff;border:none;padding:5px 10px;border-radius:9px;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;">
-            Xem (${involvingMe.length})
+            Xem tất cả (${totalAlerts})
           </button>
         `;
       }
