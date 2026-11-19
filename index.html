@@ -11165,16 +11165,15 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 </script>
 
 <script id="as-enhance-nhan-su-pin-tab-2026">
-(function enhanceNhanSuAndPinTabZeroFlicker() {
+(function enhanceNhanSuAndPinTabSafe() {
   if (!window.state || !window.adminProActions) {
-    setTimeout(enhanceNhanSuAndPinTabZeroFlicker, 80);
+    setTimeout(enhanceNhanSuAndPinTabSafe, 150);
     return;
   }
-  if (window.__AS_NHANSU_PIN_ZERO_FLICKER_V2__) return;
-  window.__AS_NHANSU_PIN_ZERO_FLICKER_V2__ = true;
+  if (window.__AS_NHANSU_PIN_SAFE_V3__) return;
+  window.__AS_NHANSU_PIN_SAFE_V3__ = true;
 
   const st = window.state;
-  let isApplyingPatch = false;
 
   // Khôi phục màu & thứ tự nhân sự từ localStorage
   try {
@@ -11191,126 +11190,108 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     }
   } catch (e) {}
 
-  function applyNhanSuPinPatchNow() {
-    if (isApplyingPatch) return;
+  function patchNhanSuPinOnce() {
     const shell = document.getElementById('as-light-admin-shell');
     if (!shell) return;
 
-    isApplyingPatch = true;
-    try {
-      // 1. Đổi tên tab "Cấp PIN" -> "🔑 NHÂN SỰ & PIN"
-      shell.querySelectorAll('button').forEach(btn => {
-        const txt = (btn.textContent || '').trim();
-        if (txt === '🔑 Cấp PIN' || txt === 'Cấp PIN') {
-          btn.textContent = '🔑 NHÂN SỰ & PIN';
+    // 1. Đổi tên nút tab "Cấp PIN" -> "🔑 NHÂN SỰ & PIN"
+    shell.querySelectorAll('button').forEach(btn => {
+      const txt = (btn.textContent || '').trim();
+      if (txt === '🔑 Cấp PIN' || txt === 'Cấp PIN') {
+        btn.textContent = '🔑 NHÂN SỰ & PIN';
+      }
+    });
+
+    // 2. Chỉ chạy khi đang mở màn hình quản lý PIN
+    const upperText = (shell.textContent || '').toUpperCase();
+    if (!upperText.includes('MÃ PIN') && !upperText.includes('HỌ TÊN')) return;
+
+    // Đổi tiêu đề khối
+    shell.querySelectorAll('div, h2, h3, span').forEach(el => {
+      if (el.children.length === 0) {
+        const t = (el.textContent || '').trim().toUpperCase();
+        if (t.startsWith('MÃ PIN & HỌ TÊN')) {
+          el.textContent = 'NHÂN SỰ, MÃ PIN, MÀU THẺ & THỨ TỰ CỘT (MẶC ĐỊNH: 1234)';
         }
-      });
+      }
+    });
 
-      // 2. Kiểm tra không phân biệt chữ hoa/thường để nhận diện đúng màn hình PIN
-      const upperShellText = (shell.textContent || '').toUpperCase();
-      if (!upperShellText.includes('MÃ PIN') && !upperShellText.includes('HỌ TÊN')) return;
+    // 3. Gắn ô chọn màu + số cột vào từng thẻ nhân sự (chỉ gắn đúng 1 lần duy nhất)
+    const members = st.members || [];
+    const saveBtns = Array.from(shell.querySelectorAll('button')).filter(
+      b => (b.textContent || '').trim().toLowerCase() === 'lưu'
+    );
 
-      // Đổi tiêu đề khối cho đồng bộ
-      shell.querySelectorAll('div, h2, h3, span').forEach(el => {
-        if (el.children.length === 0) {
-          const t = (el.textContent || '').trim().toUpperCase();
-          if (t.startsWith('MÃ PIN & HỌ TÊN')) {
-            el.textContent = 'NHÂN SỰ, MÃ PIN, MÀU THẺ & THỨ TỰ CỘT (MẶC ĐỊNH: 1234)';
-          }
-        }
-      });
+    saveBtns.forEach(saveBtn => {
+      const topRow = saveBtn.parentElement;
+      if (!topRow) return;
 
-      const members = st.members || [];
-      const saveBtns = Array.from(shell.querySelectorAll('button')).filter(
-        b => (b.textContent || '').trim().toLowerCase() === 'lưu'
-      );
+      // Tìm thẻ cha chứa tên nhân sự
+      let cardBox = topRow;
+      let matchedMem = null;
+      for (let depth = 0; depth < 3; depth++) {
+        if (!cardBox) break;
+        const cardTxtLower = (cardBox.textContent || '').toLowerCase();
+        matchedMem = members.find(m => m && m.name && cardTxtLower.includes(m.name.toLowerCase()));
+        if (matchedMem) break;
+        cardBox = cardBox.parentElement;
+      }
 
-      saveBtns.forEach(saveBtn => {
-        const topRow = saveBtn.parentElement;
-        if (!topRow || topRow.querySelector('.as-custom-mem-color')) return;
+      // Khóa cứng trên chính cardBox để tuyệt đối không bao giờ chèn lặp
+      if (!matchedMem || !cardBox || cardBox.dataset.asMemPatched === '1') return;
+      cardBox.dataset.asMemPatched = '1';
 
-        // Tìm thẻ cha chứa tên nhân sự (so sánh không phân biệt hoa/thường)
-        let cardBox = topRow;
-        let matchedMem = null;
-        for (let depth = 0; depth < 3; depth++) {
-          if (!cardBox) break;
-          const cardTxtLower = (cardBox.textContent || '').toLowerCase();
-          matchedMem = members.find(m => m && m.name && cardTxtLower.includes(m.name.toLowerCase()));
-          if (matchedMem) break;
-          cardBox = cardBox.parentElement;
-        }
-        if (!matchedMem) return;
+      // Tạo thanh công cụ nhỏ gọn (Màu thẻ + Cột) nằm ngay dưới ô Họ tên CCCD
+      const styleBar = document.createElement('div');
+      styleBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding-top:8px;border-top:1px dashed #e2e8f0;';
 
-        // Ẩn chấm tròn tĩnh và thay bằng ô chọn màu bấm được trực tiếp
-        const dotEl = cardBox.querySelector('span[style*="background"], div[style*="background"]');
-        if (dotEl && dotEl.offsetWidth <= 18) {
-          dotEl.style.display = 'none';
-        }
+      const colorWrap = document.createElement('label');
+      colorWrap.style.cssText = 'display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:#475569;cursor:pointer;';
+      colorWrap.innerHTML = `<span>Màu thẻ:</span>`;
 
-        const colorPicker = document.createElement('input');
-        colorPicker.type = 'color';
-        colorPicker.className = 'as-custom-mem-color';
-        colorPicker.value = matchedMem.bg || '#333333';
-        colorPicker.title = `Đổi màu thẻ của ${matchedMem.name}`;
-        colorPicker.style.cssText = 'width:22px;height:22px;border:1px solid #cbd5e1;border-radius:999px;padding:0;background:transparent;cursor:pointer;flex-shrink:0;margin-right:4px;';
-        colorPicker.onchange = function() {
-          window.adminProActions.updateMemberColor(matchedMem.id, this.value);
-        };
+      const colorPicker = document.createElement('input');
+      colorPicker.type = 'color';
+      colorPicker.value = matchedMem.bg || '#333333';
+      colorPicker.style.cssText = 'width:26px;height:22px;border:1px solid #cbd5e1;border-radius:6px;padding:0;background:transparent;cursor:pointer;';
+      colorPicker.onchange = function() {
+        window.adminProActions.updateMemberColor(matchedMem.id, this.value);
+      };
+      colorWrap.appendChild(colorPicker);
 
-        const nameTarget = dotEl ? dotEl.parentElement : topRow;
-        if (nameTarget) {
-          nameTarget.insertBefore(colorPicker, nameTarget.firstChild);
-        }
+      const orderWrap = document.createElement('label');
+      orderWrap.style.cssText = 'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;color:#475569;';
+      orderWrap.innerHTML = `<span>Thứ tự cột:</span>`;
 
-        // Tạo cụm chỉnh Thứ tự cột [Cột: 1..13]
-        const orderWrap = document.createElement('div');
-        orderWrap.className = 'as-custom-mem-order';
-        orderWrap.style.cssText = 'display:inline-flex;align-items:center;gap:3px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:999px;padding:2px 7px;margin-right:4px;flex-shrink:0;';
-        orderWrap.innerHTML = `<span style="font-size:10px;font-weight:800;color:#64748b;">Cột</span>`;
+      const orderInput = document.createElement('input');
+      orderInput.type = 'number';
+      orderInput.min = '1';
+      orderInput.max = '50';
+      orderInput.value = matchedMem.order !== undefined ? matchedMem.order : 1;
+      orderInput.style.cssText = 'width:44px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;text-align:center;font-size:11px;font-weight:900;color:#0f172a;';
+      orderInput.onchange = function() {
+        window.adminProActions.updateMemberOrder(matchedMem.id, this.value);
+      };
+      orderWrap.appendChild(orderInput);
 
-        const orderInput = document.createElement('input');
-        orderInput.type = 'number';
-        orderInput.min = '1';
-        orderInput.max = '50';
-        orderInput.value = matchedMem.order !== undefined ? matchedMem.order : 1;
-        orderInput.title = 'Thứ tự cột trên Bảng Công Tác';
-        orderInput.style.cssText = 'width:32px;border:none;background:transparent;text-align:center;font-size:11px;font-weight:900;color:#0f172a;outline:none;';
-        orderInput.onchange = function() {
-          window.adminProActions.updateMemberOrder(matchedMem.id, this.value);
-        };
-        orderWrap.appendChild(orderInput);
-
-        const pinInput = topRow.querySelector('input:not([type="color"])');
-        if (pinInput) {
-          topRow.insertBefore(orderWrap, pinInput);
-        } else {
-          topRow.insertBefore(orderWrap, saveBtn);
-        }
-      });
-    } finally {
-      isApplyingPatch = false;
-    }
+      styleBar.appendChild(colorWrap);
+      styleBar.appendChild(orderWrap);
+      cardBox.appendChild(styleBar);
+    });
   }
 
-  function bindShellObserver() {
-    const shell = document.getElementById('as-light-admin-shell');
-    if (!shell) {
-      setTimeout(bindShellObserver, 150);
-      return;
+  // Chỉ chạy khi người dùng bấm chuyển tab hoặc mới mở trang Admin (không dùng MutationObserver)
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const t = (btn.textContent || '').trim();
+    if (t.includes('PIN') || t.includes('Tổng Quan') || t.includes('Hệ Thống') || t.includes('Lưu')) {
+      setTimeout(patchNhanSuPinOnce, 120);
+      setTimeout(patchNhanSuPinOnce, 400);
     }
-    if (!shell.dataset.nhanSuPinObservedV2) {
-      shell.dataset.nhanSuPinObservedV2 = '1';
-      new MutationObserver(() => applyNhanSuPinPatchNow()).observe(shell, { childList: true, subtree: true });
-    }
-    applyNhanSuPinPatchNow();
-  }
+  }, true);
 
-  new MutationObserver(() => {
-    const shell = document.getElementById('as-light-admin-shell');
-    if (shell && !shell.dataset.nhanSuPinObservedV2) bindShellObserver();
-  }).observe(document.body, { childList: true });
-
-  bindShellObserver();
+  setTimeout(patchNhanSuPinOnce, 300);
+  setTimeout(patchNhanSuPinOnce, 900);
 })();
 </script>
 </body></html>
