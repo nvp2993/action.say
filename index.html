@@ -11369,13 +11369,13 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 </script>
 
 <script id="as-hold-bell-workflow-2026">
-(function initHoldBellAndOwnerNotifyWorkflowV2() {
+(function initHoldBellAndOwnerNotifyWorkflowV3() {
   if (!window.state || !window.appActions) {
-    setTimeout(initHoldBellAndOwnerNotifyWorkflowV2, 100);
+    setTimeout(initHoldBellAndOwnerNotifyWorkflowV3, 100);
     return;
   }
-  if (window.__AS_HOLD_BELL_WORKFLOW_V2__) return;
-  window.__AS_HOLD_BELL_WORKFLOW_V2__ = true;
+  if (window.__AS_HOLD_BELL_WORKFLOW_V3__) return;
+  window.__AS_HOLD_BELL_WORKFLOW_V3__ = true;
 
   const st = window.state;
   let isBellDrawerOpen = false;
@@ -11383,11 +11383,9 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   let quickHoldDraft = { startDate: '', endDate: '', ownerId: '', memberIds: [], note: '' };
   let promotingHoldId = null;
 
-  // Lưu danh sách thông báo "Đã chốt Show" mà user hiện tại đã bấm Đã xem
   function getSeenResolvedIds() {
-    try {
-      return JSON.parse(localStorage.getItem('as_seen_resolved_holds_2026') || '[]');
-    } catch (e) { return []; }
+    try { return JSON.parse(localStorage.getItem('as_seen_resolved_holds_2026') || '[]'); }
+    catch (e) { return []; }
   }
   function markResolvedAsSeen(showId) {
     const seen = getSeenResolvedIds();
@@ -11398,48 +11396,34 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   }
 
   function esc(str = '') {
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
-
   function formatDDMM(iso = '') {
     const p = String(iso).split('-');
     return p.length === 3 ? `${p[2]}/${p[1]}` : iso;
   }
-
   function formatDDMMYYYY(iso = '') {
     const p = String(iso).split('-');
     return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso;
   }
-
   function getTodayISO() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
-
   function getMemberName(id) {
     const m = (st.members || []).find(x => x && x.id === id);
     return m ? m.name : 'Thành viên';
   }
-
   function isDateOverlap(s1, e1, s2, e2) {
-    const startA = s1 || '';
-    const endA = (e1 && e1 >= s1) ? e1 : s1;
-    const startB = s2 || '';
-    const endB = (e2 && e2 >= s2) ? e2 : s2;
+    const startA = s1 || '', endA = (e1 && e1 >= s1) ? e1 : s1;
+    const startB = s2 || '', endB = (e2 && e2 >= s2) ? e2 : s2;
     if (!startA || !startB) return false;
     return startA <= endB && startB <= endA;
   }
 
-  // =========================================================================
-  // 1. CSS CHO CHUÔNG, MODAL GIỮA MÀN HÌNH & THẺ GIỮ LỊCH
-  // =========================================================================
+  // 1. CSS
   const oldStyle = document.getElementById('as-hold-badge-styles');
   if (oldStyle) oldStyle.remove();
-
   const styleEl = document.createElement('style');
   styleEl.id = 'as-hold-badge-styles';
   styleEl.textContent = `
@@ -11496,9 +11480,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       from { transform: scale(0.95); opacity: 0; }
       to { transform: scale(1); opacity: 1; }
     }
-    .as-center-modal-anim {
-      animation: asPopCenterModal 0.16s ease-out;
-    }
+    .as-center-modal-anim { animation: asPopCenterModal 0.16s ease-out; }
     .as-qh-mem-chip {
       padding: 6px 9px;
       border-radius: 10px;
@@ -11508,7 +11490,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       font-size: 11.5px;
       font-weight: 800;
       cursor: pointer;
-      transition: all 0.12s ease;
       display: inline-flex;
       align-items: center;
       gap: 5px;
@@ -11521,9 +11502,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
   `;
   document.head.appendChild(styleEl);
 
-  // =========================================================================
-  // 2. TỰ ĐỘNG DỌN THẺ GIỮ LỊCH & BÁO CHO EKIP KHI SHOW ĐƯỢC CHỐT CHÍNH THỨC
-  // =========================================================================
+  // 2. Tự động dọn thẻ giữ lịch trùng ngày khi có show chính thức
   function autoReplaceOverlappingHolds(officialShow) {
     if (!officialShow || officialShow.isHold || officialShow.isCancelled) return 0;
     const officialMembers = Array.isArray(officialShow.memberIds) ? officialShow.memberIds : [];
@@ -11584,7 +11563,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     return removedCount;
   }
 
-  // Bọc saveShowForm: biến hình show nháp thành show chính thức & gửi thông báo cho ekip đã được giữ lịch
+  // Bọc saveShowForm
   const prevSaveShowForm = window.appActions.saveShowForm;
   window.appActions.saveShowForm = async function() {
     const f = st.formModal;
@@ -11611,7 +11590,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       if (savedShow) {
         if (isPromoting || (savedShow.isHold && !String(savedShow.location || '').startsWith('⏳'))) {
           savedShow.isHold = false;
-          // Gắn danh sách người cần nhận thông báo "Show đã được chốt chính thức" (VD: Phú lớn, Kiên)
           const notifyList = Array.from(new Set([...prevHoldPeople, ...(savedShow.memberIds || [])]))
             .filter(uid => uid && uid !== st.currentUserId);
           if (notifyList.length > 0) {
@@ -11637,12 +11615,12 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         try { localStorage.setItem('as_shows_backup_2026', JSON.stringify(st.shows)); } catch (e) {}
         if (typeof window.syncShowsToSingleDoc === 'function') await window.syncShowsToSingleDoc();
         if (typeof window.renderApp === 'function') window.renderApp();
+        syncBellAndBannerUI();
       }
     }
     return res;
   };
 
-  // Chặn tính tiền CTP cho các thẻ đang ở trạng thái Giữ Lịch
   if (window.ctpActions && typeof window.ctpActions.toggleTask === 'function') {
     const origToggleTask = window.ctpActions.toggleTask;
     window.ctpActions.toggleTask = function(showId, taskKey) {
@@ -11655,23 +11633,17 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     };
   }
 
-  // =========================================================================
-  // 3. LỌC DANH SÁCH THÔNG BÁO CHO USER HIỆN TẠI
-  // =========================================================================
+  // 3. Lọc danh sách thông báo
   function getActiveHolds() {
     return (st.shows || [])
       .filter(s => s && s.isHold && !s.isCancelled)
       .sort((a, b) => String(a.startDate || '').localeCompare(String(b.startDate || '')));
   }
-
-  // 1. Show chờ mình xử lý (mình là Chủ Show)
   function getHoldsAssignedToMe() {
     const uid = st.currentUserId;
     if (!uid) return [];
     return getActiveHolds().filter(s => (s.holdOwnerId || s.ownerId) === uid);
   }
-
-  // 2. Show mình được note giữ lịch (nằm trong ekip hoặc người tạo, nhưng Chủ Show là người khác)
   function getHoldsInvolvingMe() {
     const uid = st.currentUserId;
     if (!uid) return [];
@@ -11683,8 +11655,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       return inCrew || isCreator;
     });
   }
-
-  // 3. Show vừa được Chủ Show chốt thành Show chính thức mà mình chưa bấm Đã xem
   function getUnseenResolvedShowsForMe() {
     const uid = st.currentUserId;
     if (!uid) return [];
@@ -11700,13 +11670,11 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       isQuickHoldOpen = false;
       renderOverlayUI();
     },
-
     closeAll() {
       isBellDrawerOpen = false;
       isQuickHoldOpen = false;
       renderOverlayUI();
     },
-
     openQuickHoldSheet(prefillDate = '') {
       if (st.readonlyMaintenanceMode && !st.isAdminMode) {
         alert('🛡️ Hệ thống đang tạm khóa bảo trì!');
@@ -11725,20 +11693,16 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       renderOverlayUI();
       setTimeout(() => document.getElementById('as-qh-note-inp')?.focus(), 60);
     },
-
     toggleDraftMember(memId) {
-      // Giữ lại giá trị đang gõ trước khi re-render chip
       quickHoldDraft.startDate = document.getElementById('as-qh-start')?.value || quickHoldDraft.startDate;
       quickHoldDraft.endDate = document.getElementById('as-qh-end')?.value || quickHoldDraft.endDate;
       quickHoldDraft.ownerId = document.getElementById('as-qh-owner')?.value || quickHoldDraft.ownerId;
       quickHoldDraft.note = document.getElementById('as-qh-note-inp')?.value || quickHoldDraft.note;
-
       const idx = quickHoldDraft.memberIds.indexOf(memId);
       if (idx >= 0) quickHoldDraft.memberIds.splice(idx, 1);
       else quickHoldDraft.memberIds.push(memId);
       renderOverlayUI();
     },
-
     async saveQuickHold() {
       const startDate = document.getElementById('as-qh-start')?.value || quickHoldDraft.startDate;
       const endDateRaw = document.getElementById('as-qh-end')?.value || startDate;
@@ -11795,6 +11759,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
 
       if (typeof window.syncShowsToSingleDoc === 'function') await window.syncShowsToSingleDoc();
       if (typeof window.renderApp === 'function') window.renderApp();
+      syncBellAndBannerUI();
 
       if (typeof window.__asNotify === 'function') {
         const crewNames = memberIds.map(getMemberName).join(', ');
@@ -11806,11 +11771,9 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         );
       }
     },
-
     promoteHoldToOfficial(showId) {
       const sh = (st.shows || []).find(s => s && s.id === showId);
       if (!sh) return;
-
       isBellDrawerOpen = false;
       isQuickHoldOpen = false;
       renderOverlayUI();
@@ -11830,7 +11793,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         }, 40);
       }
     },
-
     dismissResolvedNotice(showId, openDetail = false) {
       markResolvedAsSeen(showId);
       renderOverlayUI();
@@ -11845,7 +11807,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         }
       }
     },
-
     async removeHold(showId) {
       const sh = (st.shows || []).find(s => s && s.id === showId);
       if (!sh) return;
@@ -11863,14 +11824,12 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       if (typeof window.syncShowsToSingleDoc === 'function') await window.syncShowsToSingleDoc();
       if (typeof window.renderApp === 'function') window.renderApp();
       renderOverlayUI();
-
+      syncBellAndBannerUI();
       if (typeof window.__asNotify === 'function') window.__asNotify('🗑️ Đã gỡ ghi chú giữ lịch!', 'success');
     }
   };
 
-  // =========================================================================
-  // 4. MODAL NẰM GIỮA MÀN HÌNH (CENTERED) & VUỐT LÊN XUỐNG MƯỢT
-  // =========================================================================
+  // 4. Overlay nằm giữa màn hình
   const oldOverlay = document.getElementById('as-hold-bell-overlay');
   if (oldOverlay) oldOverlay.remove();
 
@@ -11887,7 +11846,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     }
     overlayEl.style.display = 'flex';
 
-    // A. KHUNG GIỮ LỊCH / NHẮC CHỦ SHOW (GIỮA MÀN HÌNH)
     if (isQuickHoldOpen) {
       const membersSorted = [...(st.members || [])].sort((a, b) => (a.order || 99) - (b.order || 99));
       overlayEl.innerHTML = `
@@ -11899,7 +11857,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
             </div>
             <button type="button" onclick="window.holdBellActions.closeAll()" style="width:30px;height:30px;border-radius:999px;border:none;background:#f1f5f9;color:#475569;font-weight:900;cursor:pointer;">✕</button>
           </div>
-
           <div style="padding:16px 18px;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:12px;">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
               <div>
@@ -11914,7 +11871,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
                   style="width:100%;padding:9px 10px;border:1.5px solid #cbd5e1;border-radius:12px;font-size:12.5px;font-weight:800;color:#0f172a;box-sizing:border-box;" />
               </div>
             </div>
-
             <div>
               <label style="display:block;font-size:11px;font-weight:800;color:#334155;margin-bottom:4px;">📌 Chủ show phụ trách (nhận nhắc điền tiếp):</label>
               <select id="as-qh-owner" style="width:100%;padding:9px 11px;border:1.5px solid #cbd5e1;border-radius:12px;font-size:12.5px;font-weight:800;color:#0f172a;background:#fff;box-sizing:border-box;">
@@ -11925,23 +11881,19 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
                 `).join('')}
               </select>
             </div>
-
             <div>
               <label style="display:block;font-size:11px;font-weight:800;color:#334155;margin-bottom:6px;">👥 Nhân sự giữ lịch (nhận thông báo & khóa trùng):</label>
               <div style="display:flex;flex-wrap:wrap;gap:6px;">
                 ${membersSorted.map(m => {
                   const sel = quickHoldDraft.memberIds.includes(m.id);
                   return `
-                    <button type="button" onclick="window.holdBellActions.toggleDraftMember('${esc(m.id)}')"
-                      class="as-qh-mem-chip ${sel ? 'selected' : ''}">
-                      <span>${sel ? '✓' : '+'}</span>
-                      <span>${esc(m.name)}</span>
+                    <button type="button" onclick="window.holdBellActions.toggleDraftMember('${esc(m.id)}')" class="as-qh-mem-chip ${sel ? 'selected' : ''}">
+                      <span>${sel ? '✓' : '+'}</span><span>${esc(m.name)}</span>
                     </button>
                   `;
                 }).join('')}
               </div>
             </div>
-
             <div>
               <label style="display:block;font-size:11px;font-weight:800;color:#334155;margin-bottom:4px;">📝 Ghi chú nhanh:</label>
               <input type="text" id="as-qh-note-inp" value="${esc(quickHoldDraft.note)}"
@@ -11949,7 +11901,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
                 onkeydown="if(event.key==='Enter') window.holdBellActions.saveQuickHold();"
                 style="width:100%;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:12px;font-size:12.5px;font-weight:700;color:#0f172a;box-sizing:border-box;" />
             </div>
-
             <button type="button" onclick="window.holdBellActions.saveQuickHold()"
               style="width:100%;margin-top:2px;padding:12px;border-radius:14px;border:none;background:#0f172a;color:#fbbf24;font-size:13px;font-weight:900;cursor:pointer;">
               ⏳ LƯU GIỮ LỊCH & GỬI THÔNG BÁO
@@ -11960,7 +11911,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       return;
     }
 
-    // B. TRUNG TÂM THÔNG BÁO CHUÔNG (GIỮA MÀN HÌNH, VUỐT LÊN XUỐNG)
     const assignedToMe = getHoldsAssignedToMe();
     const involvingMe = getHoldsInvolvingMe();
     const resolvedForMe = getUnseenResolvedShowsForMe();
@@ -11981,7 +11931,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
             + GIỮ LỊCH / NHẮC CHỦ SHOW MỚI
           </button>
 
-          <!-- 1. Thông báo Show vừa được Chủ Show chốt chính thức -->
           ${resolvedForMe.length > 0 ? `
             <div>
               <div style="font-size:11px;font-weight:900;color:#059669;text-transform:uppercase;margin-bottom:6px;">
@@ -11997,9 +11946,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
                       <span style="font-size:11px;font-weight:900;color:#047857;">📅 ${esc(dateRange)}</span>
                       <button type="button" onclick="window.holdBellActions.dismissResolvedNotice('${sh.id}', false)" style="background:none;border:none;color:#059669;font-size:11px;font-weight:800;cursor:pointer;">Đã xem ✓</button>
                     </div>
-                    <div style="font-size:12.5px;font-weight:900;color:#064e3b;margin:4px 0;">
-                      ${esc(sh.location || 'Show chính thức')}
-                    </div>
+                    <div style="font-size:12.5px;font-weight:900;color:#064e3b;margin:4px 0;">${esc(sh.location || 'Show chính thức')}</div>
                     <div style="font-size:11px;color:#047857;margin-bottom:8px;">
                       <b>${esc(sh.resolvedByName || getMemberName(sh.ownerId))}</b> đã cập nhật đầy đủ thông tin từ lịch giữ chỗ.
                     </div>
@@ -12013,7 +11960,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
             </div>
           ` : ''}
 
-          <!-- 2. Show chờ mình cập nhật (mình là Chủ Show) -->
           <div>
             <div style="font-size:11px;font-weight:900;color:#b45309;text-transform:uppercase;margin-bottom:6px;">
               ⏳ CHỜ BẠN CẬP NHẬT / CHỐT SHOW (${assignedToMe.length})
@@ -12050,7 +11996,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
             }).join('')}
           </div>
 
-          <!-- 3. Lịch mình đang được giữ chỗ (chờ Chủ Show khác cập nhật) -->
           ${involvingMe.length > 0 ? `
             <div>
               <div style="font-size:11px;font-weight:900;color:#475569;text-transform:uppercase;margin-bottom:6px;">
@@ -12082,9 +12027,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     `;
   }
 
-  // =========================================================================
-  // 5. ĐỒNG BỘ CHUÔNG & BANNER NGAY SAU RENDERAPP (0% NHẤP NHÁY, KHÔNG DÙNG SETINTERVAL)
-  // =========================================================================
+  // 5. Đồng bộ Chuông + Banner + Highlight (Chạy tức thì mỗi khi #app vẽ lại -> 0% nhấp nháy)
   function syncBellAndBannerUI() {
     const inAdmin = Boolean(st.isBackendPortal || window.location.hash === '#admin' || document.body.classList.contains('as-admin-mode-active'));
     if (inAdmin) return;
@@ -12097,7 +12040,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     const resolvedForMe = getUnseenResolvedShowsForMe();
     const totalAlerts = assignedToMe.length + involvingMe.length + resolvedForMe.length;
 
-    // 5a. Gắn nút Chuông 🔔 vào góc phải Header (tức thì, không trễ)
     let bellBtn = document.getElementById('as-header-bell-btn');
     if (!bellBtn) {
       bellBtn = document.createElement('button');
@@ -12129,7 +12071,6 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       `;
     }
 
-    // 5b. Thẻ nhắc gọn dưới Header (Ưu tiên: Show mới chốt -> Show chờ mình chốt -> Show mình được giữ chỗ)
     let banner = document.getElementById('as-owner-hold-notify-banner');
     if (totalAlerts > 0) {
       if (!banner) {
@@ -12138,9 +12079,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
         header.appendChild(banner);
       }
 
-      let html = '';
-      let sig = '';
-
+      let html = '', sig = '';
       if (resolvedForMe.length > 0) {
         const r = resolvedForMe[0];
         sig = `res:${r.id}:${totalAlerts}`;
@@ -12195,7 +12134,7 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
       banner.remove();
     }
 
-    // 5c. Tô nền sọc chéo viền nét đứt cho các thẻ đang Giữ Lịch
+    // Tô viền nét đứt sọc chéo cho các thẻ/ô đang Giữ Lịch bên Lịch Show & Bảng Công Tác
     const holdShows = getActiveHolds();
     if (holdShows.length > 0) {
       document.querySelectorAll('#app [onclick*="openEditModal"], #app [onclick*="openShowDetail"], #app td, #app div[class*="rounded"]').forEach(el => {
@@ -12209,18 +12148,12 @@ if (!target && newScrollEls[s.idx]) target = newScrollEls[s.idx];
     }
   }
 
-  // Bọc trực tiếp window.renderApp để gắn chuông ngay trong cùng 1 nhịp vẽ (0% nhấp nháy)
-  if (typeof window.renderApp === 'function' && !window.renderApp.__asHoldBellWrapped) {
-    const origRenderApp = window.renderApp;
-    window.renderApp = function() {
-      const res = origRenderApp.apply(this, arguments);
-      syncBellAndBannerUI();
-      return res;
-    };
-    window.renderApp.__asHoldBellWrapped = true;
+  // Theo dõi đúng lớp vỏ #app (childList: true, KHÔNG subtree -> tuyệt đối không lặp, gắn ngay trước khi paint)
+  const appRoot = document.getElementById('app');
+  if (appRoot) {
+    new MutationObserver(() => syncBellAndBannerUI()).observe(appRoot, { childList: true });
   }
 
-  // Double-Click vào ô trống trên Bảng Công Tác để mở thẳng khung Giữ Lịch giữa màn hình
   document.addEventListener('dblclick', (e) => {
     if (st.activeTab !== 'matrix') return;
     const td = e.target.closest('td');
