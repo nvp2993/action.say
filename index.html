@@ -397,7 +397,18 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+   import {
+  getAuth,
+  signInAnonymously,
+  signInWithCustomToken,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+  verifyBeforeUpdateEmail
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // ========================================================================
@@ -663,7 +674,7 @@
 
       adminLoginInput: { email: '', password: '', error: '' },
       newMemberForm: { name: '', shortLabel: '', pin: '1234', colorIdx: 5 },
-      accountDraft: { email: 'admin@actionsay.vn', password: 'admin2026' },
+      accountDraft: { email: '', password: '' },
       toast: null
     };
 
@@ -1945,31 +1956,41 @@ openCapturedImagePreview(canvas, 'Checkin_ActionSay_Polaroid.png', 'Ảnh Check-
         state.guideModal = false;
         renderApp();
       },
-      async submitBackendAdminLogin() {
-        const { email, password } = state.adminLoginInput;
-        if (
-          email.trim().toLowerCase() === state.adminAuth.email.trim().toLowerCase() &&
-          password === state.adminAuth.password
-        ) {
-          state.isAdminMode = true;
-          try { localStorage.setItem('as_admin_mode_2026', 'true'); } catch (e) {}
-          state.adminLoginInput.error = '';
-          renderApp();
-          showToast('Đăng nhập Quản trị viên (Backend) thành công!');
-          if (state.user && db) {
-            try {
-              await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'device_session', 'active_profile'), {
-                memberId: state.currentUserId,
-                isAdmin: true,
-                updatedAt: Date.now()
-              });
-            } catch (e) {}
-          }
-        } else {
-          state.adminLoginInput.error = 'Email hoặc mật khẩu Admin không chính xác!';
-          renderApp();
-        }
-      },
+async submitBackendAdminLogin() {
+    const { email, password } = state.adminLoginInput;
+    if (!email.trim() || !password) {
+      state.adminLoginInput.error = 'Vui lòng nhập đầy đủ Email và Mật khẩu Admin!';
+      renderApp();
+      return;
+    }
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+      state.user = cred.user;
+      state.isAdminMode = true;
+      state.adminAuth = { email: cred.user.email || email.trim(), password: '' };
+      if (state.accountDraft) {
+        state.accountDraft.email = cred.user.email || email.trim();
+        state.accountDraft.password = '';
+      }
+      try { localStorage.setItem('as_admin_mode_2026', 'true'); } catch (e) {}
+      state.adminLoginInput.error = '';
+      state.adminLoginInput.password = '';
+      renderApp();
+      showToast('Đăng nhập Quản trị viên (Backend) thành công!');
+      if (cred.user && db) {
+        try {
+          await setDoc(doc(db, 'artifacts', appId, 'users', cred.user.uid, 'device_session', 'active_profile'), {
+            memberId: state.currentUserId,
+            isAdmin: true,
+            updatedAt: Date.now()
+          });
+        } catch (e) {}
+      }
+    } catch (err) {
+      state.adminLoginInput.error = 'Email hoặc mật khẩu Admin không chính xác!';
+      renderApp();
+    }
+  },
       async logoutAdmin() {
         state.isAdminMode = false;
         try { localStorage.removeItem('as_admin_mode_2026'); } catch (e) {}
