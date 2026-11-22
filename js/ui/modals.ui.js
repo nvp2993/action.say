@@ -552,17 +552,16 @@ export function renderFormModalHtml() {
                       <i class="fa-regular fa-trash-can text-xs"></i>
                     </button>
                   </div>
-                  <div class="flex flex-wrap gap-1.5">
+                 <div class="flex flex-wrap gap-1">
                     ${ROLE_OPTIONS.map(r => {
                       const active = extRoles.includes(r.label) || extRoles.includes(r.id) || extRoles.map(normalizeRoleName).includes(r.id);
-                      const ico = roleIcons[r.id] || '';
                       return `
-                        <button type="button" onclick="appActions.toggleExternalCrewRole(${idx}, '${escapeHtml(r.label)}')" class="px-2.5 py-1 rounded-lg text-[10.5px] font-extrabold border transition ${
+                        <button type="button" onclick="appActions.toggleExternalCrewRole(${idx}, '${escapeHtml(r.label)}')" class="px-2 py-0.5 rounded-md text-[9.5px] font-bold border transition ${
                           active
                             ? 'bg-indigo-600 text-white border-indigo-600'
                             : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                         }">
-                          ${ico ? `${ico} ` : ''}${escapeHtml(r.label)}
+                          ${escapeHtml(r.label)}
                         </button>
                       `;
                     }).join('')}
