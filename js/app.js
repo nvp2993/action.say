@@ -1755,13 +1755,19 @@ window.adminProActions = {
     renderApp();
     showToast(`🗑️ Đã xóa ${m.name}!`);
   },
-  setAdminTab(tab) { state.adminTab = tab; renderApp(); },
-  pickNewColorSwatch(hex) {
-    state.adminNewColorHex = hex;
-    const inp = document.getElementById('adm-new-col-hex');
-    if (inp) inp.value = hex;
-    renderApp();
-  },
+    setAdminTab(tab) { state.adminTab = tab; renderApp(); },
+      setPerfPeriodMode(mode) {
+        state.adminPerfMode = mode === 'year' ? 'year' : 'month';
+        renderApp();
+      },
+      setPerfPeriodValue(val) {
+        if ((state.adminPerfMode || 'month') === 'year') {
+          state.adminPerfYear = Number(val) || 2026;
+        } else {
+          state.adminPerfMonth = Number(val) || (new Date().getMonth() + 1);
+        }
+        renderApp();
+      },
   triggerLogoUpload() {
     document.getElementById('adm-logo-file-input')?.click();
   },
