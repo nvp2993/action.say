@@ -504,18 +504,17 @@ export function renderFormModalHtml() {
                     </div>
                   ` : ''}
 
-                  ${sel ? `
+                   ${sel ? `
                     <div class="flex flex-wrap gap-1 pt-0.5" onclick="event.stopPropagation()">
                       ${ROLE_OPTIONS.map(r => {
                         const active = normRoles.includes(r.id);
-                        const ico = roleIcons[r.id] || '';
                         return `
-                          <button type="button" onclick="appActions.toggleMemberRole('${m.id}', '${r.id}')" class="px-1.5 py-0.5 rounded-md text-[9.5px] font-extrabold border leading-tight transition ${
+                          <button type="button" onclick="appActions.toggleMemberRole('${m.id}', '${r.id}')" class="px-1.5 py-[2px] rounded text-[8.5px] font-bold border leading-tight transition ${
                             active
                               ? 'bg-slate-900 text-white border-slate-900'
                               : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                           }">
-                            ${ico ? `${ico}` : ''}${escapeHtml(r.label)}
+                            ${escapeHtml(r.label)}
                           </button>
                         `;
                       }).join('')}
