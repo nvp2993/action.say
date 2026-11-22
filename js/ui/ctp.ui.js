@@ -85,13 +85,11 @@ export function renderCtpTabHtml() {
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-1.5 flex-wrap">
                     <span class="px-2 py-0.5 rounded-full bg-white/90 text-slate-600 font-mono font-bold text-[10px] border border-slate-200/80">#${idx + 1}</span>
-                    <span class="font-mono font-bold text-indigo-600 text-[10px]">${formatDayMonth(sh.startDate)} (${days}n)</span>
-                    ${sh.isHold ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[9.5px] font-extrabold">⏳ Giữ lịch</span>` : ''}
+                    <span class="font-mono font-bold text-indigo-600 text-[10px]">${formatDayMonth(sh.startDate)} (${days}n)</span>${sh.isHold ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[9.5px] font-extrabold">⏳ Giữ lịch</span>` : ''}
                     ${isPrivateShow ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[9.5px] font-extrabold">🔒 Riêng tư</span>` : ''}
                   </div>
                   <h4 class="font-black text-slate-900 text-sm mt-1.5 flex items-center gap-1.5 flex-wrap">
-                    <span>${escapeHtml(displayLocation)}</span>
-                    ${partnerText ? `<span class="text-slate-500 font-bold text-xs">(${escapeHtml(partnerText)})</span>` : ''}
+                    <span>${escapeHtml(displayLocation)}</span>${partnerText ? `<span class="text-slate-500 font-bold text-xs">(${escapeHtml(partnerText)})</span>` : ''}
                   </h4>
                   <p class="text-[10px] text-slate-500 mt-0.5">Chủ show: <b class="text-slate-700">${escapeHtml(owner.name)}</b></p>
                 </div>
@@ -120,16 +118,16 @@ export function renderCtpTabHtml() {
               ` : ''}
 
               ${isCounted ? `
-                <div class="flex flex-wrap gap-1.5">
+                <div class="flex flex-wrap gap-1">
                   ${taskList.map(t => {
                     const checked = item.tasks?.[t.key] !== undefined && item.tasks?.[t.key] !== null;
                     const val = checked ? item.tasks[t.key] : t.def;
                     return `
                       <div class="inline-flex flex-col items-start">
-                        <button type="button" onclick="ctpActions.toggleTask('${sh.id}', '${t.key}')" class="px-3 py-1.5 rounded-full text-[10.5px] font-extrabold border transition ${checked ? 'bg-slate-900 text-white border-slate-900' : 'bg-white/90 text-slate-700 border-slate-200'}">
+                        <button type="button" onclick="ctpActions.toggleTask('${sh.id}', '${t.key}')" class="px-2 py-1 rounded-lg text-[9.5px] font-bold border leading-tight transition ${checked ? 'bg-slate-900 text-white border-slate-900' : 'bg-white/90 text-slate-700 border-slate-200'}">
                           ${t.label}
                         </button>
-                        ${checked ? `<input type="tel" inputmode="numeric" value="${Number(val).toLocaleString('vi-VN')}" oninput="ctpActions.handleTaskPriceInput('${sh.id}', '${t.key}', this)" class="mt-1 w-24 px-2 py-0.5 bg-indigo-50 border border-indigo-300 rounded-lg text-[10px] font-mono font-black text-right" />` : ''}
+                        ${checked ? `<input type="tel" inputmode="numeric" value="${Number(val).toLocaleString('vi-VN')}" oninput="ctpActions.handleTaskPriceInput('${sh.id}', '${t.key}', this)" class="mt-1 w-20 px-1.5 py-0.5 bg-indigo-50 border border-indigo-300 rounded-md text-[9.5px] font-mono font-bold text-right" />` : ''}
                       </div>
                     `;
                   }).join('')}
@@ -142,9 +140,9 @@ export function renderCtpTabHtml() {
                   </div>
                   ${(item.extras || []).map((ex, exIdx) => `
                     <div class="flex items-center gap-1.5">
-                      <input type="text" value="${escapeHtml(ex.name || '')}" oninput="ctpActions.saveExtraField('${sh.id}', ${exIdx}, 'name', this)" placeholder="Tên phí..." class="flex-1 min-w-0 px-2.5 py-1.5 bg-white/90 border rounded-xl text-xs font-bold" />
-                      <input type="tel" inputmode="numeric" value="${ex.amount ? Number(ex.amount).toLocaleString('vi-VN') : ''}" oninput="ctpActions.saveExtraField('${sh.id}', ${exIdx}, 'amount', this)" placeholder="Số tiền" class="w-28 sm:w-32 px-2.5 py-1.5 bg-white/90 border rounded-xl text-xs font-mono font-black text-right shrink-0" />
-                      <button type="button" onclick="ctpActions.removeExtraItem('${sh.id}', ${exIdx})" class="w-7 h-7 rounded-xl bg-rose-100 text-rose-600 font-bold shrink-0">✕</button>
+                      <input type="text" value="${escapeHtml(ex.name || '')}" oninput="ctpActions.saveExtraField('${sh.id}',${exIdx}, 'name', this)" placeholder="Tên phí..." class="flex-1 min-w-0 px-2.5 py-1.5 bg-white/90 border rounded-xl text-xs font-bold" />
+                      <input type="tel" inputmode="numeric" value="${ex.amount ? Number(ex.amount).toLocaleString('vi-VN') : ''}" oninput="ctpActions.saveExtraField('${sh.id}',${exIdx}, 'amount', this)" placeholder="Số tiền" class="w-28 sm:w-32 px-2.5 py-1.5 bg-white/90 border rounded-xl text-xs font-mono font-black text-right shrink-0" />
+                      <button type="button" onclick="ctpActions.removeExtraItem('${sh.id}',${exIdx})" class="w-7 h-7 rounded-xl bg-rose-100 text-rose-600 font-bold shrink-0">✕</button>
                     </div>
                   `).join('')}
                 </div>
