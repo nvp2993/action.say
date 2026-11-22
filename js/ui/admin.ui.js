@@ -257,7 +257,6 @@ function renderCrewLeaderboardHtml(membersSorted) {
     });
 
   const maxCnt = Math.max(1, ...ranked.map(r => r.cnt));
-
   const yearOptions = Array.from(new Set([...(state.visibleYears || [2026, 2027]), perfYear])).sort((a, b) => a - b);
 
   return `
