@@ -2160,7 +2160,7 @@ initAuthListener(
     detachFinanceListeners();
   }
 );
-```[cite: 1, 9]
+```[cite: 7]
 
 ---
 
@@ -2426,7 +2426,6 @@ function renderCrewLeaderboardHtml(membersSorted) {
     });
 
   const maxCnt = Math.max(1, ...ranked.map(r => r.cnt));
-
   const yearOptions = Array.from(new Set([...(state.visibleYears || [2026, 2027]), perfYear])).sort((a, b) => a - b);
 
   return `
@@ -2960,6 +2959,6 @@ export function renderAdminPortalHtml() {
     </div>
   `;
 }
-```[cite: 5, 11, 13]
+```[cite: 8]
 
-Mày chép đè 2 file này lên, đẩy lên Vercel rồi bấm `Ctrl + Shift + R` là đủ bài luôn.
+Bạn copy đè đúng từng file lên repo, push xong đợi Vercel build rồi bấm `Ctrl + Shift + R` trên web là chạy mượt lại ngay.
