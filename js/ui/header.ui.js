@@ -184,7 +184,7 @@ export function renderBottomNavHtml() {
         <div class="flex items-center justify-around gap-0.5 min-w-0 sm:contents">
           <button type="button" onclick="appActions.setTab('shows')" class="flex flex-col items-center py-0.5 px-1 sm:px-2 rounded-xl whitespace-nowrap transition-colors ${state.activeTab === 'shows' ? 'text-indigo-600 font-extrabold' : 'text-slate-500 hover:text-slate-800 font-medium'}">
             <i class="fa-solid fa-table-list text-[11px] sm:text-xs"></i>
-            <span class="text-[8px] sm:text-[10px] tracking-tighter leading-none mt-1">SHOW</span>
+            <span class="text-[8px] sm:text-[10px] tracking-tighter leading-none mt-1">DS SHOW</span>
           </button>
           <button type="button" onclick="appActions.setTab('matrix')" class="flex flex-col items-center py-0.5 px-1 sm:px-2 rounded-xl whitespace-nowrap transition-colors ${state.activeTab === 'matrix' ? 'text-indigo-600 font-extrabold' : 'text-slate-500 hover:text-slate-800 font-medium'}">
             <i class="fa-solid fa-calendar-days text-[11px] sm:text-xs"></i>
