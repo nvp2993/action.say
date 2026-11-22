@@ -87,6 +87,84 @@ export function renderPinModalHtml() {
   `;
 }
 
+function buildVipLeaderboardData(mode, year, month) {
+  const membersSorted = [...(state.members || [])].sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+  const prefix = mode === 'year'
+    ? `${year}-`
+    : `${year}-${String(month).padStart(2, '0')}-`;
+
+  const periodShows = (state.shows || []).filter(s => {
+    if (!s || s.isCancelled || s.isHold) return false;
+    const start = String(s.startDate || '');
+    const end = String(s.endDate || s.startDate || '');
+    return start.startsWith(prefix) || end.startsWith(prefix);
+  });
+
+  const ranked = membersSorted
+    .map(mem => ({
+      ...mem,
+      cnt: periodShows.filter(s => (s.memberIds || []).includes(mem.id)).length
+    }))
+    .sort((a, b) => (b.cnt !== a.cnt ? b.cnt - a.cnt : (a.order ?? 99) - (b.order ?? 99)));
+
+  const maxCnt = Math.max(1, ...ranked.map(r => r.cnt));
+  return { ranked, maxCnt, totalShows: periodShows.length };
+}
+
+function renderVipLeaderboardRowsHtml(ranked, maxCnt, currentUserId) {
+  return ranked.map((mem, idx) => {
+    const rank = idx + 1;
+    const isMe = mem.id === currentUserId;
+    const pct = mem.cnt > 0 ? Math.max(8, Math.round((mem.cnt / maxCnt) * 100)) : 0;
+
+    let rowCls = 'bg-white/[0.04] border-white/[0.07]';
+    let badgeHtml = `<span class="w-5 h-5 rounded-full bg-white/10 text-slate-300 font-mono font-black text-[9.5px] flex items-center justify-center shrink-0">#${rank}</span>`;
+    let barCls = 'bg-gradient-to-r from-slate-500 to-slate-400';
+    let countCls = 'text-white';
+
+    if (rank === 1 && mem.cnt > 0) {
+      rowCls = 'bg-gradient-to-r from-amber-400/20 via-yellow-300/10 to-transparent border-amber-400/45';
+      badgeHtml = `<span class="text-sm leading-none shrink-0" title="Top 1">🥇</span>`;
+      barCls = 'bg-gradient-to-r from-amber-400 to-yellow-200';
+      countCls = 'text-amber-300';
+    } else if (rank === 2 && mem.cnt > 0) {
+      rowCls = 'bg-gradient-to-r from-slate-200/15 via-slate-300/5 to-transparent border-slate-300/30';
+      badgeHtml = `<span class="text-sm leading-none shrink-0" title="Top 2">🥈</span>`;
+      barCls = 'bg-gradient-to-r from-slate-300 to-slate-100';
+      countCls = 'text-slate-100';
+    } else if (rank === 3 && mem.cnt > 0) {
+      rowCls = 'bg-gradient-to-r from-orange-400/15 via-amber-500/5 to-transparent border-orange-300/30';
+      badgeHtml = `<span class="text-sm leading-none shrink-0" title="Top 3">🥉</span>`;
+      barCls = 'bg-gradient-to-r from-orange-400 to-amber-300';
+      countCls = 'text-orange-200';
+    }
+
+    if (isMe) {
+      rowCls += ' ring-1 ring-amber-300/75';
+    }
+
+    return `
+      <div class="px-2.5 py-1.5 rounded-xl border ${rowCls} space-y-1">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5 min-w-0">
+            ${badgeHtml}
+            <span style="background:${mem.bg};color:${mem.text || '#fff'}" class="px-2 py-0.5 rounded-full text-[9.5px] font-black truncate">${escapeHtml(mem.shortLabel || mem.name)}</span>
+            ${rank === 1 && mem.cnt > 0 ? `<span class="px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 font-black text-[8px] tracking-wider uppercase shrink-0">MVP</span>` : ''}
+            ${isMe ? `<span class="px-1.5 py-0.5 rounded bg-white/15 text-amber-200 font-black text-[8px] tracking-wider uppercase shrink-0">BẠN</span>` : ''}
+          </div>
+          <div class="flex items-baseline gap-1 shrink-0">
+            <span class="font-mono font-black text-xs ${countCls}">${mem.cnt}</span>
+            <span class="text-[9px] font-semibold text-slate-400">show</span>
+          </div>
+        </div>
+        <div class="w-full h-1 rounded-full bg-white/10 overflow-hidden">
+          <div style="width:${pct}%" class="h-full rounded-full ${barCls}"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 export function renderCrewPassModalHtml() {
   if (!state.crewPassModal || !state.currentUserId) return '';
   const m = getMember(state.currentUserId);
@@ -98,8 +176,16 @@ export function renderCrewPassModalHtml() {
   const hidden = !!state.vipInfoHidden;
 
   const showCount = (state.shows || []).filter(
-    s => s && !s.isCancelled && (s.memberIds || []).includes(state.currentUserId)
+    s => s && !s.isCancelled && !s.isHold && (s.memberIds || []).includes(state.currentUserId)
   ).length;
+
+  const now = new Date();
+  const curYear = Number(state.selectedYear) || now.getFullYear();
+  const curMonth = Number(state.selectedMonth) || (now.getMonth() + 1);
+  const monthBoard = buildVipLeaderboardData('month', curYear, curMonth);
+  const yearBoard = buildVipLeaderboardData('year', curYear, curMonth);
+  const myMonthRankIdx = monthBoard.ranked.findIndex(r => r.id === state.currentUserId);
+  const myMonthRank = myMonthRankIdx >= 0 ? myMonthRankIdx + 1 : '-';
 
   const displayName = (prof.fullName || m.name || '').toUpperCase();
   const displayTitle = prof.title || 'Media Crew';
@@ -117,60 +203,129 @@ export function renderCrewPassModalHtml() {
     ? `https://img.vietqr.io/image/${bankBin}-${encodeURIComponent(bankAcc)}-qr_only.png?accountName=${encodeURIComponent(displayName)}`
     : '';
 
+  const flipJs = "document.getElementById('vip-card-flip-inner')?.classList.toggle('is-flipped')";
+  const switchMonthJs = "event.stopPropagation();document.getElementById('vip-lb-month')?.classList.remove('hidden');document.getElementById('vip-lb-year')?.classList.add('hidden');document.getElementById('vip-lb-btn-m')?.classList.add('bg-amber-400','text-slate-950');document.getElementById('vip-lb-btn-m')?.classList.remove('text-slate-300');document.getElementById('vip-lb-btn-y')?.classList.remove('bg-amber-400','text-slate-950');document.getElementById('vip-lb-btn-y')?.classList.add('text-slate-300');";
+  const switchYearJs = "event.stopPropagation();document.getElementById('vip-lb-year')?.classList.remove('hidden');document.getElementById('vip-lb-month')?.classList.add('hidden');document.getElementById('vip-lb-btn-y')?.classList.add('bg-amber-400','text-slate-950');document.getElementById('vip-lb-btn-y')?.classList.remove('text-slate-300');document.getElementById('vip-lb-btn-m')?.classList.remove('bg-amber-400','text-slate-950');document.getElementById('vip-lb-btn-m')?.classList.add('text-slate-300');";
+
   return `
+    <style>
+      .vip-flip-scene { perspective: 1200px; }
+      .vip-flip-inner {
+        display: grid;
+        transform-style: preserve-3d;
+        transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .vip-flip-inner.is-flipped { transform: rotateY(180deg); }
+      .vip-flip-face {
+        grid-area: 1 / 1;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+      }
+      .vip-flip-back { transform: rotateY(180deg); }
+    </style>
+
     <div onclick="appActions.closeCrewPassModal()" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
       <div onclick="event.stopPropagation()" class="w-full max-w-sm bg-[#111318] text-white rounded-[32px] p-4 space-y-3.5 shadow-2xl max-h-[92dvh] overflow-y-auto custom-scroll">
 
-        <div class="relative rounded-[26px] p-4 overflow-hidden bg-gradient-to-br from-[#a3b86c]/80 via-[#212723] to-[#0e1218] shadow-lg space-y-3.5">
-          <div class="flex items-center justify-between gap-2">
-            <div class="px-3 py-1 rounded-full bg-black/40 text-[10px] font-black tracking-wider text-amber-300 flex items-center gap-1">
-              <span>⚡ ACTION X SAY • VIP PASS</span>
-            </div>
-            <div class="flex items-center gap-1.5 shrink-0">
-              <div class="px-2.5 py-1 rounded-full bg-black/40 text-[10px] font-black text-amber-300">
-                ${showCount} <span class="text-white/75 font-bold">SHOWS</span>
+        <div class="vip-flip-scene">
+          <div id="vip-card-flip-inner" class="vip-flip-inner">
+
+            <!-- MẶT TRƯỚC: VIP PASS -->
+            <div onclick="${flipJs}" class="vip-flip-face relative rounded-[26px] p-4 overflow-hidden bg-gradient-to-br from-[#a3b86c]/80 via-[#212723] to-[#0e1218] border border-amber-300/25 shadow-lg space-y-3.5 cursor-pointer select-none">
+              <div class="flex items-center justify-between gap-1.5">
+                <div class="px-2.5 py-1 rounded-full bg-black/40 text-[9.5px] font-black tracking-wider text-amber-300 flex items-center gap-1 truncate">
+                  <span>⚡ ACTION X SAY • VIP</span>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button type="button" onclick="event.stopPropagation();${flipJs}" title="Lật xem Bảng Xếp Hạng Thi Đua" class="px-2.5 py-1 rounded-full bg-amber-400/20 hover:bg-amber-400/35 border border-amber-300/40 text-[9.5px] font-black text-amber-200 flex items-center gap-1 transition">
+                    <span>🏆 #${myMonthRank}</span>
+                    <span class="text-amber-300/80">↻</span>
+                  </button>
+                  <button type="button" onclick="event.stopPropagation();appActions.closeCrewPassModal()" class="w-7 h-7 rounded-full bg-black/45 hover:bg-black/70 text-white/90 font-bold text-xs flex items-center justify-center">✕</button>
+                </div>
               </div>
-              <button type="button" onclick="appActions.closeCrewPassModal()" class="w-7 h-7 rounded-full bg-black/45 hover:bg-black/70 text-white/90 font-bold text-xs flex items-center justify-center">✕</button>
-            </div>
-          </div>
 
-          <div class="flex items-center gap-3.5">
-            <div onclick="appActions.triggerVipAvatarUpload()" title="Chạm để đổi ảnh đại diện" class="relative w-16 h-16 rounded-2xl bg-slate-900/90 ring-2 ring-white/70 overflow-hidden flex items-center justify-center shrink-0 cursor-pointer">
-              ${avatarSrc
-                ? `<img src="${escapeHtml(avatarSrc)}" alt="Avatar" class="w-full h-full object-cover" />`
-                : `<span class="text-xl font-black text-white">${escapeHtml(m.shortLabel || 'AS')}</span>`
-              }
-              <span class="absolute bottom-1 right-1 w-4 h-4 rounded-md bg-amber-400 text-slate-950 text-[9px] flex items-center justify-center shadow">📷</span>
-              <input id="vip-avatar-file-input" type="file" accept="image/*" onchange="appActions.handleVipAvatarUpload(this)" class="hidden" />
-            </div>
+              <div class="flex items-center gap-3.5">
+                <div onclick="event.stopPropagation();appActions.triggerVipAvatarUpload()" title="Chạm để đổi ảnh đại diện" class="relative w-16 h-16 rounded-2xl bg-slate-900/90 ring-2 ring-white/70 overflow-hidden flex items-center justify-center shrink-0 cursor-pointer">
+                  ${avatarSrc
+                    ? `<img src="${escapeHtml(avatarSrc)}" alt="Avatar" class="w-full h-full object-cover" />`
+                    : `<span class="text-xl font-black text-white">${escapeHtml(m.shortLabel || 'AS')}</span>`
+                  }
+                  <span class="absolute bottom-1 right-1 w-4 h-4 rounded-md bg-amber-400 text-slate-950 text-[9px] flex items-center justify-center shadow">📷</span>
+                  <input id="vip-avatar-file-input" type="file" accept="image/*" onchange="appActions.handleVipAvatarUpload(this)" class="hidden" />
+                </div>
 
-            <div class="min-w-0 flex-1">
-              <div class="text-base font-black tracking-tight text-white truncate">${escapeHtml(displayName)}</div>
-              <div class="text-xs font-extrabold text-amber-300 mt-0.5 truncate">${escapeHtml(displayTitle)}</div>
-              <div class="mt-1.5 inline-block px-2.5 py-0.5 rounded-lg bg-white/15 text-[10px] font-black tracking-wider text-white/95 uppercase">
-                ${escapeHtml(nickLabel)}
+                <div class="min-w-0 flex-1">
+                  <div class="text-base font-black tracking-tight text-white truncate">${escapeHtml(displayName)}</div>
+                  <div class="text-xs font-extrabold text-amber-300 mt-0.5 truncate">${escapeHtml(displayTitle)}</div>
+                  <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                    <span class="px-2.5 py-0.5 rounded-lg bg-white/15 text-[10px] font-black tracking-wider text-white/95 uppercase">${escapeHtml(nickLabel)}</span>
+                    <span class="px-2 py-0.5 rounded-lg bg-black/35 text-[9.5px] font-mono font-black text-amber-300">${showCount} SHOWS</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="h-px bg-white/15"></div>
+
+              <div class="flex items-center justify-between gap-3">
+                <div class="min-w-0 flex-1 space-y-0.5">
+                  <div class="text-[10px] font-black text-emerald-400 tracking-wider uppercase flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span> VIETQR NHẬN CTP
+                  </div>
+                  <div class="text-sm font-black text-white">${escapeHtml(bankLabel)}</div>
+                  <div class="text-sm font-mono font-black text-amber-300 tracking-wider">${escapeHtml(bankAcc || 'Chưa cập nhật STK')}</div>
+                  <div class="text-[11px] font-bold text-white/75 uppercase truncate">${escapeHtml(displayName)}</div>
+                </div>
+
+                <div class="w-24 h-24 rounded-2xl bg-white p-1.5 shrink-0 flex items-center justify-center overflow-hidden shadow-md">
+                  ${qrUrl
+                    ? `<img src="${escapeHtml(qrUrl)}" alt="VietQR" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" class="w-full h-full object-contain" /><span style="display:none" class="text-[9px] text-slate-500 text-center font-bold px-1 items-center justify-center">Lỗi tải QR</span>`
+                    : `<span class="text-[9px] text-slate-400 text-center font-bold px-1">Chưa có STK</span>`
+                  }
+                </div>
+              </div>
+
+              <div class="text-center text-[9.5px] font-bold text-white/45 tracking-wide pt-0.5">
+                Chạm vào thẻ để lật xem Bảng Xếp Hạng Thi Đua ↻
               </div>
             </div>
-          </div>
 
-          <div class="h-px bg-white/15"></div>
+            <!-- MẶT SAU: BẢNG XẾP HẠNG THI ĐUA (BLACK & GOLD) -->
+            <div class="vip-flip-face vip-flip-back relative rounded-[26px] p-4 overflow-hidden bg-gradient-to-br from-[#1e222d] via-[#12151d] to-[#080a0f] border border-amber-400/35 shadow-xl flex flex-col gap-2.5">
+              <div class="pointer-events-none absolute -top-12 -right-12 w-36 h-36 rounded-full bg-amber-400/10 blur-2xl"></div>
 
-          <div class="flex items-center justify-between gap-3">
-            <div class="min-w-0 flex-1 space-y-0.5">
-              <div class="text-[10px] font-black text-emerald-400 tracking-wider uppercase flex items-center gap-1.5">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span> VIETQR NHẬN CTP
+              <div class="flex items-center justify-between gap-1.5 relative z-10">
+                <div class="min-w-0">
+                  <div class="text-[10.5px] font-black tracking-wider text-amber-300 uppercase flex items-center gap-1">
+                    <span>🏆 BẢNG VÀNG THI ĐUA</span>
+                  </div>
+                  <div class="text-[9.5px] text-slate-400 font-semibold mt-0.5">Action Media × Say Studios</div>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button type="button" onclick="event.stopPropagation();${flipJs}" class="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-[9.5px] font-black text-amber-200 transition">
+                    ↺ Thẻ VIP
+                  </button>
+                  <button type="button" onclick="event.stopPropagation();appActions.closeCrewPassModal()" class="w-7 h-7 rounded-full bg-black/50 hover:bg-black/80 text-white/90 font-bold text-xs flex items-center justify-center">✕</button>
+                </div>
               </div>
-              <div class="text-sm font-black text-white">${escapeHtml(bankLabel)}</div>
-              <div class="text-sm font-mono font-black text-amber-300 tracking-wider">${escapeHtml(bankAcc || 'Chưa cập nhật STK')}</div>
-              <div class="text-[11px] font-bold text-white/75 uppercase truncate">${escapeHtml(displayName)}</div>
+
+              <div class="flex items-center justify-between gap-2 relative z-10">
+                <div class="inline-flex p-0.5 rounded-xl bg-black/45 border border-white/10 text-[10px] font-black">
+                  <button id="vip-lb-btn-m" type="button" onclick="${switchMonthJs}" class="px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 transition">Tháng ${curMonth}/${curYear}</button>
+                  <button id="vip-lb-btn-y" type="button" onclick="${switchYearJs}" class="px-2.5 py-1 rounded-lg text-slate-300 hover:text-white transition">Năm ${curYear}</button>
+                </div>
+                <span class="text-[9.5px] font-mono font-bold text-amber-300/80">${monthBoard.ranked.length} thành viên</span>
+              </div>
+
+              <div id="vip-lb-month" class="flex-1 min-h-0 max-h-[190px] overflow-y-auto custom-scroll space-y-1.5 pr-0.5 relative z-10">
+                ${renderVipLeaderboardRowsHtml(monthBoard.ranked, monthBoard.maxCnt, state.currentUserId)}
+              </div>
+
+              <div id="vip-lb-year" class="hidden flex-1 min-h-0 max-h-[190px] overflow-y-auto custom-scroll space-y-1.5 pr-0.5 relative z-10">
+                ${renderVipLeaderboardRowsHtml(yearBoard.ranked, yearBoard.maxCnt, state.currentUserId)}
+              </div>
             </div>
 
-            <div class="w-24 h-24 rounded-2xl bg-white p-1.5 shrink-0 flex items-center justify-center overflow-hidden shadow-md">
-              ${qrUrl
-                ? `<img src="${escapeHtml(qrUrl)}" alt="VietQR" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" class="w-full h-full object-contain" /><span style="display:none" class="text-[9px] text-slate-500 text-center font-bold px-1 items-center justify-center">Lỗi tải QR</span>`
-                : `<span class="text-[9px] text-slate-400 text-center font-bold px-1">Chưa có STK</span>`
-              }
-            </div>
           </div>
         </div>
 
