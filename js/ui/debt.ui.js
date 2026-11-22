@@ -281,16 +281,16 @@ export function renderDebtTabHtml() {
                               <span class="font-mono font-black text-xs text-slate-900">${memCost.toLocaleString('vi-VN')}đ</span>
                             </div>
 
-                            <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                            <div class="grid grid-cols-3 sm:grid-cols-6 gap-1">
                               ${taskKeys.map(tk => {
                                 const active = memTasks[tk] !== undefined && memTasks[tk] !== null;
                                 const tVal = active ? memTasks[tk] : getDefaultRateForTask(tk, sh);
                                 return `
                                   <div class="flex flex-col">
-                                    <button type="button" onclick="ownerActions.toggleOwnerCrewTask('${sh.id}', '${mid}', '${tk}')" class="w-full py-1.5 px-2 rounded-xl text-[10.5px] font-extrabold border transition text-center ${active ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'}">
+                                    <button type="button" onclick="ownerActions.toggleOwnerCrewTask('${sh.id}', '${mid}', '${tk}')" class="w-full py-1 px-1.5 rounded-lg text-[9.5px] font-bold border leading-tight transition text-center ${active ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'}">
                                       ${taskLabels[tk]}
                                     </button>
-                                    ${active ? `<input type="tel" inputmode="numeric" value="${Number(tVal).toLocaleString('vi-VN')}" oninput="ownerActions.handleOwnerCrewTaskInput('${sh.id}', '${mid}', '${tk}', this)" class="mt-1 w-full px-1.5 py-1 bg-white border border-slate-300 rounded-lg text-[10px] font-mono font-black text-right" />` : ''}
+                                    ${active ? `<input type="tel" inputmode="numeric" value="${Number(tVal).toLocaleString('vi-VN')}" oninput="ownerActions.handleOwnerCrewTaskInput('${sh.id}', '${mid}', '${tk}', this)" class="mt-1 w-full px-1.5 py-0.5 bg-white border border-slate-300 rounded-md text-[9.5px] font-mono font-bold text-right" />` : ''}
                                   </div>
                                 `;
                               }).join('')}
@@ -379,16 +379,16 @@ export function renderDebtTabHtml() {
                         <span class="text-[10px] font-black text-slate-500 uppercase">🎬 NHIỆM VỤ CTP (ĐỒNG BỘ TAB TÍNH CTP)</span>
                         <span class="text-[10px] font-semibold text-slate-400">Chạm để chọn</span>
                       </div>
-                      <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                      <div class="grid grid-cols-3 sm:grid-cols-6 gap-1">
                         ${taskKeys.map(tk => {
                           const active = linkedTasks[tk] !== undefined && linkedTasks[tk] !== null;
                           const tVal = active ? linkedTasks[tk] : getDefaultRateForTask(tk, sh);
                           return `
                             <div class="flex flex-col">
-                              <button type="button" onclick="ownerActions.toggleSyncedCtpTask('${sh.id}', '${tk}')" class="w-full py-1.5 px-2 rounded-xl text-[10.5px] font-extrabold border transition text-center ${active ? 'bg-slate-900 text-white border-slate-900' : 'bg-white/90 text-slate-700 border-slate-200'}">
+                              <button type="button" onclick="ownerActions.toggleSyncedCtpTask('${sh.id}', '${tk}')" class="w-full py-1 px-1.5 rounded-lg text-[9.5px] font-bold border leading-tight transition text-center ${active ? 'bg-slate-900 text-white border-slate-900' : 'bg-white/90 text-slate-700 border-slate-200'}">
                                 ${taskLabels[tk]}
                               </button>
-                              ${active ? `<input type="tel" inputmode="numeric" value="${Number(tVal).toLocaleString('vi-VN')}" oninput="ownerActions.handleSyncedCtpTaskInput('${sh.id}', '${tk}', this)" class="mt-1 w-full px-1.5 py-1 bg-indigo-50 border border-indigo-300 rounded-lg text-[10px] font-mono font-black text-right" />` : ''}
+                              ${active ? `<input type="tel" inputmode="numeric" value="${Number(tVal).toLocaleString('vi-VN')}" oninput="ownerActions.handleSyncedCtpTaskInput('${sh.id}', '${tk}', this)" class="mt-1 w-full px-1.5 py-0.5 bg-indigo-50 border border-indigo-300 rounded-md text-[9.5px] font-mono font-bold text-right" />` : ''}
                             </div>
                           `;
                         }).join('')}
