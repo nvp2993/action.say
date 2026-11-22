@@ -228,6 +228,115 @@ function renderGroupedShowsByCreatedDayHtml(filteredShows) {
   }).join('');
 }
 
+function renderCrewLeaderboardHtml(membersSorted) {
+  const now = new Date();
+  const perfMode = state.adminPerfMode || 'month';
+  const perfYear = Number(state.adminPerfYear) || Number(state.selectedYear) || now.getFullYear();
+  const perfMonth = Number(state.adminPerfMonth) || (now.getMonth() + 1);
+  const monthPrefix = `${perfYear}-${String(perfMonth).padStart(2, '0')}-`;
+  const yearPrefix = `${perfYear}-`;
+
+  const periodShows = (state.shows || []).filter(s => {
+    if (!s || s.isCancelled || s.isHold) return false;
+    const start = String(s.startDate || '');
+    const end = String(s.endDate || s.startDate || '');
+    if (perfMode === 'year') {
+      return start.startsWith(yearPrefix) || end.startsWith(yearPrefix);
+    }
+    return start.startsWith(monthPrefix) || end.startsWith(monthPrefix);
+  });
+
+  const ranked = membersSorted
+    .map(m => {
+      const cnt = periodShows.filter(s => (s.memberIds || []).includes(m.id)).length;
+      return { ...m, cnt };
+    })
+    .sort((a, b) => {
+      if (b.cnt !== a.cnt) return b.cnt - a.cnt;
+      return (a.order ?? 99) - (b.order ?? 99);
+    });
+
+  const maxCnt = Math.max(1, ...ranked.map(r => r.cnt));
+
+  const yearOptions = Array.from(new Set([...(state.visibleYears || [2026, 2027]), perfYear])).sort((a, b) => a - b);
+
+  return `
+    <div class="bg-white rounded-3xl p-4 border border-slate-200/80 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div class="font-black text-xs uppercase tracking-wide text-slate-900 flex items-center gap-1.5">
+            <span>🏆 Bảng Xếp Hạng Thi Đua Ekip (${membersSorted.length} người)</span>
+          </div>
+          <div class="text-[10.5px] text-slate-400 font-semibold mt-0.5">
+            ${perfMode === 'month' ? `Đua top Tháng ${perfMonth}/${perfYear}` : `Đua top Cả Năm ${perfYear}`} • Tổng ${periodShows.length} show
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <div class="inline-flex p-0.5 rounded-xl bg-slate-100 border border-slate-200/70 text-[10.5px] font-extrabold">
+            <button type="button" onclick="adminProActions.setPerfPeriodMode('month')" class="px-2.5 py-1 rounded-lg transition ${perfMode === 'month' ? 'bg-slate-900 text-amber-400 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">Theo Tháng</button>
+            <button type="button" onclick="adminProActions.setPerfPeriodMode('year')" class="px-2.5 py-1 rounded-lg transition ${perfMode === 'year' ? 'bg-slate-900 text-amber-400 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">Theo Năm</button>
+          </div>
+
+          ${perfMode === 'month' ? `
+            <select onchange="adminProActions.setPerfPeriodValue(this.value)" class="px-2.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-[11px] font-black text-slate-800 focus:outline-none">
+              ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m => `<option value="${m}" ${perfMonth === m ? 'selected' : ''}>Tháng ${m}/${perfYear}</option>`).join('')}
+            </select>
+          ` : `
+            <select onchange="adminProActions.setPerfPeriodValue(this.value)" class="px-2.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-[11px] font-black text-slate-800 focus:outline-none">
+              ${yearOptions.map(y => `<option value="${y}" ${perfYear === y ? 'selected' : ''}>Năm ${y}</option>`).join('')}
+            </select>
+          `}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        ${ranked.map((m, idx) => {
+          const rank = idx + 1;
+          const pct = m.cnt > 0 ? Math.max(8, Math.round((m.cnt / maxCnt) * 100)) : 0;
+
+          let cardCls = 'bg-slate-50/90 border-slate-200/80';
+          let rankBadge = `<span class="w-5 h-5 rounded-full bg-slate-200/80 text-slate-600 font-mono font-black text-[10px] flex items-center justify-center shrink-0">#${rank}</span>`;
+          let barCls = 'bg-slate-400';
+
+          if (rank === 1 && m.cnt > 0) {
+            cardCls = 'bg-gradient-to-r from-amber-50 via-yellow-50/80 to-amber-50/60 border-amber-300 ring-1 ring-amber-200/70';
+            rankBadge = `<span class="text-base leading-none shrink-0" title="Top 1">🥇</span>`;
+            barCls = 'bg-amber-500';
+          } else if (rank === 2 && m.cnt > 0) {
+            cardCls = 'bg-gradient-to-r from-slate-100 via-slate-50 to-white border-slate-300';
+            rankBadge = `<span class="text-base leading-none shrink-0" title="Top 2">🥈</span>`;
+            barCls = 'bg-slate-500';
+          } else if (rank === 3 && m.cnt > 0) {
+            cardCls = 'bg-gradient-to-r from-orange-50/80 via-amber-50/40 to-white border-orange-200';
+            rankBadge = `<span class="text-base leading-none shrink-0" title="Top 3">🥉</span>`;
+            barCls = 'bg-orange-400';
+          }
+
+          return `
+            <div class="p-2.5 rounded-2xl border ${cardCls} flex flex-col gap-1.5 transition">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5 min-w-0">
+                  ${rankBadge}
+                  <span style="background:${m.bg};color:${m.text}" class="px-2.5 py-0.5 rounded-full text-[10.5px] font-black truncate">${escapeHtml(m.shortLabel)}</span>
+                  ${rank === 1 && m.cnt > 0 ? `<span class="px-1.5 py-0.5 rounded-md bg-amber-400 text-slate-950 font-black text-[8.5px] tracking-wider uppercase shrink-0">MVP</span>` : ''}
+                </div>
+                <div class="flex items-baseline gap-1 shrink-0">
+                  <span class="font-mono font-black text-sm ${rank === 1 && m.cnt > 0 ? 'text-amber-700' : 'text-slate-900'}">${m.cnt}</span>
+                  <span class="text-[9.5px] font-bold text-slate-400">show</span>
+                </div>
+              </div>
+              <div class="w-full h-1.5 rounded-full bg-slate-200/70 overflow-hidden">
+                <div style="width:${pct}%" class="h-full rounded-full ${barCls} transition-all duration-300"></div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
 function renderOverviewTabHtml(membersSorted, filteredShows) {
   const validShows = (state.shows || []).filter(s => s && !s.isCancelled && !s.isHold);
   const totalShowsCount = validShows.length;
@@ -275,23 +384,7 @@ function renderOverviewTabHtml(membersSorted, filteredShows) {
         </div>
       </div>
 
-      <div class="bg-white rounded-3xl p-4 border border-slate-200/80 space-y-2.5">
-        <div class="flex items-center justify-between">
-          <span class="font-black text-xs uppercase tracking-wide text-slate-900">📊 Hiệu Suất Ekip (${membersSorted.length} người)</span>
-          <span class="text-[10.5px] text-slate-400 font-semibold">Show đang chạy</span>
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          ${membersSorted.map(m => {
-            const cnt = (state.shows || []).filter(s => s && !s.isCancelled && (s.memberIds || []).includes(m.id)).length;
-            return `
-              <div class="p-2.5 rounded-2xl bg-slate-50 border border-slate-200/70 flex items-center justify-between gap-1">
-                <span style="background:${m.bg};color:${m.text}" class="px-2 py-0.5 rounded-full text-[10px] font-black truncate">${escapeHtml(m.shortLabel)}</span>
-                <span class="font-mono font-black text-slate-900 text-xs shrink-0">${cnt}</span>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      </div>
+      ${renderCrewLeaderboardHtml(membersSorted)}
 
       <div class="bg-white rounded-3xl p-4 border border-slate-200/80 space-y-3">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
