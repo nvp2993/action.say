@@ -414,6 +414,8 @@ function renderApp() {
     ${renderDetailModalHtml()}
     ${renderFormModalHtml()}
     ${renderZaloTomorrowModalHtml()}
+    ${renderZaloTomorrowModalHtml()}
+    ${renderMatrixCellModalHtml()}
     ${renderCrewPassModalHtml()}
     ${renderCtpBillModalHtml()}
     ${renderCtpCustomShowModalHtml()}
