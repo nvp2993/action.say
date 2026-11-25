@@ -582,6 +582,15 @@ window.appActions = {
   onSearchInput(v) { state.searchQuery = v; renderApp(); },
   setCheckDate(f, v) { state[f] = v; if (f === 'checkStart' && state.checkEnd < v) state.checkEnd = v; renderApp(); },
 
+  openMatrixCell(day, memberId) {
+    const dateStr = `${state.selectedYear}-${String(state.selectedMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    state.matrixCellModal = { day, memberId, dateStr };
+    renderApp();
+  },
+  closeMatrixCell() {
+    state.matrixCellModal = null;
+    renderApp();
+  },
   openShowDetail(id) { state.detailShowId = id; renderApp(); },
   closeShowDetail() { state.detailShowId = null; renderApp(); },
   openAddModal(date = null, memId = null) {
