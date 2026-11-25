@@ -10,7 +10,7 @@ import { initPullToRefresh } from './utils/pullToRefresh.js';
 import { renderHeaderHtml, renderBottomNavHtml } from './ui/header.ui.js';
 import { renderShowsTabHtml, renderDetailModalHtml } from './ui/shows.ui.js';
 import { renderMatrixTabHtml } from './ui/matrix.ui.js';
-import { renderCrewBoardTabHtml, holdCrewRangeForMembers } from './ui/crewBoard.ui.js';
+import { renderCrewBoardTabHtml } from './ui/crewBoard.ui.js';
 import { renderCtpTabHtml, renderCtpBillModalHtml } from './ui/ctp.ui.js';
 import { renderDebtTabHtml } from './ui/debt.ui.js';
 import {
@@ -159,64 +159,6 @@ function renderZaloTomorrowModalHtml() {
         <div class="grid grid-cols-2 gap-2 pt-1 shrink-0">
           <button type="button" onclick="appActions.copyZaloTomorrowText()" class="py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-xs transition">📋 Copy gửi Zalo</button>
           <button type="button" onclick="appActions.closeZaloTomorrowModal()" class="py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold text-xs transition">Đóng</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function renderMatrixCellModalHtml() {
-  const cell = state.matrixCellModal;
-  if (!cell) return '';
-  const mem = getMember(cell.memberId);
-  const shows = (state.shows || []).filter(s =>
-    s && !s.isCancelled &&
-    s.startDate && s.startDate <= cell.dateStr && (s.endDate || s.startDate) >= cell.dateStr &&
-    (s.memberIds || []).includes(cell.memberId)
-  );
-
-  return `
-    <div onclick="appActions.closeMatrixCell()" class="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-3 sm:p-4">
-      <div onclick="event.stopPropagation()" class="ios-sheet bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-4 sm:p-5 space-y-3 text-xs shadow-2xl max-h-[85dvh] flex flex-col">
-        <div class="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-100 shrink-0">
-          <div>
-            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 text-amber-300 text-[10px] font-black uppercase">
-              <span>📅 ${escapeHtml(formatDayMonth(cell.dateStr))} • ${escapeHtml(mem.name)}</span>
-            </div>
-            <h3 class="font-black text-base text-slate-900 mt-1">Danh sách ${shows.length} show trong ngày</h3>
-            <p class="text-[11px] text-slate-500 mt-0.5">Chạm vào show để xem chi tiết hoặc chỉnh sửa</p>
-          </div>
-          <button type="button" onclick="appActions.closeMatrixCell()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 font-bold text-slate-600 flex items-center justify-center shrink-0">✕</button>
-        </div>
-
-        <div class="flex-1 min-h-0 overflow-y-auto custom-scroll space-y-2 pr-0.5">
-          ${shows.map((sh, idx) => {
-            const partner = getVisiblePartnerText(sh);
-            const owner = getMember(sh.ownerId);
-            const roles = Array.isArray(sh.roles?.[cell.memberId]) ? sh.roles[cell.memberId].filter(Boolean).join(', ') : '';
-            return `
-              <div onclick="appActions.closeMatrixCell(); appActions.openShowDetail('${escapeHtml(sh.id)}')" class="p-3 rounded-2xl border cursor-pointer transition hover:border-slate-900 ${sh.isHold ? 'bg-amber-50/80 border-amber-300' : 'bg-slate-50 border-slate-200'}">
-                <div class="flex items-center justify-between gap-2">
-                  <div class="flex items-center gap-1.5 flex-wrap">
-                    <span class="px-2 py-0.5 rounded-full bg-slate-900 text-white font-mono font-black text-[10px]">#${idx + 1}</span>
-                    ${sh.isHold ? `<span class="px-2 py-0.5 rounded-full bg-amber-200 text-amber-950 font-black text-[9.5px]">⏳ Giữ lịch</span>` : ''}
-                    <span class="text-[10.5px] font-bold text-slate-500">Chủ: <b class="text-slate-800">${escapeHtml(owner.name)}</b></span>
-                  </div>
-                  <span class="text-slate-400 font-bold text-sm">›</span>
-                </div>
-                <div class="font-black text-slate-900 text-sm mt-1">
-                  ${escapeHtml(sh.location)}
-                  ${partner ? `<span class="text-slate-500 font-bold text-xs">(${escapeHtml(partner)})</span>` : ''}
-                </div>
-                ${roles ? `<div class="text-[10.5px] font-bold text-indigo-700 mt-1">Vai trò: ${escapeHtml(roles)}</div>` : ''}
-              </div>
-            `;
-          }).join('')}
-        </div>
-
-        <div class="grid grid-cols-2 gap-2 pt-1 shrink-0">
-          <button type="button" onclick="appActions.closeMatrixCell(); appActions.openAddModal('${escapeHtml(cell.dateStr)}', '${escapeHtml(cell.memberId)}')" class="py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-amber-400 font-black text-xs">+ Nổ thêm show</button>
-          <button type="button" onclick="appActions.closeMatrixCell()" class="py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold text-xs">Đóng</button>
         </div>
       </div>
     </div>
@@ -414,8 +356,6 @@ function renderApp() {
     ${renderDetailModalHtml()}
     ${renderFormModalHtml()}
     ${renderZaloTomorrowModalHtml()}
-    ${renderZaloTomorrowModalHtml()}
-    ${renderMatrixCellModalHtml()}
     ${renderCrewPassModalHtml()}
     ${renderCtpBillModalHtml()}
     ${renderCtpCustomShowModalHtml()}
@@ -446,35 +386,9 @@ registerRenderer(renderApp);
 
 window.state = state;
 window.appActions = {
-  setCheckDate(f, v) { state[f] = v; if (f === 'checkStart' && state.checkEnd < v) state.checkEnd = v; renderApp(); },
-
-  toggleCrewBoardSelect(mid) {
-    if (!Array.isArray(state.crewBoardSelectedIds)) state.crewBoardSelectedIds = [];
-    const idx = state.crewBoardSelectedIds.indexOf(mid);
-    if (idx >= 0) state.crewBoardSelectedIds.splice(idx, 1);
-    else state.crewBoardSelectedIds.push(mid);
+  openZaloTomorrowModal() {
+    state.zaloTomorrowModal = true;
     renderApp();
-  },
-  clearCrewBoardSelection() {
-    state.crewBoardSelectedIds = [];
-    renderApp();
-  },
-  async holdSelectedCrewFromBoard() {
-    if (state.readonlyMaintenanceMode && !state.isAdminMode) {
-      return showToast('🛡️ Hệ thống đang khóa bảo trì!', 'error');
-    }
-    await holdCrewRangeForMembers(state.crewBoardSelectedIds, state.checkStart, state.checkEnd);
-    renderApp();
-    showToast('⏳ Đã giữ lịch tạm cho nhóm NS đã chọn!');
-  },
-  bookSelectedCrewFromBoard() {
-    const ids = [...(state.crewBoardSelectedIds || [])];
-    if (!ids.length) return;
-    state.crewBoardSelectedIds = [];
-    this.openAddModal(state.checkStart, ids, state.checkEnd);
-  },
-
-  openMatrixCell(day, memberId) {
   },
   closeZaloTomorrowModal() {
     state.zaloTomorrowModal = false;
@@ -608,40 +522,12 @@ window.appActions = {
   onSearchInput(v) { state.searchQuery = v; renderApp(); },
   setCheckDate(f, v) { state[f] = v; if (f === 'checkStart' && state.checkEnd < v) state.checkEnd = v; renderApp(); },
 
-  openMatrixCell(day, memberId) {
-    const dateStr = `${state.selectedYear}-${String(state.selectedMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    state.matrixCellModal = { day, memberId, dateStr };
-    renderApp();
-  },
-  closeMatrixCell() {
-    state.matrixCellModal = null;
-    renderApp();
-  },
   openShowDetail(id) { state.detailShowId = id; renderApp(); },
   closeShowDetail() { state.detailShowId = null; renderApp(); },
-  openAddModal(date = null, memId = null, endDate = null) {
+  openAddModal(date = null, memId = null) {
     if (state.readonlyMaintenanceMode && !state.isAdminMode) return showToast('🛡️ Hệ thống đang khóa bảo trì!', 'error');
     const d = date || getTodayISO();
-    const e = endDate || d;
-    const initialMembers = Array.isArray(memId)
-      ? memId.filter(Boolean)
-      : [memId || state.currentUserId];
-
-    state.formModal = {
-      mode: 'add',
-      showId: null,
-      location: '',
-      partner: '',
-      hidePartner: false,
-      startDate: d,
-      endDate: e < d ? d : e,
-      memberIds: initialMembers.length ? initialMembers : [state.currentUserId],
-      roles: {},
-      externalCrew: [],
-      ownerId: state.currentUserId,
-      creatorId: state.currentUserId,
-      error: ''
-    };
+    state.formModal = { mode: 'add', showId: null, location: '', partner: '', hidePartner: false, startDate: d, endDate: d, memberIds: [memId || state.currentUserId], roles: {}, externalCrew: [], ownerId: state.currentUserId, creatorId: state.currentUserId, error: '' };
     renderApp();
   },
   openEditModal(id) {
