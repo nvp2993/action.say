@@ -10,7 +10,7 @@ import { initPullToRefresh } from './utils/pullToRefresh.js';
 import { renderHeaderHtml, renderBottomNavHtml } from './ui/header.ui.js';
 import { renderShowsTabHtml, renderDetailModalHtml } from './ui/shows.ui.js';
 import { renderMatrixTabHtml } from './ui/matrix.ui.js';
-import { renderCrewBoardTabHtml } from './ui/crewBoard.ui.js';
+import { renderCrewBoardTabHtml, holdCrewRangeForMembers } from './ui/crewBoard.ui.js';
 import { renderCtpTabHtml, renderCtpBillModalHtml } from './ui/ctp.ui.js';
 import { renderDebtTabHtml } from './ui/debt.ui.js';
 import {
@@ -593,10 +593,29 @@ window.appActions = {
   },
   openShowDetail(id) { state.detailShowId = id; renderApp(); },
   closeShowDetail() { state.detailShowId = null; renderApp(); },
-  openAddModal(date = null, memId = null) {
+  openAddModal(date = null, memId = null, endDate = null) {
     if (state.readonlyMaintenanceMode && !state.isAdminMode) return showToast('🛡️ Hệ thống đang khóa bảo trì!', 'error');
     const d = date || getTodayISO();
-    state.formModal = { mode: 'add', showId: null, location: '', partner: '', hidePartner: false, startDate: d, endDate: d, memberIds: [memId || state.currentUserId], roles: {}, externalCrew: [], ownerId: state.currentUserId, creatorId: state.currentUserId, error: '' };
+    const e = endDate || d;
+    const initialMembers = Array.isArray(memId)
+      ? memId.filter(Boolean)
+      : [memId || state.currentUserId];
+
+    state.formModal = {
+      mode: 'add',
+      showId: null,
+      location: '',
+      partner: '',
+      hidePartner: false,
+      startDate: d,
+      endDate: e < d ? d : e,
+      memberIds: initialMembers.length ? initialMembers : [state.currentUserId],
+      roles: {},
+      externalCrew: [],
+      ownerId: state.currentUserId,
+      creatorId: state.currentUserId,
+      error: ''
+    };
     renderApp();
   },
   openEditModal(id) {
