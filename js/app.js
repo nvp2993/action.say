@@ -446,6 +446,35 @@ registerRenderer(renderApp);
 
 window.state = state;
 window.appActions = {
+  setCheckDate(f, v) { state[f] = v; if (f === 'checkStart' && state.checkEnd < v) state.checkEnd = v; renderApp(); },
+
+  toggleCrewBoardSelect(mid) {
+    if (!Array.isArray(state.crewBoardSelectedIds)) state.crewBoardSelectedIds = [];
+    const idx = state.crewBoardSelectedIds.indexOf(mid);
+    if (idx >= 0) state.crewBoardSelectedIds.splice(idx, 1);
+    else state.crewBoardSelectedIds.push(mid);
+    renderApp();
+  },
+  clearCrewBoardSelection() {
+    state.crewBoardSelectedIds = [];
+    renderApp();
+  },
+  async holdSelectedCrewFromBoard() {
+    if (state.readonlyMaintenanceMode && !state.isAdminMode) {
+      return showToast('🛡️ Hệ thống đang khóa bảo trì!', 'error');
+    }
+    await holdCrewRangeForMembers(state.crewBoardSelectedIds, state.checkStart, state.checkEnd);
+    renderApp();
+    showToast('⏳ Đã giữ lịch tạm cho nhóm NS đã chọn!');
+  },
+  bookSelectedCrewFromBoard() {
+    const ids = [...(state.crewBoardSelectedIds || [])];
+    if (!ids.length) return;
+    state.crewBoardSelectedIds = [];
+    this.openAddModal(state.checkStart, ids, state.checkEnd);
+  },
+
+  openMatrixCell(day, memberId) {
   openZaloTomorrowModal() {
     state.zaloTomorrowModal = true;
     renderApp();
