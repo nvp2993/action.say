@@ -475,9 +475,6 @@ window.appActions = {
   },
 
   openMatrixCell(day, memberId) {
-  openZaloTomorrowModal() {
-    state.zaloTomorrowModal = true;
-    renderApp();
   },
   closeZaloTomorrowModal() {
     state.zaloTomorrowModal = false;
